@@ -1,0 +1,17 @@
+{
+  "name": "xtra-devpilot",
+  "version": "1.0.0",
+  "description": "MCP server bridging IDE to Chrome extension",
+  "main": "index.js",
+  "bin": {
+    "xtra-devpilot": "./index.js"
+  },
+  "type": "module",
+  "scripts": {
+    "start": "node index.js"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.0.0",
+    "ws": "^8.18.0"
+  }
+}

@@ -1,0 +1,39 @@
+{
+  "manifest_version": 3,
+  "name": "Xtra DevPilot",
+  "version": "1.0.0",
+  "description": "Bridges live browser data to your IDE via MCP.",
+  "permissions": [
+    "storage",
+    "scripting",
+    "activeTab",
+    "tabs",
+    "webRequest"
+  ],
+  "host_permissions": [
+    "<all_urls>"
+  ],
+  "icons": {
+    "128": "icon.png"
+  },
+  "background": {
+    "service_worker": "background.js"
+  },
+  "action": {
+    "default_popup": "popup.html"
+  },
+  "content_scripts": [
+    {
+      "matches": ["<all_urls>"],
+      "js": ["injected.js"],
+      "world": "MAIN",
+      "run_at": "document_start"
+    },
+    {
+      "matches": ["<all_urls>"],
+      "js": ["content.js"],
+      "world": "ISOLATED",
+      "run_at": "document_start"
+    }
+  ]
+}
