@@ -18,17 +18,34 @@ AI Browser Bridge for your IDE. Connect Chrome to an MCP-enabled AI assistant so
 
 ## Tech stack
 
-- Chrome extension with injected scripts
-- Local MCP server over WebSocket
 - Node.js runtime
+- Chrome extension with injected scripts
+- WebSocket bridge
+- MCP protocol integration
 
 ## Repo structure
 
-```text
-extension/     Chrome extension code and assets
-mcp-server/    MCP server and WebSocket bridge
-demo/          Demo files and example scenarios
-README.md      You are here
+```
+assets/                  Logos and image assets
+demo/                   Demo static files
+  index.html
+  style1.css
+  style2.css
+extension/             Chrome extension
+  background.js
+  content.js
+  injected.js
+  popup.js
+  devtools.html
+  devtools.js
+  panel.html
+  manifest.json
+  icon.png
+mcp-server/            MCP server and bridge
+  index.js
+  get_dom.js
+  package.json
+README.md              You are here
 ```
 
 ## Requirements
