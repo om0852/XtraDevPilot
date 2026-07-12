@@ -1,0 +1,408 @@
+<!DOCTYPE html>
+
+<html class="dark" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Xtra DevPilot | Elite AI Frontend Engineering</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://cdn.jsdelivr.net/npm/geist@1.3.0/dist/fonts/geist.css" rel="stylesheet"/>
+<link href="https://cdn.jsdelivr.net/npm/jetbrains-mono@1.0.6/css/jetbrains-mono.min.css" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+      tailwind.config = {
+        darkMode: "class",
+        theme: {
+          extend: {
+            "colors": {
+                    "surface-container-lowest": "#0f0d13",
+                    "on-tertiary-container": "#503d00",
+                    "tertiary-fixed": "#ffdf93",
+                    "surface": "#141218",
+                    "on-primary-fixed-variant": "#4f378a",
+                    "inverse-surface": "#e6e0e9",
+                    "surface-container-high": "#2b292f",
+                    "outline-variant": "#494551",
+                    "primary-fixed": "#e9ddff",
+                    "secondary-container": "#4d4465",
+                    "on-error-container": "#ffdad6",
+                    "on-tertiary": "#3e2e00",
+                    "secondary-fixed": "#e9ddff",
+                    "on-surface-variant": "#cbc4d2",
+                    "surface-container": "#211f24",
+                    "surface-container-highest": "#36343a",
+                    "on-primary": "#381e72",
+                    "inverse-primary": "#6750a4",
+                    "tertiary": "#e7c365",
+                    "on-tertiary-fixed": "#241a00",
+                    "secondary": "#cdc0e9",
+                    "on-secondary-container": "#bfb2da",
+                    "surface-dim": "#141218",
+                    "on-secondary-fixed-variant": "#4b4263",
+                    "tertiary-container": "#c9a74d",
+                    "on-secondary": "#342b4b",
+                    "primary": "#cfbcff",
+                    "error-container": "#93000a",
+                    "primary-fixed-dim": "#cfbcff",
+                    "on-tertiary-fixed-variant": "#594400",
+                    "on-primary-container": "#e0d2ff",
+                    "secondary-fixed-dim": "#cdc0e9",
+                    "on-primary-fixed": "#22005d",
+                    "surface-bright": "#3b383e",
+                    "background": "#141218",
+                    "on-background": "#e6e0e9",
+                    "inverse-on-surface": "#322f35",
+                    "on-error": "#690005",
+                    "tertiary-fixed-dim": "#e7c365",
+                    "surface-variant": "#36343a",
+                    "error": "#ffb4ab",
+                    "on-secondary-fixed": "#1f1635",
+                    "primary-container": "#6750a4",
+                    "surface-container-low": "#1d1b20",
+                    "outline": "#948e9c",
+                    "on-surface": "#e6e0e9",
+                    "surface-tint": "#cfbcff"
+            },
+            "borderRadius": {
+                    "DEFAULT": "0.125rem",
+                    "lg": "0.25rem",
+                    "xl": "0.5rem",
+                    "full": "0.75rem"
+            },
+            "spacing": {
+                    "margin-mobile": "16px",
+                    "gutter": "24px",
+                    "unit": "4px",
+                    "margin-desktop": "40px",
+                    "container-max-width": "1440px"
+            },
+            "fontFamily": {
+                    "body-md": ["Geist", "sans-serif"],
+                    "label-mono": ["JetBrains Mono", "monospace"],
+                    "headline-lg-mobile": ["Geist", "sans-serif"],
+                    "display-lg": ["Geist", "sans-serif"],
+                    "code-sm": ["JetBrains Mono", "monospace"],
+                    "headline-lg": ["Geist", "sans-serif"]
+            },
+            "fontSize": {
+                    "body-md": ["16px", {"lineHeight": "24px", "letterSpacing": "-0.01em", "fontWeight": "400"}],
+                    "label-mono": ["14px", {"lineHeight": "20px", "letterSpacing": "0.02em", "fontWeight": "500"}],
+                    "headline-lg-mobile": ["24px", {"lineHeight": "32px", "letterSpacing": "-0.02em", "fontWeight": "600"}],
+                    "display-lg": ["48px", {"lineHeight": "56px", "letterSpacing": "-0.04em", "fontWeight": "700"}],
+                    "code-sm": ["13px", {"lineHeight": "18px", "fontWeight": "400"}],
+                    "headline-lg": ["32px", {"lineHeight": "40px", "letterSpacing": "-0.02em", "fontWeight": "600"}]
+            }
+          },
+        },
+      }
+    </script>
+<style>
+        body {
+            background-color: #050505;
+            color: #e6e0e9;
+            overflow-x: hidden;
+        }
+        .glass-card {
+            background: rgba(255, 255, 255, 0.04);
+            backdrop-filter: blur(40px);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            border-top: 1px solid rgba(255, 255, 255, 0.2);
+            transition: all 0.3s ease;
+        }
+        .glass-card:hover {
+            border-color: rgba(207, 188, 255, 0.3);
+            box-shadow: 0 0 40px rgba(207, 188, 255, 0.1);
+        }
+        .primary-gradient {
+            background: linear-gradient(135deg, #6750a4 0%, #cfbcff 100%);
+        }
+        .text-gradient {
+            background: linear-gradient(135deg, #cfbcff 0%, #22d3ee 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+        .bloom-glow:hover {
+            box-shadow: 0 0 30px rgba(103, 80, 164, 0.4);
+        }
+        .material-symbols-outlined {
+            font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+        }
+        .mcp-node {
+            animation: pulse 4s infinite ease-in-out;
+        }
+        @keyframes pulse {
+            0%, 100% { opacity: 0.5; filter: blur(2px); }
+            50% { opacity: 1; filter: blur(0px); }
+        }
+    </style>
+</head>
+<body class="font-body-md text-body-md">
+<!-- TopNavBar -->
+<nav class="fixed top-0 w-full z-50 bg-white/4 backdrop-blur-[40px] border-b border-white/10 shadow-[0_0_20px_rgba(207,188,255,0.1)]">
+<div class="flex justify-between items-center px-margin-desktop py-4 max-w-container-max-width mx-auto">
+<div class="flex items-center gap-3">
+<img class="h-8 w-8 object-contain" src="https://lh3.googleusercontent.com/aida/AP1WRLtMoDi9co78tXZcftYK2wGSqmSRMGeqPRquNHRqwXGTva6TqE5DkyyBnhsmHsmgLWqysLowxJJeMGsWG_hsazxErieI1yDwsgWA8SAYj92yg6P85endQpqqA7LQ_EerchGbb0lhxrcxbiyCjaoAqImr8yQC1xEZJ6NQxYsyfof4ueL7mBq1vPv3kp5K-Vi5NwfQdTMEW27-70aJZddbA85hu87QHRC87SjaZkCFFlHNH3Bnp2fHulRk_Q"/>
+<span class="font-headline-lg text-headline-lg font-bold text-on-surface tracking-tight">Xtra DevPilot</span>
+</div>
+<div class="hidden md:flex items-center gap-8">
+<a class="text-on-surface-variant hover:text-on-surface transition-colors font-body-md text-body-md" href="#features">Features</a>
+<a class="text-on-surface-variant hover:text-on-surface transition-colors font-body-md text-body-md" href="#architecture">Architecture</a>
+<a class="text-on-surface-variant hover:text-on-surface transition-colors font-body-md text-body-md" href="#pricing">Pricing</a>
+</div>
+<button class="primary-gradient text-on-primary font-bold px-6 py-2 rounded-sm bloom-glow active:scale-95 transition-all text-body-md">
+                Install Extension
+            </button>
+</div>
+</nav>
+<!-- Hero Section -->
+<section class="relative pt-32 pb-20 px-margin-desktop overflow-hidden">
+
+<div class="max-w-container-max-width mx-auto grid lg:grid-cols-2 gap-16 items-center">
+<div class="space-y-8">
+<div class="inline-flex items-center gap-2 px-3 py-1 glass-card border-primary/20 rounded-full">
+<span class="w-2 h-2 rounded-full bg-primary animate-pulse"></span>
+<span class="font-label-mono text-label-mono text-primary uppercase tracking-widest">v2.4 Live Now</span>
+</div>
+<h1 class="font-display-lg text-display-lg leading-tight tracking-tighter">
+                    The AI Copilot for <span class="text-gradient">Elite Frontend Engineers.</span>
+</h1>
+<p class="text-on-surface-variant text-xl max-w-lg leading-relaxed">
+                    Ship features 10x faster with ghost automation, visual debugging, and local-first architecture. Built for the terminal-obsessed.
+                </p>
+<div class="flex flex-wrap gap-4">
+<button class="primary-gradient text-on-primary font-bold px-8 py-4 rounded-sm bloom-glow text-body-md">
+                        Install Extension
+                    </button>
+<button class="glass-card text-on-surface font-bold px-8 py-4 rounded-sm hover:bg-white/10 text-body-md flex items-center gap-2">
+                        View Docs
+                        <span class="material-symbols-outlined text-sm">arrow_forward</span>
+</button>
+</div>
+<div class="flex items-center gap-6 pt-4 grayscale opacity-50">
+<span class="font-label-mono text-xs uppercase tracking-widest">Trusted By Lead Engineers At</span>
+<div class="flex gap-4">
+<!-- Logos would go here, using placeholders -->
+</div>
+</div>
+</div>
+<!-- Code Editor Mock -->
+<div class="relative group">
+<div class="absolute -inset-4 bg-primary/20 blur-3xl opacity-0 group-hover:opacity-100 transition-opacity duration-1000"></div>
+<div class="glass-card rounded-lg overflow-hidden shadow-2xl relative border-white/20">
+<div class="bg-surface-container px-4 py-3 border-b border-white/10 flex items-center justify-between">
+<div class="flex gap-1.5">
+<div class="w-3 h-3 rounded-full bg-error/40"></div>
+<div class="w-3 h-3 rounded-full bg-tertiary/40"></div>
+<div class="w-3 h-3 rounded-full bg-primary/40"></div>
+</div>
+<div class="font-label-mono text-xs text-outline">ProductCard.tsx — Xtra DevPilot</div>
+<div class="w-12"></div>
+</div>
+<div class="p-6 font-code-sm text-code-sm space-y-2">
+<div class="flex gap-4">
+<span class="text-outline w-6 text-right select-none">24</span>
+<code class="text-secondary">export const <span class="text-primary">ProductCard</span> = ({ product }) =&gt; {</code>
+</div>
+<div class="flex gap-4 relative">
+<span class="text-outline w-6 text-right select-none">25</span>
+<code class="text-on-surface">  return (</code>
+</div>
+<div class="flex gap-4 bg-primary/10 -mx-6 px-6 py-1 border-l-2 border-primary">
+<span class="text-outline w-6 text-right select-none">26</span>
+<code class="text-on-surface">    &lt;div className="relative group overflow-hidden"&gt;</code>
+<div class="absolute right-4 top-1/2 -translate-y-1/2 flex items-center gap-2 glass-card px-2 py-0.5 rounded text-[10px] text-primary">
+<span class="material-symbols-outlined text-[12px]" style="font-variation-settings: 'FILL' 1;">auto_fix_high</span>
+                                AI Ghost: Suggested ghost-hover effect
+                            </div>
+</div>
+<div class="flex gap-4">
+<span class="text-outline w-6 text-right select-none">27</span>
+<code class="text-on-surface">      &lt;Image src={product.img} alt={product.name} /&gt;</code>
+</div>
+<div class="flex gap-4">
+<span class="text-outline w-6 text-right select-none">28</span>
+<code class="text-on-surface">      &lt;div className="p-4"&gt;</code>
+</div>
+<div class="flex gap-4 text-tertiary">
+<span class="text-outline w-6 text-right select-none">29</span>
+<code class="italic">// @devpilot visual-debug: check layout shift on mount</code>
+</div>
+<div class="flex gap-4">
+<span class="text-outline w-6 text-right select-none">30</span>
+<code class="text-on-surface">        &lt;h3&gt;{product.title}&lt;/h3&gt;</code>
+</div>
+</div>
+</div>
+</div>
+</div>
+</section>
+<!-- Features Grid -->
+<section class="py-32 px-margin-desktop bg-surface-container-lowest" id="features">
+<div class="max-w-container-max-width mx-auto">
+<div class="mb-20 space-y-4">
+<h2 class="font-headline-lg text-headline-lg">Engineered for <span class="text-primary">Precision</span></h2>
+<p class="text-on-surface-variant max-w-xl">A suite of tools that bridge the gap between your intent and the DOM.</p>
+</div>
+<div class="grid md:grid-cols-2 lg:grid-cols-4 gap-gutter">
+<!-- Ghost User Automation -->
+<div class="glass-card p-8 flex flex-col gap-6 group hover:-translate-y-2">
+<div class="w-12 h-12 rounded-sm bg-primary/10 flex items-center justify-center text-primary border border-primary/20">
+<span class="material-symbols-outlined text-3xl">record_voice_over</span>
+</div>
+<div>
+<h3 class="font-headline-lg text-xl mb-3">Ghost User Automation</h3>
+<p class="text-on-surface-variant text-sm leading-relaxed">Record and replay complex user flows with AI-generated test scripts that never flake.</p>
+</div>
+</div>
+<!-- Visual Eyes Debugging -->
+<div class="glass-card p-8 flex flex-col gap-6 group hover:-translate-y-2">
+<div class="w-12 h-12 rounded-sm bg-secondary/10 flex items-center justify-center text-secondary border border-secondary/20">
+<span class="material-symbols-outlined text-3xl">visibility</span>
+</div>
+<div>
+<h3 class="font-headline-lg text-xl mb-3">Visual Eyes Debugging</h3>
+<p class="text-on-surface-variant text-sm leading-relaxed">One-click screenshot debugging with pixel-perfect diffing and instant fix suggestions.</p>
+</div>
+</div>
+<!-- API Mocking -->
+<div class="glass-card p-8 flex flex-col gap-6 group hover:-translate-y-2">
+<div class="w-12 h-12 rounded-sm bg-tertiary/10 flex items-center justify-center text-tertiary border border-tertiary/20">
+<span class="material-symbols-outlined text-3xl">api</span>
+</div>
+<div>
+<h3 class="font-headline-lg text-xl mb-3">API Mocking</h3>
+<p class="text-on-surface-variant text-sm leading-relaxed">Instant, typesafe API mocks that evolve automatically with your backend schema changes.</p>
+</div>
+</div>
+<!-- LLM-Optimized DOM -->
+<div class="glass-card p-8 flex flex-col gap-6 group hover:-translate-y-2">
+<div class="w-12 h-12 rounded-sm bg-primary/10 flex items-center justify-center text-primary border border-primary/20">
+<span class="material-symbols-outlined text-3xl">hub</span>
+</div>
+<div>
+<h3 class="font-headline-lg text-xl mb-3">LLM-Optimized DOM</h3>
+<p class="text-on-surface-variant text-sm leading-relaxed">A specialized DOM representation designed for maximum context window efficiency.</p>
+</div>
+</div>
+</div>
+</div>
+</section>
+<!-- Architecture Section -->
+<section class="py-32 px-margin-desktop relative overflow-hidden" id="architecture">
+<div class="absolute inset-0 -z-10 opacity-20">
+
+</div>
+<div class="max-w-container-max-width mx-auto flex flex-col lg:flex-row gap-20 items-center">
+<div class="lg:w-1/2 space-y-8">
+<h2 class="font-display-lg text-display-lg tracking-tight">Local-First. <br/><span class="text-gradient">Private by Design.</span></h2>
+<p class="text-on-surface-variant text-lg leading-relaxed">
+                    Xtra DevPilot runs locally on your machine via the Model Context Protocol (MCP). Your code never leaves your device. We process intelligence where your source lives.
+                </p>
+<div class="space-y-4">
+<div class="flex items-start gap-4">
+<div class="mt-1 bg-primary/20 p-1 rounded">
+<span class="material-symbols-outlined text-primary text-sm">shield</span>
+</div>
+<div>
+<p class="font-bold">Zero-Cloud Residency</p>
+<p class="text-on-surface-variant text-sm">Sensitive logic and proprietary assets remain within your local firewall.</p>
+</div>
+</div>
+<div class="flex items-start gap-4">
+<div class="mt-1 bg-primary/20 p-1 rounded">
+<span class="material-symbols-outlined text-primary text-sm">speed</span>
+</div>
+<div>
+<p class="font-bold">Millisecond Latency</p>
+<p class="text-on-surface-variant text-sm">Local MCP server ensures your IDE and AI are perfectly synchronized.</p>
+</div>
+</div>
+</div>
+</div>
+<!-- MCP Diagram Mockup -->
+<div class="lg:w-1/2 w-full glass-card p-12 relative overflow-hidden rounded-xl border-white/10">
+<div class="flex flex-col items-center gap-12 relative z-10">
+<!-- Extension Node -->
+<div class="flex flex-col items-center gap-2 mcp-node">
+<div class="w-24 h-24 rounded-full glass-card flex items-center justify-center border-primary/40 bg-primary/5">
+<img class="w-12 h-12 object-contain" src="https://lh3.googleusercontent.com/aida/AP1WRLtMoDi9co78tXZcftYK2wGSqmSRMGeqPRquNHRqwXGTva6TqE5DkyyBnhsmHsmgLWqysLowxJJeMGsWG_hsazxErieI1yDwsgWA8SAYj92yg6P85endQpqqA7LQ_EerchGbb0lhxrcxbiyCjaoAqImr8yQC1xEZJ6NQxYsyfof4ueL7mBq1vPv3kp5K-Vi5NwfQdTMEW27-70aJZddbA85hu87QHRC87SjaZkCFFlHNH3Bnp2fHulRk_Q"/>
+</div>
+<span class="font-label-mono text-xs uppercase text-primary">IDE Extension</span>
+</div>
+<!-- Connection Lines (SVG) -->
+<div class="h-24 w-1 flex items-center justify-center">
+<div class="h-full w-px bg-gradient-to-b from-primary to-secondary relative">
+<div class="absolute top-0 w-2 h-2 rounded-full bg-primary -left-[3.5px] blur-[2px]"></div>
+<div class="absolute bottom-0 w-2 h-2 rounded-full bg-secondary -left-[3.5px] blur-[2px]"></div>
+</div>
+</div>
+<!-- MCP Server Node -->
+<div class="flex flex-col items-center gap-2 mcp-node" style="animation-delay: 1s;">
+<div class="w-24 h-24 rounded-sm glass-card flex items-center justify-center border-secondary/40 bg-secondary/5 rotate-45">
+<span class="material-symbols-outlined text-secondary text-4xl -rotate-45">terminal</span>
+</div>
+<span class="font-label-mono text-xs uppercase text-secondary">Local MCP Server</span>
+</div>
+</div>
+<!-- Background decorative mesh -->
+<div class="absolute inset-0 opacity-10 pointer-events-none" style="background-image: radial-gradient(circle at 2px 2px, white 1px, transparent 0); background-size: 24px 24px;"></div>
+</div>
+</div>
+</section>
+<!-- Call to Action -->
+<section class="py-24 px-margin-desktop text-center relative overflow-hidden">
+<div class="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[800px] h-[400px] bg-primary/10 blur-[120px] rounded-full -z-10"></div>
+<div class="max-w-3xl mx-auto space-y-10">
+<h2 class="font-headline-lg text-5xl font-bold tracking-tight">Ready to transcend?</h2>
+<p class="text-on-surface-variant text-xl">Join 20,000+ elite frontend engineers using Xtra DevPilot to build the future of the web.</p>
+<div class="flex flex-col sm:flex-row justify-center gap-4">
+<button class="primary-gradient text-on-primary font-bold px-12 py-5 rounded-sm bloom-glow text-lg">
+                    Install Extension
+                </button>
+<button class="glass-card text-on-surface font-bold px-12 py-5 rounded-sm hover:bg-white/10 text-lg">
+                    Book a Demo
+                </button>
+</div>
+<p class="font-label-mono text-xs text-outline uppercase tracking-widest">Available on VS Code, Cursor, and JetBrains</p>
+</div>
+</section>
+<!-- Footer -->
+<footer class="bg-surface-container-lowest dark:bg-surface-container-lowest w-full py-12 border-t border-white/5">
+<div class="flex flex-col md:flex-row justify-between items-center px-margin-desktop max-w-container-max-width mx-auto gap-gutter">
+<div class="flex flex-col items-center md:items-start gap-4">
+<div class="flex items-center gap-3">
+<img class="h-6 w-6" src="https://lh3.googleusercontent.com/aida/AP1WRLtMoDi9co78tXZcftYK2wGSqmSRMGeqPRquNHRqwXGTva6TqE5DkyyBnhsmHsmgLWqysLowxJJeMGsWG_hsazxErieI1yDwsgWA8SAYj92yg6P85endQpqqA7LQ_EerchGbb0lhxrcxbiyCjaoAqImr8yQC1xEZJ6NQxYsyfof4ueL7mBq1vPv3kp5K-Vi5NwfQdTMEW27-70aJZddbA85hu87QHRC87SjaZkCFFlHNH3Bnp2fHulRk_Q"/>
+<span class="font-headline-lg text-2xl font-bold text-on-surface">Xtra DevPilot</span>
+</div>
+<p class="font-label-mono text-label-mono text-outline">© 2024 Xtra DevPilot. Built for elite engineers.</p>
+</div>
+<div class="flex gap-8">
+<a class="font-label-mono text-label-mono text-outline hover:text-primary transition-colors" href="#">Documentation</a>
+<a class="font-label-mono text-label-mono text-outline hover:text-primary transition-colors" href="#">Privacy</a>
+<a class="font-label-mono text-label-mono text-outline hover:text-primary transition-colors" href="#">GitHub</a>
+<a class="font-label-mono text-label-mono text-outline hover:text-primary transition-colors" href="#">Discord</a>
+</div>
+</div>
+</footer>
+<script>
+        // Smooth scroll for anchors
+        document.querySelectorAll('a[href^="#"]').forEach(anchor => {
+            anchor.addEventListener('click', function (e) {
+                e.preventDefault();
+                document.querySelector(this.getAttribute('href')).scrollIntoView({
+                    behavior: 'smooth'
+                });
+            });
+        });
+
+        // Simple parallax effect for glass cards
+        window.addEventListener('mousemove', (e) => {
+            const moveX = (e.clientX - window.innerWidth / 2) / 100;
+            const moveY = (e.clientY - window.innerHeight / 2) / 100;
+            
+            document.querySelectorAll('.glass-card').forEach(card => {
+                card.style.transform = `translate(${moveX}px, ${moveY}px)`;
+            });
+        });
+    </script>
+</body></html>
