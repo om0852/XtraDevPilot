@@ -1,77 +1,158 @@
 # Xtra DevPilot
 
-AI Browser Bridge for your IDE. Connect Chrome to an MCP-enabled AI assistant so it can inspect the live DOM, console, and network without leaving your editor.
+<p align="center">
+  <img src="assets/android-chrome-512x512.png" alt="Xtra DevPilot Logo" width="128" height="128" />
+</p>
 
-## Product
+An open-source **AI Browser Bridge** for your IDE. Connect Google Chrome directly to any Model Context Protocol (MCP) compatible AI assistant (such as Cursor Composer, Windsurf, or Claude Desktop) so it can inspect the live DOM, capture screenshots, intercept network requests, read console logs, and interact with the page—all without you leaving your editor.
 
-- Specializes in: browser-to-IDE automation, prompted web debugging, and AI-assisted QA
-- Supports: Cursor, Claude Desktop, and compatible MCP clients
-- Model: local relay bridge; browser data stays on-device
+---
 
-## What it does
+## 🚀 Key Features
 
-- Reads live DOM and extracts an LLM-friendly view
-- Captures browser screenshots
-- Watches console logs and network requests
-- Interacts with page elements: click, type, evaluate
-- Mocks responses for frontend testing without a backend
+* 🌐 **AI Browser Bridge**: Gives your IDE agent "eyes and hands" inside Google Chrome.
+* 🛡️ **Local-First & Secure**: Runs entirely on a local loopback network (`127.0.0.1:42819`). Your source code and browser data never leave your device.
+* 📸 **Visual Debugging**: Allows your agent to request viewport screenshots and extract LLM-friendly DOM snapshots.
+* 🖱️ **Full Element Interaction**: Supports click simulation, keyboard typing, scrolling, and custom JavaScript execution.
+* 🩺 **Console Hooks**: Directly reports browser logs and exceptions to assist in real-time debugging.
 
-## Tech stack
+---
 
-- Node.js runtime
-- Chrome extension with injected scripts
-- WebSocket bridge
-- MCP protocol integration
+## 📐 Architecture Overview
 
-## Repo structure
+Xtra DevPilot uses a three-part local architecture to establish a secure link between Chrome and your editor:
 
 ```
-assets/                  Logos and image assets
-demo/                   Demo static files
-  index.html
-  style1.css
-  style2.css
-extension/             Chrome extension
-  background.js
-  content.js
-  injected.js
-  popup.js
-  devtools.html
-  devtools.js
-  panel.html
-  manifest.json
-  icon.png
-mcp-server/            MCP server and bridge
-  index.js
-  get_dom.js
-  package.json
-README.md              You are here
++--------------------------+                 +--------------------------+
+|                          |    WebSocket    |                          |
+|     Chrome Extension     |<--------------->|     Local MCP Server     |
+| (Inspects DOM & console) |  (Port 42819)   |   (Stdio MCP Transport)  |
+|                          |                 |                          |
++--------------------------+                 +--------------------------+
+                                                          ^
+                                                          | stdio (JSON-RPC)
+                                                          v
+                                             +--------------------------+
+                                             |                          |
+                                             |     IDE / MCP Client     |
+                                             |  (Cursor, Claude, etc.)  |
+                                             |                          |
+                                             +--------------------------+
 ```
 
-## Requirements
+---
 
-- Node.js
-- Chrome or Chromium browser
-- An MCP-compatible IDE or client
+## 🛠️ Quick Start
 
-## Setup
+### Prerequisites
+* **Node.js** v18.0.0 or higher.
+* **Google Chrome** (or any Chromium-based browser like Brave or Edge).
+* An **MCP-compatible client** (e.g., Cursor, Claude Desktop).
 
-1. Install dependencies in `mcp-server/`.
-2. Open Chrome and load the `extension/` folder as an unpacked extension.
-3. Start the MCP server.
-4. Add the server to your IDE/client MCP configuration.
+---
 
-## Usage ideas
+### Step 1: Install the Chrome Extension
 
-- Debug a failing UI by asking the IDE to check console and network
-- Capture the current page before reporting a bug
-- Test UI flows by simulating clicks and form inputs
-- Mock APIs to work offline
+1. Clone this repository to your local machine:
+   ```bash
+   git clone https://github.com/om0852/XtraDevPilot.git
+   ```
+2. Open Chrome and navigate to: `chrome://extensions/`
+3. In the top-right corner, toggle **Developer mode** to **ON**.
+4. In the top-left corner, click **Load unpacked**.
+5. Select the `extension/` folder inside your cloned `XtraDevPilot` directory.
+6. The Xtra DevPilot extension icon will now appear in your browser toolbar. We recommend pinning it for easy access.
 
-## Contributing
+---
 
-Improvements are welcome. Please update docs, add tests, and keep changes small and reviewable.
+### Step 2: Start the MCP Server
 
-## License
+The server acts as the Stdio bridge. You can run the server directly from NPM using `npx`:
 
-MIT
+```bash
+npx xtradevpilot-mcp
+```
+
+*Alternatively, if running from source:*
+```bash
+cd mcp-server
+npm install
+npm start
+```
+
+---
+
+### Step 3: Configure your IDE / Client
+
+Add the local MCP server command to your client configurations.
+
+#### 1. Cursor IDE Setup
+1. Open **Cursor Settings** and select the **Features** tab.
+2. Scroll down to the **MCP** section.
+3. Click **+ Add New MCP Server**.
+4. Enter the configuration:
+   * **Name**: `Xtra DevPilot`
+   * **Type**: `command`
+   * **Command**: `npx -y xtradevpilot-mcp`
+5. Click **Save**.
+
+#### 2. Claude Desktop Setup
+Open your Claude Desktop config file (located at `%appdata%\Claude\claude_desktop_config.json` on Windows or `~/Library/Application Support/Claude/claude_desktop_config.json` on macOS) and add:
+
+```json
+{
+  "mcpServers": {
+    "xtra-devpilot": {
+      "command": "npx",
+      "args": ["-y", "xtradevpilot-mcp"]
+    }
+  }
+}
+```
+
+---
+
+## 🧰 Available MCP Tools
+
+Once connected, Xtra DevPilot provides your AI agent with these capabilities:
+
+| Tool Name | Parameters | Description |
+|---|---|---|
+| `get_dom_snapshot` | None | Returns a condensed, LLM-friendly structural snapshot of the active page DOM. |
+| `capture_screenshot` | None | Captures a high-resolution base64 screenshot of the active browser viewport. |
+| `interact_with_page` | `action` ("click" / "type" / "scroll"), `selector`, `text` | Simulates user inputs like clicks, scrolling, and entering values on page elements. |
+| `evaluate_javascript` | `code` | Evaluates custom JavaScript in the context of the active webpage and returns output. |
+
+---
+
+## 💡 Example Prompt Instructions
+
+Try using these prompts inside Cursor Composer or your agent window:
+* > "Inspect the DOM of my current webpage and tell me why the submit button isn't clickable."
+* > "Click the login link, then type my email into the input field."
+* > "Evaluate `window.performance.timing` on my current tab and report the metrics."
+* > "Check the active page console and summarize any warnings or errors."
+
+---
+
+## 🔧 Troubleshooting
+
+* **Extension shows red status**: Check that the server process is running and WebSocket port `42819` is free. Try clicking **Reconnect** in the extension popup.
+* **WSL / Containers**: If running your IDE inside WSL, you may need to forward port `42819` to your Windows host so the extension can connect.
+* **Permission issues**: Make sure the Chrome extension has permission to access your active tab pages.
+
+---
+
+## 🤝 Contributing
+
+We welcome open-source contributions!
+1. Fork the repo and create your feature branch: `git checkout -b feature/my-new-feature`.
+2. Commit your changes: `git commit -am 'Add some feature'`.
+3. Push to the branch: `git push origin feature/my-new-feature`.
+4. Submit a Pull Request.
+
+---
+
+## 📄 License
+
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
