@@ -1,19 +1,31 @@
 "use client";
 
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
 
 export default function Landing() {
+  const [showModal, setShowModal] = useState(false);
+  const [toastMessage, setToastMessage] = useState<string | null>(null);
+
+  const showToast = (message: string) => {
+    setToastMessage(message);
+    setTimeout(() => {
+      setToastMessage((curr) => (curr === message ? null : curr));
+    }, 3000);
+  };
+
   useEffect(() => {
     // Smooth scroll for anchors
     const handleAnchorClick = (e: MouseEvent) => {
       const target = e.currentTarget as HTMLAnchorElement;
       const href = target.getAttribute("href");
-      if (href && href.startsWith("#")) {
+      if (href && href.startsWith("#") && href.length > 1) {
         e.preventDefault();
-        document.querySelector(href)?.scrollIntoView({
-          behavior: "smooth",
-        });
+        try {
+          document.querySelector(href)?.scrollIntoView({
+            behavior: "smooth",
+          });
+        } catch (e) {}
       }
     };
 
@@ -48,8 +60,8 @@ export default function Landing() {
         <div className="flex justify-between items-center px-margin-desktop py-4 max-w-container-max-width mx-auto">
           <Link href="/" className="flex items-center gap-3">
             <img
-              className="h-8 w-8 object-contain"
-              src="/xtradevpilot_logo.png"
+              className="h-8 w-8 object-contain rounded-sm"
+              src="/android-chrome-512x512.png"
               alt="Xtra DevPilot Logo"
             />
             <span className="font-headline-lg text-headline-lg font-bold text-on-surface tracking-tight">
@@ -76,7 +88,10 @@ export default function Landing() {
               Pricing
             </a>
           </div>
-          <button className="primary-gradient text-on-primary font-bold px-6 py-2 rounded-sm bloom-glow active:scale-95 transition-all text-body-md">
+          <button
+            onClick={() => setShowModal(true)}
+            className="primary-gradient text-on-primary font-bold px-6 py-2 rounded-sm bloom-glow active:scale-95 transition-all text-body-md cursor-pointer"
+          >
             Install Extension
           </button>
         </div>
@@ -100,7 +115,10 @@ export default function Landing() {
               and local-first architecture. Built for the terminal-obsessed.
             </p>
             <div className="flex flex-wrap gap-4">
-              <button className="primary-gradient text-on-primary font-bold px-8 py-4 rounded-sm bloom-glow text-body-md">
+              <button
+                onClick={() => setShowModal(true)}
+                className="primary-gradient text-on-primary font-bold px-8 py-4 rounded-sm bloom-glow text-body-md cursor-pointer"
+              >
                 Install Extension
               </button>
               <Link href="/docs" className="glass-card text-on-surface font-bold px-8 py-4 rounded-sm hover:bg-white/10 text-body-md flex items-center gap-2">
@@ -331,8 +349,8 @@ export default function Landing() {
               <div className="flex flex-col items-center gap-2 mcp-node">
                 <div className="w-24 h-24 rounded-full glass-card flex items-center justify-center border-primary/40 bg-primary/5">
                   <img
-                    className="w-12 h-12 object-contain"
-                    src="/xtradevpilot_logo.png"
+                    className="w-12 h-12 object-contain rounded-sm"
+                    src="/android-chrome-512x512.png"
                     alt="Extension Node"
                   />
                 </div>
@@ -376,10 +394,16 @@ export default function Landing() {
             the future of the web.
           </p>
           <div className="flex flex-col sm:flex-row justify-center gap-4">
-            <button className="primary-gradient text-on-primary font-bold px-12 py-5 rounded-sm bloom-glow text-lg">
+            <button
+              onClick={() => setShowModal(true)}
+              className="primary-gradient text-on-primary font-bold px-12 py-5 rounded-sm bloom-glow text-lg cursor-pointer"
+            >
               Install Extension
             </button>
-            <button className="glass-card text-on-surface font-bold px-12 py-5 rounded-sm hover:bg-white/10 text-lg">
+            <button
+              onClick={() => showToast("Demo requests will open next week!")}
+              className="glass-card text-on-surface font-bold px-12 py-5 rounded-sm hover:bg-white/10 text-lg cursor-pointer"
+            >
               Book a Demo
             </button>
           </div>
@@ -394,8 +418,8 @@ export default function Landing() {
           <div className="flex flex-col items-center md:items-start gap-4">
             <Link href="/" className="flex items-center gap-3">
               <img
-                className="h-6 w-6"
-                src="/xtradevpilot_logo.png"
+                className="h-6 w-6 rounded-sm"
+                src="/android-chrome-512x512.png"
                 alt="Xtra DevPilot Logo"
               />
               <span className="font-headline-lg text-2xl font-bold text-on-surface">
@@ -413,27 +437,157 @@ export default function Landing() {
             >
               Documentation
             </Link>
-            <a
-              className="font-label-mono text-label-mono text-outline hover:text-primary transition-colors"
-              href="#"
+            <button
+              onClick={() => showToast("Privacy Policy: All data is processed locally on your machine.")}
+              className="font-label-mono text-label-mono text-outline hover:text-primary transition-colors cursor-pointer text-left"
             >
               Privacy
-            </a>
+            </button>
             <a
               className="font-label-mono text-label-mono text-outline hover:text-primary transition-colors"
-              href="#"
+              href="https://github.com/om0852/XtraDevPilot"
+              target="_blank"
+              rel="noopener noreferrer"
             >
               GitHub
             </a>
-            <a
-              className="font-label-mono text-label-mono text-outline hover:text-primary transition-colors"
-              href="#"
+            <button
+              onClick={() => showToast("Discord link is coming soon!")}
+              className="font-label-mono text-label-mono text-outline hover:text-primary transition-colors cursor-pointer text-left"
             >
               Discord
-            </a>
+            </button>
           </div>
         </div>
       </footer>
+
+      {/* Elegant Installation Modal */}
+      {showModal && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/60 backdrop-blur-md">
+          <div className="relative w-full max-w-2xl bg-[#141218] border border-white/10 rounded-sm shadow-2xl overflow-hidden glass-card">
+            {/* Accent strip */}
+            <div className="h-1.5 w-full bg-gradient-to-r from-primary via-secondary to-tertiary"></div>
+            
+            <div className="p-6 md:p-8">
+              {/* Header */}
+              <div className="flex justify-between items-start mb-6">
+                <div>
+                  <h3 className="font-headline-lg text-2xl font-bold text-on-surface">
+                    Install Xtra DevPilot Extension
+                  </h3>
+                  <p className="text-sm text-on-surface-variant mt-1 font-body-md">
+                    Follow these steps to set up the browser bridge in Chrome.
+                  </p>
+                </div>
+                <button
+                  onClick={() => setShowModal(false)}
+                  className="text-on-surface-variant hover:text-primary transition-colors focus:outline-none cursor-pointer"
+                >
+                  <span className="material-symbols-outlined text-2xl">close</span>
+                </button>
+              </div>
+
+              {/* Steps */}
+              <div className="space-y-6 max-h-[60vh] overflow-y-auto pr-2">
+                {/* Step 1: Download */}
+                <div className="flex gap-4">
+                  <div className="flex-shrink-0 w-8 h-8 rounded-full bg-primary/20 text-primary border border-primary/30 flex items-center justify-center font-label-mono font-bold text-sm">
+                    1
+                  </div>
+                  <div>
+                    <h4 className="font-bold text-on-surface text-base font-body-md">Get the Extension Source</h4>
+                    <p className="text-sm text-on-surface-variant mt-1 font-body-md">
+                      Download or clone the official repository from GitHub:
+                    </p>
+                    <div className="mt-3 flex flex-wrap gap-3 items-center">
+                      <a
+                        href="https://github.com/om0852/XtraDevPilot"
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="inline-flex items-center gap-2 bg-primary text-on-primary px-4 py-2 rounded-sm font-label-mono text-xs hover:scale-105 transition-all"
+                      >
+                        <span className="material-symbols-outlined text-sm">open_in_new</span>
+                        GitHub Repository
+                      </a>
+                      <div className="bg-[#0A0A0A] border border-white/10 px-3 py-2 rounded-sm font-code-sm text-xs text-on-surface-variant select-all">
+                        git clone https://github.com/om0852/XtraDevPilot.git
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Step 2: Developer Mode */}
+                <div className="flex gap-4">
+                  <div className="flex-shrink-0 w-8 h-8 rounded-full bg-secondary/20 text-secondary border border-secondary/30 flex items-center justify-center font-label-mono font-bold text-sm">
+                    2
+                  </div>
+                  <div>
+                    <h4 className="font-bold text-on-surface text-base font-body-md">Enable Chrome Developer Mode</h4>
+                    <p className="text-sm text-on-surface-variant mt-1 font-body-md">
+                      Open a new tab in Google Chrome and enter <code className="bg-white/10 px-1 rounded font-label-mono text-xs text-secondary">chrome://extensions/</code> in the address bar.
+                    </p>
+                    <p className="text-sm text-on-surface-variant mt-1 font-body-md">
+                      In the top-right corner of the Extensions page, turn on the <span className="text-secondary font-bold font-body-md">Developer mode</span> switch.
+                    </p>
+                  </div>
+                </div>
+
+                {/* Step 3: Load Unpacked */}
+                <div className="flex gap-4">
+                  <div className="flex-shrink-0 w-8 h-8 rounded-full bg-tertiary/20 text-tertiary border border-tertiary/30 flex items-center justify-center font-label-mono font-bold text-sm">
+                    3
+                  </div>
+                  <div>
+                    <h4 className="font-bold text-on-surface text-base font-body-md">Load Unpacked Extension</h4>
+                    <p className="text-sm text-on-surface-variant mt-1 font-body-md">
+                      Click the <span className="text-tertiary font-bold font-body-md">Load unpacked</span> button in the top-left corner.
+                    </p>
+                    <p className="text-sm text-on-surface-variant mt-1 font-body-md">
+                      Select the <code className="bg-white/10 px-1 rounded font-label-mono text-xs">extension/</code> folder within your cloned <code className="bg-white/10 px-1 rounded font-label-mono text-xs">XtraDevPilot</code> directory.
+                    </p>
+                  </div>
+                </div>
+
+                {/* Step 4: Verification */}
+                <div className="flex gap-4">
+                  <div className="flex-shrink-0 w-8 h-8 rounded-full bg-primary/20 text-primary border border-primary/30 flex items-center justify-center font-label-mono font-bold text-sm">
+                    4
+                  </div>
+                  <div>
+                    <h4 className="font-bold text-on-surface text-base font-body-md">Verify Connection</h4>
+                    <p className="text-sm text-on-surface-variant mt-1 font-body-md">
+                      Once loaded, the Xtra DevPilot extension icon will appear in your toolbar. Pin it, then start your local MCP bridge:
+                    </p>
+                    <div className="mt-2 bg-[#0A0A0A] border border-white/10 px-3 py-2 rounded-sm font-code-sm text-xs text-on-surface-variant select-all w-fit">
+                      npx xtradevpilot-mcp
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Footer */}
+              <div className="mt-8 pt-4 border-t border-white/10 flex justify-end">
+                <button
+                  onClick={() => setShowModal(false)}
+                  className="px-5 py-2 border border-white/10 text-on-surface hover:bg-white/5 font-label-mono text-xs rounded-sm transition-all cursor-pointer"
+                >
+                  Close
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Toast Notification */}
+      <div
+        className={`fixed bottom-6 right-6 z-[100] flex items-center gap-3 px-4 py-3 bg-[#141218] border border-primary/30 text-on-surface rounded-sm shadow-lg backdrop-blur-md transition-all duration-300 ${
+          toastMessage ? "opacity-100 translate-y-0" : "opacity-0 translate-y-4 pointer-events-none"
+        }`}
+      >
+        <span className="material-symbols-outlined text-primary">info</span>
+        <span className="font-label-mono text-sm">{toastMessage}</span>
+      </div>
     </>
   );
 }

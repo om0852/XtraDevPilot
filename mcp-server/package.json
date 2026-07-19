@@ -1,5 +1,5 @@
 {
-  "name": "xtra-devpilot",
+  "name": "xtradevpilot-mcp",
   "version": "1.0.0",
   "description": "MCP server bridging IDE to Chrome extension",
   "main": "index.js",
