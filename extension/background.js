@@ -8,6 +8,7 @@ function connectWebSocket() {
 
   socket.onopen = () => {
     console.log("[DevPilot] Connected to IDE Bridge.");
+    socket.send(JSON.stringify({ role: 'extension' }));
   };
 
   socket.onmessage = async (event) => {
@@ -53,6 +54,41 @@ function getActiveTabLogs(logsObj) {
 
 async function handleAction(action, payload) {
   switch (action) {
+    case 'OPEN_TAB':
+    case 'NAVIGATE':
+      return new Promise((resolve, reject) => {
+        const url = payload.url || 'https://google.com';
+        if (action === 'OPEN_TAB' || payload.newTab) {
+          chrome.tabs.create({ url, active: true }, (tab) => {
+            if (chrome.runtime.lastError) return reject(new Error(chrome.runtime.lastError.message));
+            resolve({ tabId: tab.id, url: tab.url, status: tab.status });
+          });
+        } else {
+          chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
+            if (tabs.length === 0) return reject(new Error("No active tab found."));
+            chrome.tabs.update(tabs[0].id, { url }, (tab) => {
+              if (chrome.runtime.lastError) return reject(new Error(chrome.runtime.lastError.message));
+              resolve({ tabId: tab.id, url: tab.url, status: tab.status });
+            });
+          });
+        }
+      });
+    case 'GET_TAB_INFO':
+      return new Promise((resolve, reject) => {
+        chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
+          if (tabs.length === 0) return reject(new Error("No active tab found."));
+          const tab = tabs[0];
+          resolve({
+            id: tab.id,
+            title: tab.title,
+            url: tab.url,
+            favIconUrl: tab.favIconUrl,
+            width: tab.width,
+            height: tab.height,
+            status: tab.status
+          });
+        });
+      });
     case 'GET_NETWORK_LOGS':
       return await getActiveTabLogs(networkLogsByTab);
     case 'GET_CONSOLE_LOGS':

@@ -1,0 +1,50 @@
+{
+  "name": "@xtradevpilot/sdk",
+  "version": "1.0.0",
+  "description": "Enterprise-grade Node.js & TypeScript Automation SDK for Xtra DevPilot browser bridge",
+  "main": "./dist/index.js",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "require": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist",
+    "README.md"
+  ],
+  "scripts": {
+    "build": "tsc",
+    "watch": "tsc --watch",
+    "type-check": "tsc --noEmit",
+    "test": "node --test dist/tests/unit/sdk.test.js",
+    "example": "node dist/examples/enterprise_test.js",
+    "ws-example": "node dist/examples/persistent_websocket_test.js",
+    "tab-info": "node dist/examples/get_active_tab_info.js",
+    "open-site": "node dist/examples/open_website_demo.js",
+    "prepublishOnly": "npm run build && npm test"
+  },
+  "keywords": [
+    "xtradevpilot",
+    "mcp",
+    "browser-automation",
+    "testing",
+    "chrome",
+    "sdk",
+    "typescript"
+  ],
+  "author": "XtraDevPilot Team",
+  "license": "MIT",
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.0.0",
+    "ws": "^8.18.0"
+  },
+  "devDependencies": {
+    "@types/node": "^20.19.43",
+    "@types/ws": "^8.18.1",
+    "typescript": "^5.9.3"
+  }
+}

@@ -135,6 +135,40 @@ Try using these prompts inside Cursor Composer or your agent window:
 
 ---
 
+## 🤖 Node.js Automation SDK
+
+You can also use Xtra DevPilot as a programmatic browser automation SDK to run step-by-step test scripts directly in Node.js.
+
+### Quick Start
+
+```javascript
+import { XtraDevPilot } from './sdk/index.js';
+
+const pilot = new XtraDevPilot();
+
+// Connect to Chrome extension via MCP bridge
+await pilot.connect();
+
+// Perform browser automation steps sequentially
+await pilot.type('#email-input', 'test@example.com');
+await pilot.click('#submit-btn');
+
+// Capture screenshot & DOM
+const dom = await pilot.getCleanDomSnapshot();
+const screenshot = await pilot.captureScreenshot();
+
+// Run security & a11y checks
+const secReport = await pilot.runSecurityAudit();
+
+await pilot.disconnect();
+```
+
+To run the bundled example automation test script:
+```bash
+node sdk/examples/test_automation.js
+```
+
+
 ## 🔧 Troubleshooting
 
 * **Extension shows red status**: Check that the server process is running and WebSocket port `42819` is free. Try clicking **Reconnect** in the extension popup.

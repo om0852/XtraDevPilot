@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 import fs from 'fs';
 import path from 'path';
+import { execSync } from 'child_process';
 import { Server } from '@modelcontextprotocol/sdk/server/index.js';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
 import {
@@ -13,19 +14,55 @@ import { WebSocketServer } from 'ws';
 
 // Setup WebSocket Server to listen for the Chrome Extension
 const WSS_PORT = 42819;
-const wss = new WebSocketServer({ port: WSS_PORT });
+
+function freePortIfInUse(port) {
+  try {
+    if (process.platform === 'win32') {
+      execSync(`powershell -Command "Get-NetTCPConnection -LocalPort ${port} -ErrorAction SilentlyContinue | ForEach-Object { Stop-Process -Id $_.OwningProcess -Force -ErrorAction SilentlyContinue }"`, { stdio: 'ignore' });
+    } else {
+      execSync(`fuser -k ${port}/tcp`, { stdio: 'ignore' });
+    }
+  } catch (e) {
+    // Ignore error if port cannot be cleared
+  }
+}
+
+let wss;
+try {
+  wss = new WebSocketServer({ port: WSS_PORT });
+} catch (e) {
+  console.error(`[DevPilot Bridge] Failed to bind port ${WSS_PORT}, attempting to free port...`);
+  freePortIfInUse(WSS_PORT);
+  wss = new WebSocketServer({ port: WSS_PORT });
+}
+
+wss.on('error', (err) => {
+  console.error(`[DevPilot Bridge] WebSocket Server error: ${err.message}`);
+  if (err.code === 'EADDRINUSE') {
+    console.error(`[DevPilot Bridge] Port ${WSS_PORT} is in use. Attempting to free port...`);
+    freePortIfInUse(WSS_PORT);
+  }
+});
 
 let activeExtensionSocket = null;
 let messageIdCounter = 1;
 const pendingRequests = new Map();
 
 wss.on('connection', (ws) => {
-  console.error(`[DevPilot Bridge] Chrome Extension connected via WebSocket.`);
-  activeExtensionSocket = ws;
+  if (!activeExtensionSocket || activeExtensionSocket.readyState !== 1) {
+    console.error(`[DevPilot Bridge] Registered active Chrome Extension connection.`);
+    activeExtensionSocket = ws;
+  }
 
-  ws.on('message', (message) => {
+  ws.on('message', async (message) => {
     try {
       const data = JSON.parse(message);
+      
+      if (data.role === 'extension') {
+        console.error(`[DevPilot Bridge] Chrome Extension registered via WebSocket.`);
+        activeExtensionSocket = ws;
+        return;
+      }
       
       if (data.type === 'PING') {
         return; // Ignore keep-alive pings
@@ -39,8 +76,17 @@ wss.on('connection', (ws) => {
           resolve(data.result);
         }
         pendingRequests.delete(data.id);
-      } else {
-        console.error(`[DevPilot Bridge] Unhandled message:`, data);
+        return;
+      }
+      
+      if (data.id && data.action) {
+        try {
+          const result = await askExtension(data.action, data);
+          ws.send(JSON.stringify({ id: data.id, result }));
+        } catch (err) {
+          ws.send(JSON.stringify({ id: data.id, error: err.message }));
+        }
+        return;
       }
     } catch (e) {
       console.error(`[DevPilot Bridge] Failed to parse WebSocket message:`, e);
@@ -48,8 +94,8 @@ wss.on('connection', (ws) => {
   });
 
   ws.on('close', () => {
-    console.error(`[DevPilot Bridge] Chrome Extension disconnected.`);
     if (activeExtensionSocket === ws) {
+      console.error(`[DevPilot Bridge] Chrome Extension disconnected.`);
       activeExtensionSocket = null;
     }
   });
@@ -93,6 +139,33 @@ const server = new Server(
 server.setRequestHandler(ListToolsRequestSchema, async () => {
   return {
     tools: [
+      {
+        name: 'open_tab',
+        description: 'Opens a new browser tab in Chrome and navigates to the specified URL.',
+        inputSchema: {
+          type: 'object',
+          properties: {
+            url: { type: 'string', description: 'Target URL to open in a new tab (e.g. "https://google.com")' }
+          },
+          required: ['url']
+        },
+      },
+      {
+        name: 'navigate',
+        description: 'Navigates the active browser tab to the specified URL.',
+        inputSchema: {
+          type: 'object',
+          properties: {
+            url: { type: 'string', description: 'Target URL to navigate to' }
+          },
+          required: ['url']
+        },
+      },
+      {
+        name: 'get_tab_info',
+        description: 'Get metadata (title, URL, dimensions, favicon, status) of the active Chrome browser tab.',
+        inputSchema: { type: 'object', properties: {} },
+      },
       {
         name: 'get_dom_snapshot',
         description: 'Get the current HTML structure (DOM) of the active browser tab. Use this to understand the page layout and element IDs.',
@@ -292,6 +365,15 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         break;
       case 'get_console_logs':
         result = await askExtension('GET_CONSOLE_LOGS');
+        break;
+      case 'get_tab_info':
+        result = await askExtension('GET_TAB_INFO');
+        break;
+      case 'open_tab':
+        result = await askExtension('OPEN_TAB', { url: request.params.arguments.url });
+        break;
+      case 'navigate':
+        result = await askExtension('NAVIGATE', { url: request.params.arguments.url });
         break;
       case 'get_storage':
         result = await askExtension('GET_STORAGE');
