@@ -1,15 +1,301 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, useMemo } from "react";
 import Link from "next/link";
 
+interface DocTool {
+  name: string;
+  category: "tabs" | "inspection" | "automation" | "devqa" | "scraping" | "observability";
+  description: string;
+  schema: string;
+  sampleCall: string;
+  response: string;
+}
+
+const ALL_DOC_TOOLS: DocTool[] = [
+  // 1. Tabs & Window
+  {
+    name: "list_tabs",
+    category: "tabs",
+    description: "Returns all currently open Chrome tabs, including their unique tab IDs, window IDs, page titles, active status, and URLs.",
+    schema: "{}",
+    sampleCall: '{\n  "name": "list_tabs",\n  "arguments": {}\n}',
+    response: '[\n  {\n    "id": 414720296,\n    "title": "Creator Studio | Creatosaurus",\n    "url": "https://www.app.creatosaurus.io/",\n    "active": true\n  }\n]'
+  },
+  {
+    name: "open_tab",
+    category: "tabs",
+    description: "Spawns a new browser tab in Google Chrome and navigates immediately to the specified URL.",
+    schema: '{\n  "url": "string (required)"\n}',
+    sampleCall: '{\n  "name": "open_tab",\n  "arguments": {\n    "url": "https://google.com"\n  }\n}',
+    response: '{\n  "success": true,\n  "tabId": 414720300,\n  "url": "https://google.com"\n}'
+  },
+  {
+    name: "navigate",
+    category: "tabs",
+    description: "Navigates an existing or currently active tab to a new URL, waiting for DOM readiness.",
+    schema: '{\n  "url": "string (required)",\n  "tabId": "number (optional)"\n}',
+    sampleCall: '{\n  "name": "navigate",\n  "arguments": {\n    "url": "https://github.com",\n    "tabId": 414720296\n  }\n}',
+    response: '{\n  "success": true,\n  "status": "complete"\n}'
+  },
+  {
+    name: "get_tab_info",
+    category: "tabs",
+    description: "Extracts metadata for a tab including viewport dimensions, favicon URL, audio state, and load status.",
+    schema: '{\n  "tabId": "number (optional)"\n}',
+    sampleCall: '{\n  "name": "get_tab_info",\n  "arguments": {}\n}',
+    response: '{\n  "id": 414720296,\n  "width": 1186,\n  "height": 609,\n  "status": "complete",\n  "title": "Creator Studio"\n}'
+  },
+  {
+    name: "set_viewport_size",
+    category: "tabs",
+    description: "Resizes the Chrome window to test responsive design breakpoints (mobile 375px, tablet 768px, desktop 1440px).",
+    schema: '{\n  "width": "number (required)",\n  "height": "number (required)"\n}',
+    sampleCall: '{\n  "name": "set_viewport_size",\n  "arguments": {\n    "width": 375,\n    "height": 812\n  }\n}',
+    response: '{\n  "success": true,\n  "width": 375,\n  "height": 812\n}'
+  },
+
+  // 2. DOM & Inspection
+  {
+    name: "get_dom_snapshot",
+    category: "inspection",
+    description: "Captures full raw outerHTML DOM tree for complete layout inspection and structural analysis.",
+    schema: '{\n  "tabId": "number (optional)"\n}',
+    sampleCall: '{\n  "name": "get_dom_snapshot",\n  "arguments": {}\n}',
+    response: '"<!DOCTYPE html><html><head>...</head><body>...</body></html>"'
+  },
+  {
+    name: "get_clean_dom_snapshot",
+    category: "inspection",
+    description: "Extracts an LLM-optimized HTML structure by stripping bulky SVG paths, styles, scripts, and classes to save up to 94% tokens.",
+    schema: '{\n  "rootSelector": "string (optional)",\n  "tabId": "number (optional)"\n}',
+    sampleCall: '{\n  "name": "get_clean_dom_snapshot",\n  "arguments": {\n    "rootSelector": "main"\n  }\n}',
+    response: '"<main><h1>Creator Studio</h1><button class=\\"submit-btn\\">Publish</button></main>"'
+  },
+  {
+    name: "highlight_element",
+    category: "inspection",
+    description: "Visually highlights an element on the user's screen with an animated pulsing neon border and scrolls it into view.",
+    schema: '{\n  "selector": "string (required)",\n  "tabId": "number (optional)"\n}',
+    sampleCall: '{\n  "name": "highlight_element",\n  "arguments": {\n    "selector": "button.group-hover:opacity-100"\n  }\n}',
+    response: '{\n  "success": true,\n  "highlighted": true\n}'
+  },
+  {
+    name: "wait_for_user_click",
+    category: "inspection",
+    description: "Enters visual 'Pencil Mode'. Pauses execution until the user clicks any element in the browser. Returns computed CSS, styles, classes, and HTML.",
+    schema: "{}",
+    sampleCall: '{\n  "name": "wait_for_user_click",\n  "arguments": {}\n}',
+    response: '{\n  "tagName": "BUTTON",\n  "classes": "submit-btn",\n  "computedStyles": { "color": "rgb(255,255,255)" }\n}'
+  },
+  {
+    name: "capture_screenshot",
+    category: "inspection",
+    description: "Captures a visible screenshot of the active browser tab and returns the absolute local path to the saved PNG image.",
+    schema: '{\n  "tabId": "number (optional)"\n}',
+    sampleCall: '{\n  "name": "capture_screenshot",\n  "arguments": {}\n}',
+    response: '{\n  "path": "C:\\\\Users\\\\...\\\\.devpilot-screenshot.png",\n  "mimeType": "image/png"\n}'
+  },
+
+  // 3. Automation & Forms
+  {
+    name: "click_element",
+    category: "automation",
+    description: "Simulates a user click on an element with automatic polling wait and Tailwind-escaped selector resilience.",
+    schema: '{\n  "selector": "string (required)",\n  "timeoutMs": "number (optional, default: 3000)",\n  "tabId": "number (optional)"\n}',
+    sampleCall: '{\n  "name": "click_element",\n  "arguments": {\n    "selector": "span.ml-[10px]"\n  }\n}',
+    response: '{\n  "success": true,\n  "clicked": true\n}'
+  },
+  {
+    name: "type_text",
+    category: "automation",
+    description: "Types text into an input or textarea using React-compatible state setters and input event triggers.",
+    schema: '{\n  "selector": "string (required)",\n  "text": "string (required)",\n  "timeoutMs": "number (optional)",\n  "tabId": "number (optional)"\n}',
+    sampleCall: '{\n  "name": "type_text",\n  "arguments": {\n    "selector": "input[type=\'search\']",\n    "text": "XtraDevPilot"\n  }\n}',
+    response: '{\n  "success": true,\n  "value": "XtraDevPilot"\n}'
+  },
+  {
+    name: "batch_fill_form",
+    category: "automation",
+    description: "Fills multiple form fields in a single rapid roundtrip (<200ms). Supports text, selects, checkboxes, and radio buttons.",
+    schema: '{\n  "actions": "array of { selector, value, action, waitMs }",\n  "tabId": "number (optional)"\n}',
+    sampleCall: '{\n  "name": "batch_fill_form",\n  "arguments": {\n    "actions": [\n      { "selector": "#firstName", "value": "Om", "action": "type" },\n      { "selector": "#lastName", "value": "Salunke", "action": "type" }\n    ]\n  }\n}',
+    response: '{\n  "success": true,\n  "succeeded": 2,\n  "failed": 0\n}'
+  },
+  {
+    name: "smart_select_combobox",
+    category: "automation",
+    description: "Selects options from modern searchable comboboxes (Workday, ARIA comboboxes, headless UI, and custom dropdowns).",
+    schema: '{\n  "triggerSelector": "string (required)",\n  "optionText": "string (required)",\n  "searchQuery": "string (optional)",\n  "tabId": "number (optional)"\n}',
+    sampleCall: '{\n  "name": "smart_select_combobox",\n  "arguments": {\n    "triggerSelector": "#country-btn",\n    "optionText": "India"\n  }\n}',
+    response: '{\n  "success": true,\n  "selected": "India"\n}'
+  },
+  {
+    name: "upload_file",
+    category: "automation",
+    description: "Uploads a local file directly into a file input or drag-and-drop zone without OS file chooser dialogues.",
+    schema: '{\n  "filePath": "string (required)",\n  "selector": "string (optional, default: input[type=\'file\'])",\n  "tabId": "number (optional)"\n}',
+    sampleCall: '{\n  "name": "upload_file",\n  "arguments": {\n    "filePath": "Om_Salunke_Resume_AI_SDE.pdf"\n  }\n}',
+    response: '{\n  "success": true,\n  "file": "Om_Salunke_Resume_AI_SDE.pdf",\n  "size": 5247\n}'
+  },
+  {
+    name: "scroll_page",
+    category: "automation",
+    description: "Scrolls the page or inner scrollable container by direction, pixel distance, or directly into view of an element.",
+    schema: '{\n  "direction": "\'down\'|\'up\'|\'top\'|\'bottom\'",\n  "amount": "number",\n  "scrollToSelector": "string",\n  "smooth": "boolean"\n}',
+    sampleCall: '{\n  "name": "scroll_page",\n  "arguments": {\n    "direction": "down",\n    "amount": 500,\n    "smooth": true\n  }\n}',
+    response: '{\n  "success": true,\n  "scrollX": 0,\n  "scrollY": 500\n}'
+  },
+  {
+    name: "wait_for_element",
+    category: "automation",
+    description: "Waits using MutationObserver for an element matching selector to appear, become visible, or detach.",
+    schema: '{\n  "selector": "string (required)",\n  "timeoutMs": "number (default: 5000)",\n  "state": "\'visible\'|\'attached\'|\'detached\'"\n}',
+    sampleCall: '{\n  "name": "wait_for_element",\n  "arguments": {\n    "selector": "#dashboard",\n    "state": "visible"\n  }\n}',
+    response: '{\n  "success": true,\n  "found": true\n}'
+  },
+
+  // 4. Dev & QA Engine
+  {
+    name: "execute_script",
+    category: "devqa",
+    description: "Evaluates arbitrary JS expressions in the webpage context with automatic async IIFE wrapping and Redux/store access.",
+    schema: '{\n  "script": "string (required)",\n  "tabId": "number (optional)"\n}',
+    sampleCall: '{\n  "name": "execute_script",\n  "arguments": {\n    "script": "return document.title"\n  }\n}',
+    response: '{\n  "result": "Creator Studio | Creatosaurus"\n}'
+  },
+  {
+    name: "assert_element_state",
+    category: "devqa",
+    description: "QA assertion tool checking element visibility, enabled state, text content, or attributes with pass/fail reports.",
+    schema: '{\n  "selector": "string (required)",\n  "condition": "\'is_visible\'|\'is_hidden\'|\'is_enabled\'|\'contains_text\'|\'has_value\'|\'has_attribute\'",\n  "expected": "string (optional)"\n}',
+    sampleCall: '{\n  "name": "assert_element_state",\n  "arguments": {\n    "selector": "h1",\n    "condition": "contains_text",\n    "expected": "Creator Studio"\n  }\n}',
+    response: '{\n  "passed": true,\n  "actual": "Creator Studio"\n}'
+  },
+  {
+    name: "record_user_flow",
+    category: "devqa",
+    description: "Records user interactions and compiles them into clean, deterministic @playwright/test scripts with selector sanitization.",
+    schema: '{\n  "action": "\'start\'|\'stop\'|\'status\'",\n  "tabId": "number (optional)"\n}',
+    sampleCall: '{\n  "name": "record_user_flow",\n  "arguments": {\n    "action": "start"\n  }\n}',
+    response: '{\n  "recording": true,\n  "eventsCount": 0\n}'
+  },
+  {
+    name: "inject_css",
+    category: "devqa",
+    description: "Dynamically injects custom CSS rules into the live DOM without reloading to test layout adjustments.",
+    schema: '{\n  "cssString": "string (required)"\n}',
+    sampleCall: '{\n  "name": "inject_css",\n  "arguments": {\n    "cssString": "body { filter: grayscale(0.5); }"\n  }\n}',
+    response: '{\n  "success": true,\n  "injected": true\n}'
+  },
+  {
+    name: "toggle_layout_debug_mode",
+    category: "devqa",
+    description: "Toggles red outlines on all elements in the active browser tab to instantly reveal layout boundaries and margins.",
+    schema: "{}",
+    sampleCall: '{\n  "name": "toggle_layout_debug_mode",\n  "arguments": {}\n}',
+    response: '{\n  "success": true,\n  "debugMode": true\n}'
+  },
+
+  // 5. Scraping & Extraction
+  {
+    name: "extract_structured_data",
+    category: "scraping",
+    description: "Extracts repeated cards, tables, and product listings into clean typed JSON structures.",
+    schema: '{\n  "targetSelector": "string (optional)",\n  "type": "\'auto\'|\'table\'|\'cards\'|\'list\'",\n  "itemSelector": "string (optional)"\n}',
+    sampleCall: '{\n  "name": "extract_structured_data",\n  "arguments": {\n    "targetSelector": ".grid",\n    "type": "cards"\n  }\n}',
+    response: '[\n  {\n    "title": "Starter Pack",\n    "price": "$29/mo",\n    "cta": "Sign Up"\n  }\n]'
+  },
+  {
+    name: "extract_job_details",
+    category: "scraping",
+    description: "Intelligently parses ATS platforms (Workday, Greenhouse, Lever) to extract title, company, location, requisition ID, and description.",
+    schema: '{\n  "tabId": "number (optional)"\n}',
+    sampleCall: '{\n  "name": "extract_job_details",\n  "arguments": {}\n}',
+    response: '{\n  "platform": "Workday",\n  "company": "SmartTech",\n  "title": "Senior Frontend Engineer",\n  "location": "Pune, India"\n}'
+  },
+
+  // 6. Observability, Diagnostics & State
+  {
+    name: "get_console_logs",
+    category: "observability",
+    description: "Streams recent browser console errors, warnings, and log statements directly into your IDE context.",
+    schema: "{}",
+    sampleCall: '{\n  "name": "get_console_logs",\n  "arguments": {}\n}',
+    response: '[\n  {\n    "level": "error",\n    "message": "Uncaught TypeError: Cannot read properties of undefined"\n  }\n]'
+  },
+  {
+    name: "get_network_logs",
+    category: "observability",
+    description: "Intercepts recent HTTP network requests, status codes, URLs, headers, and payload timings.",
+    schema: "{}",
+    sampleCall: '{\n  "name": "get_network_logs",\n  "arguments": {}\n}',
+    response: '[\n  {\n    "method": "POST",\n    "url": "https://api.creatosaurus.io/v1/auth",\n    "statusCode": 200\n  }\n]'
+  },
+  {
+    name: "get_web_vitals",
+    category: "observability",
+    description: "Measures Core Web Vitals (LCP, CLS, FCP) and full asset waterfalls directly from Chrome Performance API.",
+    schema: "{}",
+    sampleCall: '{\n  "name": "get_web_vitals",\n  "arguments": {}\n}',
+    response: '{\n  "LCP": "1.24s",\n  "CLS": "0.012",\n  "FCP": "0.82s"\n}'
+  },
+  {
+    name: "run_security_audit",
+    category: "observability",
+    description: "Scans active tab for insecure forms, unencrypted transmission, and exposed JWTs or API keys stored in LocalStorage.",
+    schema: "{}",
+    sampleCall: '{\n  "name": "run_security_audit",\n  "arguments": {}\n}',
+    response: '{\n  "protocol": "https:",\n  "insecureForms": 0,\n  "vulnerabilities": [\n    {\n      "severity": "HIGH",\n      "type": "JWT_IN_LOCAL_STORAGE",\n      "key": "token"\n    }\n  ]\n}'
+  },
+  {
+    name: "run_accessibility_audit",
+    category: "observability",
+    description: "Performs WCAG compliance audit checking for missing alt tags, unlabelled buttons, and improper heading hierarchies.",
+    schema: "{}",
+    sampleCall: '{\n  "name": "run_accessibility_audit",\n  "arguments": {}\n}',
+    response: '{\n  "missingAltCount": 0,\n  "unlabelledButtons": 1,\n  "headingErrors": 0\n}'
+  },
+  {
+    name: "get_storage",
+    category: "observability",
+    description: "Reads all localStorage, sessionStorage, and cookie entries to inspect authentication tokens and persisted state.",
+    schema: "{}",
+    sampleCall: '{\n  "name": "get_storage",\n  "arguments": {}\n}',
+    response: '{\n  "localStorage": { "theme": "dark" },\n  "sessionStorage": {}\n}'
+  },
+  {
+    name: "manage_storage_and_cookies",
+    category: "observability",
+    description: "Inspects, sets, or clears browser cookies, localStorage, and sessionStorage to easily mock login sessions or reset test state.",
+    schema: '{\n  "type": "\'cookie\'|\'local_storage\'|\'session_storage\' (required)",\n  "operation": "\'get\'|\'set\'|\'remove\'|\'clear\' (required)",\n  "name": "string",\n  "value": "string"\n}',
+    sampleCall: '{\n  "name": "manage_storage_and_cookies",\n  "arguments": {\n    "type": "local_storage",\n    "operation": "set",\n    "name": "mockUser",\n    "value": "{\\"id\\":1}"\n  }\n}',
+    response: '{\n  "success": true,\n  "updated": true\n}'
+  },
+  {
+    name: "mock_network_response",
+    category: "observability",
+    description: "Intercepts window.fetch calls matching a URL pattern and returns custom mock JSON payloads without a backend.",
+    schema: '{\n  "urlPattern": "string (required)",\n  "responseBody": "string (required)",\n  "status": "number (default: 200)"\n}',
+    sampleCall: '{\n  "name": "mock_network_response",\n  "arguments": {\n    "urlPattern": "/api/user",\n    "responseBody": "{\\"name\\":\\"Om\\"}"\n  }\n}',
+    response: '{\n  "success": true,\n  "mockedPattern": "/api/user"\n}'
+  },
+  {
+    name: "clear_network_mocks",
+    category: "observability",
+    description: "Removes all registered URL network intercept mocks, restoring standard network execution.",
+    schema: "{}",
+    sampleCall: '{\n  "name": "clear_network_mocks",\n  "arguments": {}\n}',
+    response: '{\n  "success": true,\n  "clearedCount": 1\n}'
+  }
+];
+
 export default function DocsPage() {
-  const searchInputRef = useRef<HTMLInputElement>(null);
-  const [activeSection, setActiveSection] = useState<"installation" | "configuration" | "usage" | "security" | "support" | "settings">("installation");
-  const [showModal, setShowModal] = useState(false);
-  const [toastMessage, setToastMessage] = useState<string | null>(null);
+  const [activeSection, setActiveSection] = useState<"installation" | "configuration" | "tools" | "architecture" | "troubleshooting" | "settings">("installation");
+  const [toolCategory, setToolCategory] = useState<string>("all");
   const [searchQuery, setSearchQuery] = useState("");
-  const [searchResults, setSearchResults] = useState<{ section: string; title: string }[]>([]);
+  const [toastMessage, setToastMessage] = useState<string | null>(null);
+  const [copiedKey, setCopiedKey] = useState<string | null>(null);
 
   const showToast = (message: string) => {
     setToastMessage(message);
@@ -18,471 +304,299 @@ export default function DocsPage() {
     }, 3000);
   };
 
-  const searchIndex = [
-    { section: "installation", title: "Installation Guide", keywords: "install browser extension github repository clone unpacked developer option" },
-    { section: "installation", title: "MCP Server Setup", keywords: "install mcp server npm npx xtradevpilot-mcp bridge node" },
-    { section: "configuration", title: "Claude Desktop Config", keywords: "claude desktop configuration json mcpServers command path" },
-    { section: "configuration", title: "Cursor IDE Setup", keywords: "cursor ide settings features mcp server command" },
-    { section: "usage", title: "get_dom_snapshot tool", keywords: "get_dom_snapshot tool html structure viewport dom snapshot" },
-    { section: "usage", title: "capture_screenshot tool", keywords: "capture_screenshot base64 view tab debug image screenshot" },
-    { section: "usage", title: "interact_with_page tool", keywords: "interact click type scroll inputs selectors page interaction" },
-    { section: "usage", title: "evaluate_javascript tool", keywords: "evaluate javascript console log window code execution" },
-    { section: "security", title: "Local-First Architecture", keywords: "local-first loop connection websocket private design security" },
-    { section: "security", title: "Telemetry & Verbose Logs", keywords: "telemetry logs data collection verbose mode privacy" },
-    { section: "support", title: "Troubleshooting Connection Issues", keywords: "red status disconnected websocket port 42819 occupied reload" },
-    { section: "support", title: "IDE Server Timeouts", keywords: "ide timeout crash node dependencies npm install error" },
-    { section: "settings", title: "Connection Settings", keywords: "settings host URL ws localhost reconnect port wsl custom" }
-  ];
-
-  const handleSearchChange = (query: string) => {
-    setSearchQuery(query);
-    if (!query.trim()) {
-      setSearchResults([]);
-      return;
-    }
-    const filtered = searchIndex
-      .filter(item => item.keywords.toLowerCase().includes(query.toLowerCase()) || item.title.toLowerCase().includes(query.toLowerCase()))
-      .map(item => ({
-        section: item.section,
-        title: item.title
-      }));
-    setSearchResults(filtered);
+  const copyCode = (code: string, key: string, label: string) => {
+    navigator.clipboard.writeText(code);
+    setCopiedKey(key);
+    showToast(`Copied ${label} to clipboard!`);
+    setTimeout(() => setCopiedKey(null), 2000);
   };
 
-  useEffect(() => {
-    // Hover effect on glass panels
-    const handleMouseMove = (e: MouseEvent) => {
-      const card = e.currentTarget as HTMLElement;
-      const rect = card.getBoundingClientRect();
-      const x = e.clientX - rect.left;
-      const y = e.clientY - rect.top;
-      card.style.setProperty("--mouse-x", `${x}px`);
-      card.style.setProperty("--mouse-y", `${y}px`);
-    };
-
-    const cards = document.querySelectorAll(".glass-card");
-    cards.forEach((card) => {
-      (card as HTMLElement).addEventListener("mousemove", handleMouseMove as EventListener);
+  const filteredTools = useMemo(() => {
+    return ALL_DOC_TOOLS.filter((t) => {
+      const matchCat = toolCategory === "all" || t.category === toolCategory;
+      const matchQuery =
+        t.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        t.description.toLowerCase().includes(searchQuery.toLowerCase());
+      return matchCat && matchQuery;
     });
-
-    // Smooth Scroll
-    const handleAnchorClick = (e: MouseEvent) => {
-      const target = e.currentTarget as HTMLAnchorElement;
-      const href = target.getAttribute("href");
-      if (href && href.startsWith("#") && href.length > 1) {
-        e.preventDefault();
-        try {
-          document.querySelector(href)?.scrollIntoView({
-            behavior: "smooth",
-          });
-        } catch (e) {}
-      }
-    };
-
-    const anchors = document.querySelectorAll('a[href^="#"]');
-    anchors.forEach((anchor) => {
-      anchor.addEventListener("click", handleAnchorClick as EventListener);
-    });
-
-    // Search Bar Focus Effect
-    const searchInput = searchInputRef.current;
-    const handleFocus = () => {
-      searchInput?.parentElement?.classList.add("scale-105");
-    };
-    const handleBlur = () => {
-      searchInput?.parentElement?.classList.remove("scale-105");
-    };
-
-    if (searchInput) {
-      searchInput.addEventListener("focus", handleFocus);
-      searchInput.addEventListener("blur", handleBlur);
-    }
-
-    return () => {
-      cards.forEach((card) => {
-        (card as HTMLElement).removeEventListener("mousemove", handleMouseMove as EventListener);
-      });
-      anchors.forEach((anchor) => {
-        anchor.removeEventListener("click", handleAnchorClick as EventListener);
-      });
-      if (searchInput) {
-        searchInput.removeEventListener("focus", handleFocus);
-        searchInput.removeEventListener("blur", handleBlur);
-      }
-    };
-  }, [activeSection]);
+  }, [toolCategory, searchQuery]);
 
   return (
-    <div className="selection:bg-primary/30 min-h-screen flex flex-col">
-      {/* TopNavBar */}
-      <header className="fixed top-0 left-0 w-full z-50 flex justify-between items-center px-margin-desktop h-16 bg-surface/40 backdrop-blur-[40px] border-b border-white/10 shadow-[0_0_20px_rgba(207,188,255,0.1)]">
-        <Link href="/" className="flex items-center gap-4">
+    <div className="selection:bg-[#cfbcff]/30 min-h-screen flex flex-col bg-[#0d0b12] text-[#e6e0e9]">
+      {/* Top Navbar */}
+      <header className="fixed top-0 left-0 w-full z-50 flex justify-between items-center px-6 md:px-12 h-16 bg-[#141218]/85 backdrop-blur-[32px] border-b border-white/10 shadow-[0_4px_25px_rgba(0,0,0,0.4)]">
+        <Link href="/" className="flex items-center gap-3 group">
           <img
             alt="Xtra DevPilot Logo"
-            className="h-8 w-8 object-contain rounded-sm"
+            className="h-8 w-8 object-contain transition-transform duration-300 group-hover:scale-105"
             src="/android-chrome-512x512.png"
           />
-          <span className="font-headline-lg text-headline-lg font-bold text-primary tracking-tighter">
-            Xtra DevPilot
-          </span>
-        </Link>
-        <nav className="hidden md:flex items-center gap-8">
-          <Link
-            className="font-body-md text-body-md text-on-surface-variant hover:text-primary transition-colors duration-200"
-            href="/docs"
-          >
-            Docs
-          </Link>
-          <button
-            onClick={() => showToast("Changelog is coming soon in v2.5.0!")}
-            className="font-body-md text-body-md text-on-surface-variant hover:text-primary transition-colors duration-200 cursor-pointer"
-          >
-            Changelog
-          </button>
-          <button
-            onClick={() => showToast("API Reference documentation is coming soon!")}
-            className="font-body-md text-body-md text-on-surface-variant hover:text-primary transition-colors duration-200 cursor-pointer"
-          >
-            API
-          </button>
-          <button
-            onClick={() => showToast("Community Hub is coming soon!")}
-            className="font-body-md text-body-md text-on-surface-variant hover:text-primary transition-colors duration-200 cursor-pointer"
-          >
-            Community
-          </button>
-        </nav>
-        <div className="flex items-center gap-6">
-          {/* Search Bar */}
-          <div className="relative hidden lg:block transition-all duration-300">
-            <span className="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-on-surface-variant text-sm">
-              search
+          <div className="flex flex-col">
+            <span className="font-headline-lg text-lg font-bold text-white tracking-tight flex items-center gap-2">
+              Xtra DevPilot
+              <span className="text-[10px] uppercase font-label-mono px-1.5 py-0.5 bg-[#cfbcff]/15 text-[#cfbcff] rounded border border-[#cfbcff]/30">
+                Docs
+              </span>
             </span>
-            <input
-              ref={searchInputRef}
-              value={searchQuery}
-              onChange={(e) => handleSearchChange(e.target.value)}
-              className="bg-[#0A0A0A] border border-white/10 text-on-surface py-2 pl-10 pr-4 rounded-sm font-label-mono text-label-mono w-64 focus:border-primary focus:ring-0 focus:outline-none transition-colors duration-300"
-              placeholder="Search documentation..."
-              type="text"
-            />
-            {/* Search Results Dropdown */}
-            {searchResults.length > 0 && (
-              <div className="absolute right-0 top-12 w-80 bg-[#141218] border border-white/10 rounded-sm shadow-2xl z-50 glass-card p-2 max-h-60 overflow-y-auto">
-                <div className="font-label-mono text-xs text-primary/60 px-2 py-1 uppercase tracking-wider border-b border-white/5 mb-1">
-                  Search Results
-                </div>
-                {searchResults.map((result, idx) => (
-                  <button
-                    key={idx}
-                    onClick={() => {
-                      setActiveSection(result.section as any);
-                      setSearchQuery("");
-                      setSearchResults([]);
-                    }}
-                    className="w-full text-left px-2 py-1.5 rounded-sm hover:bg-white/5 transition-colors font-body-md text-sm text-on-surface hover:text-primary flex flex-col"
-                  >
-                    <span className="font-semibold">{result.title}</span>
-                    <span className="text-xs text-on-surface-variant font-label-mono capitalize">{result.section} docs</span>
-                  </button>
-                ))}
-              </div>
-            )}
           </div>
+        </Link>
+
+        <div className="flex items-center gap-4">
           <a
-            className="flex items-center gap-2 font-label-mono text-label-mono text-on-surface-variant hover:text-primary transition-colors duration-200"
+            href="/xtradevpilot-extension.zip"
+            download="xtradevpilot-extension.zip"
+            onClick={() => showToast("Downloading XtraDevPilot Chrome Extension ZIP...")}
+            className="hidden sm:inline-flex items-center gap-2 bg-[#cfbcff] hover:bg-[#e0d2ff] text-[#381e72] font-bold text-xs font-label-mono px-3.5 py-1.5 rounded transition-all cursor-pointer"
+          >
+            <span className="material-symbols-outlined text-sm">download</span>
+            Download Extension (.zip)
+          </a>
+
+          <a
+            className="flex items-center gap-1.5 text-xs font-label-mono text-[#cbc4d2] hover:text-white transition-colors"
             href="https://github.com/om0852/XtraDevPilot"
             target="_blank"
             rel="noopener noreferrer"
           >
-            <span className="material-symbols-outlined">terminal</span>
+            <span className="material-symbols-outlined text-base">terminal</span>
             GitHub
           </a>
-          <button
-            onClick={() => setShowModal(true)}
-            className="bg-primary text-on-primary font-body-md text-body-md px-6 py-2 rounded-sm hover:scale-105 active:scale-95 transition-all glow-accent cursor-pointer"
-          >
-            Get Started
-          </button>
         </div>
       </header>
 
       {/* Sidebar Navigation */}
-      <aside className="fixed left-0 top-16 bottom-0 w-[280px] z-40 flex flex-col bg-surface/40 backdrop-blur-[40px] border-r border-white/10 transition-all duration-300 ease-in-out">
-        <div className="p-6">
-          <div className="flex items-center gap-3 mb-8">
-            <div className="w-10 h-10 rounded-sm bg-primary/20 flex items-center justify-center text-primary border border-primary/30">
-              <span className="material-symbols-outlined">menu_book</span>
-            </div>
-            <div>
-              <div className="font-label-mono text-label-mono text-primary font-bold">
-                Documentation
-              </div>
-              <div className="font-label-mono text-xs text-on-surface-variant opacity-60">
-                v2.4.0
-              </div>
-            </div>
+      <aside className="fixed left-0 top-16 bottom-0 w-[270px] z-40 flex flex-col bg-[#141218]/90 backdrop-blur-[32px] border-r border-white/10">
+        <div className="p-5 space-y-4">
+          <div className="text-[11px] font-label-mono text-[#948e9c] uppercase tracking-wider">
+            Documentation Menu
           </div>
           <nav className="space-y-1">
-            <button
-              onClick={() => setActiveSection("installation")}
-              className={`w-full flex items-center gap-3 px-4 py-3 font-label-mono text-label-mono transition-all duration-200 rounded-sm text-left cursor-pointer group ${
-                activeSection === "installation"
-                  ? "text-primary bg-primary/10 border-r-2 border-primary"
-                  : "text-on-surface-variant hover:bg-white/5 hover:text-on-surface"
-              }`}
-            >
-              <span className="material-symbols-outlined text-xl group-hover:text-primary">
-                download
-              </span>
-              Installation
-            </button>
-            <button
-              onClick={() => setActiveSection("configuration")}
-              className={`w-full flex items-center gap-3 px-4 py-3 font-label-mono text-label-mono transition-all duration-200 rounded-sm text-left cursor-pointer group ${
-                activeSection === "configuration"
-                  ? "text-primary bg-primary/10 border-r-2 border-primary"
-                  : "text-on-surface-variant hover:bg-white/5 hover:text-on-surface"
-              }`}
-            >
-              <span
-                className="material-symbols-outlined text-xl"
-                style={{ fontVariationSettings: activeSection === "configuration" ? "'FILL' 1" : "'FILL' 0" }}
+            {[
+              { id: "installation", label: "Installation Guide", icon: "download" },
+              { id: "configuration", label: "IDE Configurations", icon: "settings" },
+              { id: "tools", label: "33 Tools Reference", icon: "terminal" },
+              { id: "architecture", label: "Protocol & Security", icon: "security" },
+              { id: "troubleshooting", label: "Troubleshooting", icon: "build" },
+              { id: "settings", label: "Extension Settings", icon: "tune" },
+            ].map((item) => (
+              <button
+                key={item.id}
+                onClick={() => setActiveSection(item.id as any)}
+                className={`w-full flex items-center gap-3 px-3.5 py-2.5 rounded font-label-mono text-xs transition-all text-left cursor-pointer ${
+                  activeSection === item.id
+                    ? "text-[#381e72] bg-[#cfbcff] font-bold shadow-sm"
+                    : "text-[#cbc4d2] hover:bg-white/5 hover:text-white"
+                }`}
               >
-                settings
-              </span>
-              Configuration
-            </button>
-            <button
-              onClick={() => setActiveSection("usage")}
-              className={`w-full flex items-center gap-3 px-4 py-3 font-label-mono text-label-mono transition-all duration-200 rounded-sm text-left cursor-pointer group ${
-                activeSection === "usage"
-                  ? "text-primary bg-primary/10 border-r-2 border-primary"
-                  : "text-on-surface-variant hover:bg-white/5 hover:text-on-surface"
-              }`}
-            >
-              <span className="material-symbols-outlined text-xl group-hover:text-primary">
-                terminal
-              </span>
-              Usage
-            </button>
-            <button
-              onClick={() => setActiveSection("security")}
-              className={`w-full flex items-center gap-3 px-4 py-3 font-label-mono text-label-mono transition-all duration-200 rounded-sm text-left cursor-pointer group ${
-                activeSection === "security"
-                  ? "text-primary bg-primary/10 border-r-2 border-primary"
-                  : "text-on-surface-variant hover:bg-white/5 hover:text-on-surface"
-              }`}
-            >
-              <span className="material-symbols-outlined text-xl group-hover:text-primary">
-                security
-              </span>
-              Security
-            </button>
+                <span className="material-symbols-outlined text-lg">{item.icon}</span>
+                {item.label}
+              </button>
+            ))}
           </nav>
         </div>
-        <div className="mt-auto p-6 border-t border-white/5">
-          <button
-            onClick={() => setActiveSection("settings")}
-            className="w-full py-3 bg-secondary-container/30 border border-secondary-container text-secondary font-label-mono text-label-mono rounded-sm hover:bg-secondary-container/50 transition-all mb-6 cursor-pointer"
-          >
-            Developer Portal
-          </button>
-          <nav className="space-y-1">
-            <button
-              onClick={() => setActiveSection("support")}
-              className={`w-full flex items-center gap-3 px-4 py-2 font-label-mono text-label-mono transition-all duration-200 rounded-sm text-left cursor-pointer group ${
-                activeSection === "support"
-                  ? "text-primary bg-primary/10 border-r-2 border-primary"
-                  : "text-on-surface-variant hover:bg-white/5 hover:text-on-surface"
-              }`}
-            >
-              <span className="material-symbols-outlined text-lg">help</span>
-              Support
-            </button>
-            <button
-              onClick={() => setActiveSection("settings")}
-              className={`w-full flex items-center gap-3 px-4 py-2 font-label-mono text-label-mono transition-all duration-200 rounded-sm text-left cursor-pointer group ${
-                activeSection === "settings"
-                  ? "text-primary bg-primary/10 border-r-2 border-primary"
-                  : "text-on-surface-variant hover:bg-white/5 hover:text-on-surface"
-              }`}
-            >
-              <span className="material-symbols-outlined text-lg">
-                settings_accessibility
-              </span>
-              Settings
-            </button>
-          </nav>
+
+        <div className="mt-auto p-5 border-t border-white/10 space-y-3">
+          <div className="bg-[#0f0d13] p-3 rounded border border-white/5 text-[11px] font-label-mono space-y-1">
+            <div className="text-[#948e9c]">Bridge Port:</div>
+            <div className="text-emerald-400 font-bold flex items-center gap-1.5">
+              <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
+              ws://127.0.0.1:42819
+            </div>
+          </div>
         </div>
       </aside>
 
       {/* Main Content Area */}
-      <main className="ml-[280px] mt-16 p-margin-desktop min-h-[calc(100vh-64px)] flex flex-col relative overflow-hidden flex-1">
-        {/* Decorative Ambient Background */}
-        <div className="absolute -top-[20%] -right-[10%] w-[600px] h-[600px] bg-primary/10 blur-[120px] rounded-full pointer-events-none"></div>
-        <div className="absolute top-[40%] -left-[5%] w-[400px] h-[400px] bg-secondary/5 blur-[100px] rounded-full pointer-events-none"></div>
-
-        <div className="max-w-[1000px] relative z-10 flex-1">
-          {activeSection === "installation" && (
-            <>
-              {/* Breadcrumbs */}
-              <div className="flex items-center gap-2 font-label-mono text-xs text-on-surface-variant/60 mb-6 uppercase tracking-widest">
-                <span>Docs</span>
-                <span className="material-symbols-outlined text-sm">
-                  chevron_right
-                </span>
-                <span className="text-primary">Installation</span>
+      <main className="ml-[270px] mt-16 p-8 md:p-12 min-h-[calc(100vh-64px)] flex flex-col relative flex-1 max-w-5xl">
+        {/* Section 1: Installation */}
+        {activeSection === "installation" && (
+          <div className="space-y-10">
+            <div>
+              <div className="text-xs font-label-mono text-[#cfbcff] uppercase tracking-wider mb-2">
+                Getting Started
               </div>
-
-              {/* Page Title */}
-              <h1 className="font-display-lg text-display-lg mb-4 text-on-surface tracking-tighter">
-                Getting Started with <span className="primary-gradient-text">Xtra DevPilot</span>
+              <h1 className="text-3xl sm:text-4xl font-extrabold text-white">
+                Installation Guide
               </h1>
-              <p className="font-body-md text-lg text-on-surface-variant max-w-2xl mb-12">
-                Xtra DevPilot is an AI Browser Bridge for your IDE. Connect Chrome to an MCP-enabled AI assistant so it can inspect the live DOM, console, and network without leaving your editor.
+              <p className="text-[#cbc4d2] text-base mt-2 max-w-2xl">
+                Set up the two components of Xtra DevPilot: the Chrome extension and the local MCP server.
               </p>
+            </div>
 
-              {/* Content Sections */}
-              <section className="space-y-12">
-                {/* Section 1 */}
-                <div className="group">
-                  <div className="flex items-center gap-3 mb-4">
-                    <div className="h-[1px] w-8 bg-primary"></div>
-                    <h2 className="font-headline-lg text-headline-lg text-on-surface">
-                      1. Install the Browser Extension
-                    </h2>
-                  </div>
-                  <p className="font-body-md text-on-surface-variant leading-relaxed mb-6">
-                    Clone the official repository to download the extension. Then, open Chrome and load the <code className="bg-white/10 px-1 rounded font-label-mono text-sm">extension/</code> folder as an unpacked extension.
-                  </p>
-                  <button
-                    onClick={() => setShowModal(true)}
-                    className="flex items-center gap-2 bg-primary text-on-primary font-body-md px-6 py-3 rounded-sm hover:scale-105 active:scale-95 transition-all glow-accent cursor-pointer"
-                  >
-                    <span className="material-symbols-outlined">download</span>
-                    Install Extension Guide
-                  </button>
-                </div>
-
-                {/* Code Block Section */}
-                <div className="space-y-4">
-                  <div className="relative glass-card code-block-glow p-6 rounded-sm border border-white/10 overflow-hidden">
-                    <div className="absolute top-0 left-0 w-1 h-full bg-gradient-to-b from-primary to-secondary"></div>
-                    <pre className="font-code-sm text-code-sm leading-6 overflow-x-auto">
-                      <code className="text-on-surface-variant">
-                        git clone https://github.com/om0852/XtraDevPilot.git
-                      </code>
-                    </pre>
-                  </div>
-                </div>
-
-                {/* Section 2 */}
-                <div className="group">
-                  <div className="flex items-center gap-3 mb-4">
-                    <div className="h-[1px] w-8 bg-secondary"></div>
-                    <h2 className="font-headline-lg text-headline-lg text-on-surface">
-                      2. Install the MCP Server
-                    </h2>
-                  </div>
-                  <p className="font-body-md text-on-surface-variant leading-relaxed">
-                    The MCP server acts as the bridge between your IDE and the browser extension. It is deployed on NPM, making it incredibly easy to run using <code className="bg-white/10 px-1 rounded font-label-mono text-sm">npx</code>.
-                  </p>
-                </div>
-
-                {/* Code Block Section */}
-                <div className="space-y-4">
-                  <div className="relative glass-card code-block-glow p-6 rounded-sm border border-white/10 overflow-hidden">
-                    <div className="absolute top-0 left-0 w-1 h-full bg-gradient-to-b from-secondary to-tertiary"></div>
-                    <pre className="font-code-sm text-code-sm leading-6 overflow-x-auto">
-                      <code className="text-on-surface-variant">
-                        npx xtradevpilot-mcp
-                      </code>
-                    </pre>
-                  </div>
-                </div>
-
-                {/* Bento Info Grid */}
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-gutter py-8">
-                  <div className="glass-card p-6 rounded-sm hover:border-primary/40 transition-colors cursor-pointer group">
-                    <div className="w-10 h-10 rounded-sm bg-primary/10 flex items-center justify-center text-primary mb-4 group-hover:scale-110 transition-transform">
-                      <span className="material-symbols-outlined">visibility</span>
-                    </div>
-                    <h3 className="font-headline-lg text-xl text-on-surface mb-2">
-                      DOM Inspection
-                    </h3>
-                    <p className="font-body-md text-on-surface-variant text-sm">
-                      Reads live DOM and extracts an LLM-friendly view, automatically capturing browser screenshots.
-                    </p>
-                  </div>
-                  <div className="glass-card p-6 rounded-sm hover:border-secondary/40 transition-colors cursor-pointer group">
-                    <div className="w-10 h-10 rounded-sm bg-secondary/10 flex items-center justify-center text-secondary mb-4 group-hover:scale-110 transition-transform">
-                      <span className="material-symbols-outlined">network_check</span>
-                    </div>
-                    <h3 className="font-headline-lg text-xl text-on-surface mb-2">
-                      Network & Console
-                    </h3>
-                    <p className="font-body-md text-on-surface-variant text-sm">
-                      Watches console logs and network requests directly inside your IDE without leaving the editor.
-                    </p>
-                  </div>
-                </div>
-
-                {/* Callout */}
-                <div className="p-6 bg-primary/5 border border-primary/20 rounded-sm flex gap-4 items-start">
-                  <span
-                    className="material-symbols-outlined text-primary mt-1"
-                    style={{ fontVariationSettings: "'FILL' 1" }}
-                  >
-                    info
+            {/* Step 1 */}
+            <div className="glass-card p-6 rounded-xl border border-white/10 space-y-4">
+              <div className="flex items-center justify-between">
+                <h3 className="text-lg font-bold text-white flex items-center gap-2">
+                  <span className="w-6 h-6 rounded-full bg-[#cfbcff]/20 text-[#cfbcff] text-xs flex items-center justify-center font-label-mono">
+                    1
                   </span>
-                  <div>
-                    <div className="font-body-md font-bold text-on-surface mb-1">
-                      IDE Configuration
-                    </div>
-                    <p className="font-body-md text-on-surface-variant text-sm">
-                      Remember to add the <code className="bg-white/10 px-1 rounded font-label-mono text-xs">npx xtradevpilot-mcp</code> command to your Cursor, Claude Desktop, or compatible MCP client's configuration to establish the bridge.
-                    </p>
-                  </div>
-                </div>
-              </section>
-            </>
-          )}
-
-          {activeSection === "configuration" && (
-            <>
-              {/* Breadcrumbs */}
-              <div className="flex items-center gap-2 font-label-mono text-xs text-on-surface-variant/60 mb-6 uppercase tracking-widest">
-                <span>Docs</span>
-                <span className="material-symbols-outlined text-sm">chevron_right</span>
-                <span className="text-secondary">Configuration</span>
+                  Get the Chrome Extension
+                </h3>
+                <a
+                  href="/xtradevpilot-extension.zip"
+                  download="xtradevpilot-extension.zip"
+                  className="primary-gradient text-white text-xs font-bold px-4 py-2 rounded flex items-center gap-1.5 cursor-pointer shadow"
+                >
+                  <span className="material-symbols-outlined text-sm">download</span>
+                  Download ZIP
+                </a>
               </div>
-
-              {/* Page Title */}
-              <h1 className="font-display-lg text-display-lg mb-4 text-on-surface tracking-tighter">
-                Bridge <span className="primary-gradient-text">Configuration</span>
-              </h1>
-              <p className="font-body-md text-lg text-on-surface-variant max-w-2xl mb-12">
-                Set up Xtra DevPilot in your favorite IDEs or MCP clients. The local bridge server uses WebSocket port <code className="bg-white/10 px-1.5 py-0.5 rounded font-label-mono text-sm text-secondary">42819</code>.
+              <p className="text-xs sm:text-sm text-[#cbc4d2]">
+                Choose either the 1-click ZIP download or clone the repository via Git:
               </p>
+              <div className="bg-[#0f0d13] p-3 rounded border border-white/10 font-label-mono text-xs text-[#cfbcff] flex justify-between items-center">
+                <code>git clone https://github.com/om0852/XtraDevPilot.git</code>
+                <button
+                  onClick={() => copyCode("git clone https://github.com/om0852/XtraDevPilot.git", "git-clone", "git clone command")}
+                  className="text-xs text-[#cbc4d2] hover:text-white uppercase"
+                >
+                  {copiedKey === "git-clone" ? "Copied" : "Copy"}
+                </button>
+              </div>
+            </div>
 
-              <section className="space-y-12">
-                <div className="group">
-                  <div className="flex items-center gap-3 mb-4">
-                    <div className="h-[1px] w-8 bg-secondary"></div>
-                    <h2 className="font-headline-lg text-headline-lg text-on-surface">
-                      Claude Desktop Configuration
-                    </h2>
-                  </div>
-                  <p className="font-body-md text-on-surface-variant leading-relaxed mb-4">
-                    Add the server to your Claude Desktop configuration file:
-                  </p>
-                  <div className="font-label-mono text-xs text-outline mb-2">
-                    File Location: <code className="bg-white/15 px-1 py-0.5 rounded">%appdata%\Claude\claude_desktop_config.json</code> (Windows) or <code className="bg-white/15 px-1 py-0.5 rounded">~/Library/Application Support/Claude/claude_desktop_config.json</code> (macOS)
-                  </div>
-                  <div className="relative glass-card code-block-glow p-6 rounded-sm border border-white/10 overflow-hidden">
-                    <pre className="font-code-sm text-code-sm leading-6 overflow-x-auto">
-                      <code className="text-on-surface-variant">
+            {/* Step 2 */}
+            <div className="glass-card p-6 rounded-xl border border-white/10 space-y-4">
+              <h3 className="text-lg font-bold text-white flex items-center gap-2">
+                <span className="w-6 h-6 rounded-full bg-[#e7c365]/20 text-[#e7c365] text-xs flex items-center justify-center font-label-mono">
+                  2
+                </span>
+                Load Unpacked in Google Chrome
+              </h3>
+              <ol className="list-decimal pl-6 space-y-2 text-xs sm:text-sm text-[#cbc4d2]">
+                <li>Open Chrome and navigate to <code className="text-[#e7c365] bg-white/10 px-1 rounded">chrome://extensions/</code>.</li>
+                <li>Turn ON the <strong className="text-white">Developer mode</strong> switch in the top-right corner.</li>
+                <li>Click <strong className="text-white">Load unpacked</strong> in the top-left corner.</li>
+                <li>Select the <code className="text-[#cfbcff] bg-white/10 px-1 rounded">extension/</code> folder inside the extracted or cloned repository.</li>
+                <li>Pin the Xtra DevPilot extension icon to your Chrome toolbar.</li>
+              </ol>
+            </div>
+
+            {/* Step 3 */}
+            <div className="glass-card p-6 rounded-xl border border-white/10 space-y-4">
+              <div className="flex items-center justify-between">
+                <h3 className="text-lg font-bold text-white flex items-center gap-2">
+                  <span className="w-6 h-6 rounded-full bg-[#22d3ee]/20 text-[#22d3ee] text-xs flex items-center justify-center font-label-mono">
+                    3
+                  </span>
+                  Start the Local MCP Server Bridge
+                </h3>
+                <button
+                  onClick={() => copyCode("npx xtradevpilot-mcp", "npx-cmd", "npx command")}
+                  className="text-xs text-[#22d3ee] font-label-mono hover:underline cursor-pointer"
+                >
+                  {copiedKey === "npx-cmd" ? "✔ Copied" : "Copy Command"}
+                </button>
+              </div>
+              <p className="text-xs sm:text-sm text-[#cbc4d2]">
+                The server runs locally on port <code className="text-[#cfbcff]">42819</code>. Run this command in any terminal:
+              </p>
+              <div className="bg-[#0f0d13] p-3 rounded border border-white/10 font-label-mono text-xs text-[#cfbcff]">
+                <code>npx xtradevpilot-mcp</code>
+              </div>
+              <p className="text-xs text-[#948e9c]">
+                Once started, the Chrome extension popup indicator turns from red to <span className="text-emerald-400 font-semibold">Green (Connected)</span>.
+              </p>
+            </div>
+          </div>
+        )}
+
+        {/* Section 2: Configurations */}
+        {activeSection === "configuration" && (
+          <div className="space-y-10">
+            <div>
+              <div className="text-xs font-label-mono text-[#cfbcff] uppercase tracking-wider mb-2">
+                Setup Guides
+              </div>
+              <h1 className="text-3xl sm:text-4xl font-extrabold text-white">
+                IDE & MCP Client Configurations
+              </h1>
+              <p className="text-[#cbc4d2] text-base mt-2 max-w-2xl">
+                Add Xtra DevPilot to your editor of choice. Works natively with any Model Context Protocol compliant client.
+              </p>
+            </div>
+
+            {/* Google Antigravity */}
+            <div className="glass-card p-6 rounded-xl border border-white/10 space-y-4">
+              <div className="flex items-center justify-between">
+                <h3 className="text-lg font-bold text-white flex items-center gap-2">
+                  <span className="material-symbols-outlined text-[#cfbcff]">view_in_ar</span>
+                  Google Antigravity IDE
+                </h3>
+                <button
+                  onClick={() =>
+                    copyCode(
+                      JSON.stringify(
+                        {
+                          mcpServers: {
+                            xtradevpilot: {
+                              command: "node",
+                              args: ["c:/Users/salun/OneDrive - smarttech/Desktop/D folder/xtradevpilot/mcp-server/index.js"]
+                            }
+                          }
+                        },
+                        null,
+                        2
+                      ),
+                      "antigravity-code",
+                      "Antigravity config"
+                    )
+                  }
+                  className="text-xs text-[#cfbcff] font-label-mono hover:underline cursor-pointer"
+                >
+                  {copiedKey === "antigravity-code" ? "✔ Copied" : "Copy JSON"}
+                </button>
+              </div>
+              <p className="text-xs sm:text-sm text-[#cbc4d2]">
+                Configure in your workspace root under <code className="text-[#cfbcff]">.gemini/config/mcp_config.json</code>:
+              </p>
+              <pre className="bg-[#0f0d13] p-4 rounded border border-white/10 font-label-mono text-xs text-[#cbc4d2] overflow-x-auto">
+{`{
+  "mcpServers": {
+    "xtradevpilot": {
+      "command": "npx",
+      "args": ["-y", "xtradevpilot-mcp"]
+    }
+  }
+}`}
+              </pre>
+            </div>
+
+            {/* Claude Desktop */}
+            <div className="glass-card p-6 rounded-xl border border-white/10 space-y-4">
+              <div className="flex items-center justify-between">
+                <h3 className="text-lg font-bold text-white flex items-center gap-2">
+                  <span className="material-symbols-outlined text-[#e7c365]">chat</span>
+                  Claude Desktop
+                </h3>
+                <button
+                  onClick={() =>
+                    copyCode(
+                      JSON.stringify(
+                        {
+                          mcpServers: {
+                            "xtra-devpilot": {
+                              command: "npx",
+                              args: ["-y", "xtradevpilot-mcp"]
+                            }
+                          }
+                        },
+                        null,
+                        2
+                      ),
+                      "claude-code",
+                      "Claude config"
+                    )
+                  }
+                  className="text-xs text-[#e7c365] font-label-mono hover:underline cursor-pointer"
+                >
+                  {copiedKey === "claude-code" ? "✔ Copied" : "Copy JSON"}
+                </button>
+              </div>
+              <p className="text-xs sm:text-sm text-[#cbc4d2]">
+                Add to your Claude Desktop config (<code className="text-[#cfbcff]">%appdata%\Claude\claude_desktop_config.json</code> on Windows, or <code className="text-[#cfbcff]">~/Library/Application Support/Claude/claude_desktop_config.json</code> on macOS):
+              </p>
+              <pre className="bg-[#0f0d13] p-4 rounded border border-white/10 font-label-mono text-xs text-[#cbc4d2] overflow-x-auto">
 {`{
   "mcpServers": {
     "xtra-devpilot": {
@@ -491,468 +605,271 @@ export default function DocsPage() {
     }
   }
 }`}
+              </pre>
+            </div>
+
+            {/* Cursor IDE */}
+            <div className="glass-card p-6 rounded-xl border border-white/10 space-y-4">
+              <h3 className="text-lg font-bold text-white flex items-center gap-2">
+                <span className="material-symbols-outlined text-[#22d3ee]">code</span>
+                Cursor IDE
+              </h3>
+              <ol className="list-decimal pl-6 space-y-2 text-xs sm:text-sm text-[#cbc4d2]">
+                <li>Open Cursor settings and select <strong className="text-white">Features &gt; MCP</strong>.</li>
+                <li>Click <strong className="text-white">+ Add New MCP Server</strong>.</li>
+                <li>Set Name: <code className="text-[#cfbcff]">Xtra DevPilot</code>.</li>
+                <li>Set Type: <code className="text-[#cfbcff]">command</code>.</li>
+                <li>Set Command: <code className="text-[#cfbcff]">npx -y xtradevpilot-mcp</code>.</li>
+                <li>Click Save. A green indicator will verify the connection.</li>
+              </ol>
+            </div>
+
+            {/* TypeScript SDK */}
+            <div className="glass-card p-6 rounded-xl border border-white/10 space-y-4">
+              <h3 className="text-lg font-bold text-white flex items-center gap-2">
+                <span className="material-symbols-outlined text-purple-400">dataset</span>
+                TypeScript Automation SDK
+              </h3>
+              <p className="text-xs sm:text-sm text-[#cbc4d2]">
+                For CI/CD test automation pipelines and Node.js backend scripts, use the native typed SDK:
+              </p>
+              <pre className="bg-[#0f0d13] p-4 rounded border border-white/10 font-label-mono text-xs text-[#cbc4d2] overflow-x-auto">
+{`import { DevPilotClient } from "@xtradevpilot/sdk";
+
+const client = new DevPilotClient({ wsUrl: "ws://127.0.0.1:42819" });
+await client.connect();
+
+const dom = await client.getCleanDomSnapshot({ rootSelector: "main" });
+console.log(dom);`}
+              </pre>
+            </div>
+          </div>
+        )}
+
+        {/* Section 3: 33 Tools Reference */}
+        {activeSection === "tools" && (
+          <div className="space-y-10">
+            <div>
+              <div className="text-xs font-label-mono text-[#cfbcff] uppercase tracking-wider mb-2">
+                API Reference
+              </div>
+              <h1 className="text-3xl sm:text-4xl font-extrabold text-white">
+                All 33 Production MCP Tools
+              </h1>
+              <p className="text-[#cbc4d2] text-base mt-2 max-w-2xl">
+                Every tool is verified live against Google Chrome with deterministic input schemas and typed JSON responses.
+              </p>
+            </div>
+
+            {/* Filter & Search Bar */}
+            <div className="flex flex-col sm:flex-row gap-4 justify-between items-center">
+              <div className="flex flex-wrap gap-2">
+                {[
+                  { id: "all", label: "All (33)" },
+                  { id: "tabs", label: "Tabs (5)" },
+                  { id: "inspection", label: "DOM (5)" },
+                  { id: "automation", label: "Automation (7)" },
+                  { id: "devqa", label: "Dev/QA (5)" },
+                  { id: "scraping", label: "Scraping (2)" },
+                  { id: "observability", label: "Observability (9)" },
+                ].map((c) => (
+                  <button
+                    key={c.id}
+                    onClick={() => setToolCategory(c.id)}
+                    className={`px-3 py-1 rounded text-xs font-label-mono transition-colors cursor-pointer ${
+                      toolCategory === c.id
+                        ? "bg-[#cfbcff] text-[#381e72] font-bold"
+                        : "bg-white/5 text-[#cbc4d2] hover:bg-white/10"
+                    }`}
+                  >
+                    {c.label}
+                  </button>
+                ))}
+              </div>
+
+              <input
+                type="text"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                placeholder="Search tools..."
+                className="bg-[#141218] border border-white/15 px-3 py-1.5 rounded text-xs font-label-mono text-white placeholder:text-[#948e9c] focus:outline-none focus:border-[#cfbcff] w-full sm:w-60"
+              />
+            </div>
+
+            {/* Tools Detailed List */}
+            <div className="space-y-8">
+              {filteredTools.map((tool) => (
+                <div key={tool.name} className="glass-card p-6 rounded-xl border border-white/10 space-y-4">
+                  <div className="flex items-center justify-between border-b border-white/10 pb-3">
+                    <div className="flex items-center gap-3">
+                      <code className="text-base font-bold text-white font-label-mono">
+                        {tool.name}
                       </code>
-                    </pre>
-                  </div>
-                </div>
-
-                <div className="group">
-                  <div className="flex items-center gap-3 mb-4">
-                    <div className="h-[1px] w-8 bg-primary"></div>
-                    <h2 className="font-headline-lg text-headline-lg text-on-surface">
-                      Cursor IDE Configuration
-                    </h2>
-                  </div>
-                  <p className="font-body-md text-on-surface-variant leading-relaxed mb-4">
-                    To configure Cursor to communicate with your browser, perform the following steps:
-                  </p>
-                  <ul className="list-decimal pl-6 space-y-2 font-body-md text-on-surface-variant text-sm">
-                    <li>Open Cursor settings, then navigate to the <span className="text-primary font-bold">Features</span> tab.</li>
-                    <li>Scroll down to the <span className="text-primary font-bold">MCP</span> section.</li>
-                    <li>Click <span className="text-primary font-bold">+ Add New MCP Server</span>.</li>
-                    <li>Enter the following details:
-                      <ul className="list-disc pl-6 mt-1 space-y-1">
-                        <li>Name: <code className="bg-white/10 px-1 rounded">Xtra DevPilot</code></li>
-                        <li>Type: <code className="bg-white/10 px-1 rounded">command</code></li>
-                        <li>Command: <code className="bg-white/10 px-1 rounded">npx -y xtradevpilot-mcp</code></li>
-                      </ul>
-                    </li>
-                    <li>Click <span className="text-primary font-bold">Save</span>. The server status should display green if connected.</li>
-                  </ul>
-                </div>
-              </section>
-            </>
-          )}
-
-          {activeSection === "usage" && (
-            <>
-              {/* Breadcrumbs */}
-              <div className="flex items-center gap-2 font-label-mono text-xs text-on-surface-variant/60 mb-6 uppercase tracking-widest">
-                <span>Docs</span>
-                <span className="material-symbols-outlined text-sm">chevron_right</span>
-                <span className="text-tertiary">Usage</span>
-              </div>
-
-              {/* Page Title */}
-              <h1 className="font-display-lg text-display-lg mb-4 text-on-surface tracking-tighter">
-                Command & <span className="primary-gradient-text">Usage Guide</span>
-              </h1>
-              <p className="font-body-md text-lg text-on-surface-variant max-w-2xl mb-12">
-                Once the bridge is active, you can interact with your browser directly from your AI agent. Here are the core capabilities and sample prompts.
-              </p>
-
-              <section className="space-y-12">
-                <div className="group">
-                  <div className="flex items-center gap-3 mb-4">
-                    <div className="h-[1px] w-8 bg-tertiary"></div>
-                    <h2 className="font-headline-lg text-headline-lg text-on-surface">
-                      Supported MCP Tools
-                    </h2>
-                  </div>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-gutter py-4">
-                    <div className="glass-card p-6 rounded-sm border border-white/10">
-                      <div className="flex items-center gap-2 mb-3">
-                        <span className="material-symbols-outlined text-primary">analytics</span>
-                        <h4 className="font-bold text-on-surface font-headline-lg text-base">get_dom_snapshot</h4>
-                      </div>
-                      <p className="text-sm text-on-surface-variant">
-                        Extracts a highly condensed, semantic, LLM-optimized representation of the DOM tree. Includes element attributes and viewport visibility status.
-                      </p>
+                      <span className="text-[10px] uppercase font-label-mono px-2 py-0.5 rounded bg-white/10 text-[#cfbcff]">
+                        {tool.category}
+                      </span>
                     </div>
-                    <div className="glass-card p-6 rounded-sm border border-white/10">
-                      <div className="flex items-center gap-2 mb-3">
-                        <span className="material-symbols-outlined text-secondary">photo_camera</span>
-                        <h4 className="font-bold text-on-surface font-headline-lg text-base">capture_screenshot</h4>
-                      </div>
-                      <p className="text-sm text-on-surface-variant">
-                        Takes a live, high-resolution screenshot of the currently active browser tab. Returns it as base64 or saves it to your workspace.
-                      </p>
-                    </div>
-                    <div className="glass-card p-6 rounded-sm border border-white/10">
-                      <div className="flex items-center gap-2 mb-3">
-                        <span className="material-symbols-outlined text-tertiary">mouse</span>
-                        <h4 className="font-bold text-on-surface font-headline-lg text-base">interact_with_page</h4>
-                      </div>
-                      <p className="text-sm text-on-surface-variant">
-                        Performs browser actions like `click` on elements (by CSS selector or coordinates), `type` text into input fields, or `scroll` down the page.
-                      </p>
-                    </div>
-                    <div className="glass-card p-6 rounded-sm border border-white/10">
-                      <div className="flex items-center gap-2 mb-3">
-                        <span className="material-symbols-outlined text-primary">code</span>
-                        <h4 className="font-bold text-on-surface font-headline-lg text-base">evaluate_javascript</h4>
-                      </div>
-                      <p className="text-sm text-on-surface-variant">
-                        Evaluates custom JavaScript code in the context of the active tab. Useful for reading window state or running test assertions.
-                      </p>
-                    </div>
-                  </div>
-                </div>
-
-                <div className="group">
-                  <div className="flex items-center gap-3 mb-4">
-                    <div className="h-[1px] w-8 bg-primary"></div>
-                    <h2 className="font-headline-lg text-headline-lg text-on-surface">
-                      Example Prompts
-                    </h2>
-                  </div>
-                  <p className="font-body-md text-on-surface-variant leading-relaxed mb-4">
-                    Try these instructions inside Cursor Composer or your MCP-enabled chat client:
-                  </p>
-                  <div className="space-y-3 font-label-mono text-sm">
-                    <div className="bg-[#0A0A0A] border border-white/10 p-4 rounded-sm text-on-surface-variant">
-                      &gt; "Look at the current tab and inspect the header. Why is the logo misaligned on mobile?"
-                    </div>
-                    <div className="bg-[#0A0A0A] border border-white/10 p-4 rounded-sm text-on-surface-variant">
-                      &gt; "Click the settings button, navigate to general, and toggle developer mode."
-                    </div>
-                    <div className="bg-[#0A0A0A] border border-white/10 p-4 rounded-sm text-on-surface-variant">
-                      &gt; "Check the active page console and let me know if there are any CORS warnings."
-                    </div>
-                  </div>
-                </div>
-              </section>
-            </>
-          )}
-
-          {activeSection === "security" && (
-            <>
-              {/* Breadcrumbs */}
-              <div className="flex items-center gap-2 font-label-mono text-xs text-on-surface-variant/60 mb-6 uppercase tracking-widest">
-                <span>Docs</span>
-                <span className="material-symbols-outlined text-sm">chevron_right</span>
-                <span className="text-error">Security</span>
-              </div>
-
-              {/* Page Title */}
-              <h1 className="font-display-lg text-display-lg mb-4 text-on-surface tracking-tighter">
-                Security & <span className="primary-gradient-text">Privacy Principles</span>
-              </h1>
-              <p className="font-body-md text-lg text-on-surface-variant max-w-2xl mb-12">
-                Xtra DevPilot is built to be private by design. Your code, browser sessions, and secrets never leave your local environment.
-              </p>
-
-              <section className="space-y-12">
-                <div className="p-6 bg-error-container/10 border border-error/20 rounded-sm flex gap-4 items-start">
-                  <span className="material-symbols-outlined text-error mt-1" style={{ fontVariationSettings: "'FILL' 1" }}>
-                    security
-                  </span>
-                  <div>
-                    <div className="font-body-md font-bold text-on-surface mb-1">
-                      Zero Cloud Residency
-                    </div>
-                    <p className="font-body-md text-on-surface-variant text-sm">
-                      Unlike traditional browser-automation tools, Xtra DevPilot has zero cloud storage. No data is stored, cached, or compiled on third-party cloud infrastructure.
-                    </p>
-                  </div>
-                </div>
-
-                <div className="group">
-                  <div className="flex items-center gap-3 mb-4">
-                    <div className="h-[1px] w-8 bg-error"></div>
-                    <h2 className="font-headline-lg text-headline-lg text-on-surface">
-                      Local Loop Communication
-                    </h2>
-                  </div>
-                  <p className="font-body-md text-on-surface-variant leading-relaxed">
-                    Communication between the Chrome extension and the IDE occurs via a local WebSocket connection (port <code className="bg-white/10 px-1 rounded font-label-mono text-sm">42819</code>). This loop is fully contained inside your operating system's local loopback network (<code className="bg-white/10 px-1 rounded font-label-mono text-sm">127.0.0.1</code>), bypassing external networks.
-                  </p>
-                </div>
-
-                <div className="group">
-                  <div className="flex items-center gap-3 mb-4">
-                    <div className="h-[1px] w-8 bg-secondary"></div>
-                    <h2 className="font-headline-lg text-headline-lg text-on-surface">
-                      Telemetry & Logs
-                    </h2>
-                  </div>
-                  <p className="font-body-md text-on-surface-variant leading-relaxed">
-                    No background analytics or data collection processes are enabled. You can inspect all payload logs in real-time by launching the server in verbose mode:
-                  </p>
-                  <div className="mt-4 relative glass-card code-block-glow p-6 rounded-sm border border-white/10 overflow-hidden">
-                    <pre className="font-code-sm text-code-sm leading-6 overflow-x-auto">
-                      <code className="text-on-surface-variant">
-                        npx xtradevpilot-mcp --verbose
-                      </code>
-                    </pre>
-                  </div>
-                </div>
-              </section>
-            </>
-          )}
-
-          {activeSection === "support" && (
-            <>
-              {/* Breadcrumbs */}
-              <div className="flex items-center gap-2 font-label-mono text-xs text-on-surface-variant/60 mb-6 uppercase tracking-widest">
-                <span>Docs</span>
-                <span className="material-symbols-outlined text-sm">chevron_right</span>
-                <span className="text-primary">Support</span>
-              </div>
-
-              {/* Page Title */}
-              <h1 className="font-display-lg text-display-lg mb-4 text-on-surface tracking-tighter">
-                Support & <span className="primary-gradient-text">Troubleshooting</span>
-              </h1>
-              <p className="font-body-md text-lg text-on-surface-variant max-w-2xl mb-12">
-                Resolve common configuration and connection issues with this troubleshooting guide.
-              </p>
-
-              <section className="space-y-12">
-                <div className="space-y-6">
-                  <div className="border border-white/10 rounded-sm p-6 bg-white/5">
-                    <h3 className="font-bold text-on-surface text-base mb-2">Extension shows a red disconnected status</h3>
-                    <p className="text-sm text-on-surface-variant">
-                      This means the extension is unable to connect to the local WebSocket server.
-                    </p>
-                    <ul className="list-disc pl-6 mt-2 space-y-1 text-sm text-on-surface-variant">
-                      <li>Ensure you have run the MCP server using <code className="bg-white/10 px-1 rounded">npx xtradevpilot-mcp</code> in your terminal.</li>
-                      <li>Check that the port <code className="bg-white/10 px-1 rounded">42819</code> is not being used by another process.</li>
-                      <li>Reload the extension in Chrome: go to <code className="bg-white/10 px-1 rounded">chrome://extensions/</code> and click the reload icon.</li>
-                    </ul>
-                  </div>
-
-                  <div className="border border-white/10 rounded-sm p-6 bg-white/5">
-                    <h3 className="font-bold text-on-surface text-base mb-2">IDE client reports "server disconnected" or timeouts</h3>
-                    <p className="text-sm text-on-surface-variant">
-                      Some IDEs spin up the MCP server process in isolation, which might fail if dependencies are not correctly resolved.
-                    </p>
-                    <ul className="list-disc pl-6 mt-2 space-y-1 text-sm text-on-surface-variant">
-                      <li>Ensure Node.js is installed on your system path (v18.0.0 or higher recommended).</li>
-                      <li>If you are running the MCP server from a cloned copy of the repository, navigate to the <code className="bg-white/10 px-1 rounded">mcp-server/</code> directory and verify dependencies:
-                        <div className="mt-2 bg-[#0A0A0A] border border-white/10 px-3 py-2 rounded-sm font-code-sm text-xs text-on-surface-variant select-all w-fit">
-                          cd mcp-server && npm install
-                        </div>
-                      </li>
-                    </ul>
-                  </div>
-                </div>
-
-                <div className="p-6 bg-primary/5 border border-primary/20 rounded-sm flex justify-between items-center">
-                  <div>
-                    <h4 className="font-bold text-on-surface font-headline-lg text-base">Still need help?</h4>
-                    <p className="text-sm text-on-surface-variant mt-1 font-body-md">Join the community on Discord or create a ticket on GitHub.</p>
-                  </div>
-                  <div className="flex gap-3">
-                    <a href="https://github.com/om0852/XtraDevPilot/issues" target="_blank" rel="noopener noreferrer" className="bg-[#0A0A0A] border border-white/10 text-on-surface-variant px-4 py-2 font-label-mono text-xs hover:text-primary transition-all flex items-center justify-center">
-                      GitHub Issues
-                    </a>
                     <button
-                      onClick={() => showToast("Discord link is coming soon!")}
-                      className="bg-primary text-on-primary px-4 py-2 font-label-mono text-xs hover:scale-105 transition-all cursor-pointer"
+                      onClick={() => copyCode(tool.name, tool.name, tool.name)}
+                      className="text-xs text-[#cfbcff] font-label-mono hover:underline cursor-pointer"
                     >
-                      Join Discord
+                      {copiedKey === tool.name ? "✔ Copied" : "Copy Name"}
                     </button>
                   </div>
-                </div>
-              </section>
-            </>
-          )}
 
-          {activeSection === "settings" && (
-            <>
-              {/* Breadcrumbs */}
-              <div className="flex items-center gap-2 font-label-mono text-xs text-on-surface-variant/60 mb-6 uppercase tracking-widest">
-                <span>Docs</span>
-                <span className="material-symbols-outlined text-sm">chevron_right</span>
-                <span className="text-secondary">Settings</span>
-              </div>
-
-              {/* Page Title */}
-              <h1 className="font-display-lg text-display-lg mb-4 text-on-surface tracking-tighter">
-                Extension <span className="primary-gradient-text">Settings</span>
-              </h1>
-              <p className="font-body-md text-lg text-on-surface-variant max-w-2xl mb-12">
-                Configure the default behavior and network properties of the Xtra DevPilot browser extension.
-              </p>
-
-              <section className="space-y-12">
-                <div className="group">
-                  <div className="flex items-center gap-3 mb-4">
-                    <div className="h-[1px] w-8 bg-secondary"></div>
-                    <h2 className="font-headline-lg text-headline-lg text-on-surface">
-                      Configuring Connection Endpoint
-                    </h2>
-                  </div>
-                  <p className="font-body-md text-on-surface-variant leading-relaxed mb-4 text-sm">
-                    By default, the browser extension links to the local host address. If you run your MCP client or server inside a container or VM (such as WSL), you may need to configure a custom endpoint:
+                  <p className="text-xs sm:text-sm text-[#cbc4d2] leading-relaxed">
+                    {tool.description}
                   </p>
-                  <ul className="list-decimal pl-6 space-y-3 font-body-md text-on-surface-variant text-sm">
-                    <li>Click the <span className="text-secondary font-bold font-body-md">Xtra DevPilot</span> extension icon in your Chrome toolbar.</li>
-                    <li>In the popup menu, choose <span className="text-secondary font-bold font-body-md">Connection Settings</span>.</li>
-                    <li>Update the URL to your target workspace (e.g. <code className="bg-white/10 px-1 rounded font-label-mono">ws://127.0.0.1:42819</code> or a custom tunnel address).</li>
-                    <li>Click <span className="text-secondary font-bold font-body-md">Reconnect</span> to apply changes.</li>
-                  </ul>
-                </div>
-              </section>
-            </>
-          )}
-        </div>
 
-        {/* Footer */}
-        <footer className="w-full py-8 flex flex-col md:flex-row justify-between items-center mt-20 border-t border-white/10">
-          <div className="mb-4 md:mb-0">
-            <p className="font-label-mono text-label-mono text-on-surface-variant opacity-60">
-              © 2024 Xtra DevPilot. Built for elite engineers.
-            </p>
-          </div>
-          <div className="flex gap-8">
-            <a
-              className="font-label-mono text-label-mono text-on-surface-variant hover:text-tertiary transition-colors"
-              href="https://github.com/om0852/XtraDevPilot"
-              target="_blank"
-              rel="noopener noreferrer"
-            >
-              GitHub
-            </a>
-            <button
-              onClick={() => showToast("Discord link is coming soon!")}
-              className="font-label-mono text-label-mono text-on-surface-variant hover:text-tertiary transition-colors cursor-pointer"
-            >
-              Discord
-            </button>
-            <button
-              onClick={() => showToast("All local bridge systems are online.")}
-              className="font-label-mono text-label-mono text-on-surface-variant hover:text-tertiary transition-colors cursor-pointer"
-            >
-              Status
-            </button>
-            <button
-              onClick={() => showToast("MIT License")}
-              className="font-label-mono text-label-mono text-on-surface-variant hover:text-tertiary transition-colors cursor-pointer"
-            >
-              Terms
-            </button>
-          </div>
-        </footer>
-      </main>
-
-      {/* Elegant Installation Modal */}
-      {showModal && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/60 backdrop-blur-md">
-          <div className="relative w-full max-w-2xl bg-[#141218] border border-white/10 rounded-sm shadow-2xl overflow-hidden glass-card">
-            {/* Accent strip */}
-            <div className="h-1.5 w-full bg-gradient-to-r from-primary via-secondary to-tertiary"></div>
-            
-            <div className="p-6 md:p-8">
-              {/* Header */}
-              <div className="flex justify-between items-start mb-6">
-                <div>
-                  <h3 className="font-headline-lg text-2xl font-bold text-on-surface">
-                    Install Xtra DevPilot Extension
-                  </h3>
-                  <p className="text-sm text-on-surface-variant mt-1 font-body-md">
-                    Follow these steps to set up the browser bridge in Chrome.
-                  </p>
-                </div>
-                <button
-                  onClick={() => setShowModal(false)}
-                  className="text-on-surface-variant hover:text-primary transition-colors focus:outline-none cursor-pointer"
-                >
-                  <span className="material-symbols-outlined text-2xl">close</span>
-                </button>
-              </div>
-
-              {/* Steps */}
-              <div className="space-y-6 max-h-[60vh] overflow-y-auto pr-2">
-                {/* Step 1: Download */}
-                <div className="flex gap-4">
-                  <div className="flex-shrink-0 w-8 h-8 rounded-full bg-primary/20 text-primary border border-primary/30 flex items-center justify-center font-label-mono font-bold text-sm">
-                    1
-                  </div>
-                  <div>
-                    <h4 className="font-bold text-on-surface text-base font-body-md">Get the Extension Source</h4>
-                    <p className="text-sm text-on-surface-variant mt-1 font-body-md">
-                      Download or clone the official repository from GitHub:
-                    </p>
-                    <div className="mt-3 flex flex-wrap gap-3 items-center">
-                      <a
-                        href="https://github.com/om0852/XtraDevPilot"
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="inline-flex items-center gap-2 bg-primary text-on-primary px-4 py-2 rounded-sm font-label-mono text-xs hover:scale-105 transition-all"
-                      >
-                        <span className="material-symbols-outlined text-sm">open_in_new</span>
-                        GitHub Repository
-                      </a>
-                      <div className="bg-[#0A0A0A] border border-white/10 px-3 py-2 rounded-sm font-code-sm text-xs text-on-surface-variant select-all">
-                        git clone https://github.com/om0852/XtraDevPilot.git
+                  <div className="grid md:grid-cols-2 gap-4">
+                    <div>
+                      <div className="text-[11px] font-label-mono text-[#e7c365] mb-1">
+                        Input Arguments:
                       </div>
+                      <pre className="bg-[#0f0d13] p-3 rounded border border-white/5 font-label-mono text-[11px] text-[#cbc4d2] overflow-x-auto">
+                        {tool.sampleCall}
+                      </pre>
+                    </div>
+                    <div>
+                      <div className="text-[11px] font-label-mono text-emerald-400 mb-1">
+                        Expected Return Payload:
+                      </div>
+                      <pre className="bg-[#0f0d13] p-3 rounded border border-white/5 font-label-mono text-[11px] text-[#cbc4d2] overflow-x-auto">
+                        {tool.response}
+                      </pre>
                     </div>
                   </div>
                 </div>
+              ))}
+            </div>
+          </div>
+        )}
 
-                {/* Step 2: Developer Mode */}
-                <div className="flex gap-4">
-                  <div className="flex-shrink-0 w-8 h-8 rounded-full bg-secondary/20 text-secondary border border-secondary/30 flex items-center justify-center font-label-mono font-bold text-sm">
-                    2
-                  </div>
-                  <div>
-                    <h4 className="font-bold text-on-surface text-base font-body-md">Enable Chrome Developer Mode</h4>
-                    <p className="text-sm text-on-surface-variant mt-1 font-body-md">
-                      Open a new tab in Google Chrome and enter <code className="bg-white/10 px-1 rounded font-label-mono text-xs text-secondary">chrome://extensions/</code> in the address bar.
-                    </p>
-                    <p className="text-sm text-on-surface-variant mt-1 font-body-md">
-                      In the top-right corner of the Extensions page, turn on the <span className="text-secondary font-bold font-body-md">Developer mode</span> switch.
-                    </p>
-                  </div>
-                </div>
+        {/* Section 4: Architecture & Security */}
+        {activeSection === "architecture" && (
+          <div className="space-y-10">
+            <div>
+              <div className="text-xs font-label-mono text-[#cfbcff] uppercase tracking-wider mb-2">
+                Security & Specs
+              </div>
+              <h1 className="text-3xl sm:text-4xl font-extrabold text-white">
+                Architecture & Privacy Principles
+              </h1>
+              <p className="text-[#cbc4d2] text-base mt-2 max-w-2xl">
+                Built from the ground up for strict enterprise security. Zero cloud telemetry.
+              </p>
+            </div>
 
-                {/* Step 3: Load Unpacked */}
-                <div className="flex gap-4">
-                  <div className="flex-shrink-0 w-8 h-8 rounded-full bg-tertiary/20 text-tertiary border border-tertiary/30 flex items-center justify-center font-label-mono font-bold text-sm">
-                    3
-                  </div>
-                  <div>
-                    <h4 className="font-bold text-on-surface text-base font-body-md">Load Unpacked Extension</h4>
-                    <p className="text-sm text-on-surface-variant mt-1 font-body-md">
-                      Click the <span className="text-tertiary font-bold font-body-md">Load unpacked</span> button in the top-left corner.
-                    </p>
-                    <p className="text-sm text-on-surface-variant mt-1 font-body-md">
-                      Select the <code className="bg-white/10 px-1 rounded font-label-mono text-xs">extension/</code> folder within your cloned <code className="bg-white/10 px-1 rounded font-label-mono text-xs">XtraDevPilot</code> directory.
-                    </p>
-                  </div>
-                </div>
+            <div className="glass-card p-6 rounded-xl border border-white/10 space-y-4">
+              <h3 className="text-lg font-bold text-white flex items-center gap-2">
+                <span className="material-symbols-outlined text-emerald-400">lock</span>
+                Zero-Cloud Residency
+              </h3>
+              <p className="text-xs sm:text-sm text-[#cbc4d2] leading-relaxed">
+                Traditional browser automation frameworks route network payloads through remote cloud clusters. In contrast, Xtra DevPilot establishes an isolated loopback pipe on <code className="text-[#cfbcff]">127.0.0.1:42819</code>. No cookies, DOM trees, internal secrets, or source code packets leave your physical workstation.
+              </p>
+            </div>
 
-                {/* Step 4: Verification */}
-                <div className="flex gap-4">
-                  <div className="flex-shrink-0 w-8 h-8 rounded-full bg-primary/20 text-primary border border-primary/30 flex items-center justify-center font-label-mono font-bold text-sm">
-                    4
-                  </div>
-                  <div>
-                    <h4 className="font-bold text-on-surface text-base font-body-md">Verify Connection</h4>
-                    <p className="text-sm text-on-surface-variant mt-1 font-body-md">
-                      Once loaded, the Xtra DevPilot extension icon will appear in your toolbar. Pin it, then start your local MCP bridge:
-                    </p>
-                    <div className="mt-2 bg-[#0A0A0A] border border-white/10 px-3 py-2 rounded-sm font-code-sm text-xs text-on-surface-variant select-all w-fit">
-                      npx xtradevpilot-mcp
-                    </div>
-                  </div>
+            <div className="glass-card p-6 rounded-xl border border-white/10 space-y-4">
+              <h3 className="text-lg font-bold text-white flex items-center gap-2">
+                <span className="material-symbols-outlined text-[#cfbcff]">network_node</span>
+                Communication Protocol
+              </h3>
+              <p className="text-xs sm:text-sm text-[#cbc4d2] leading-relaxed">
+                The IDE communicates with the MCP server via standard JSON-RPC over <code className="text-[#cfbcff]">stdio</code>. The MCP server multiplexes requests over a local WebSocket server (<code className="text-[#cfbcff]">ws://127.0.0.1:42819</code>) to the Chrome Manifest V3 service worker, which delegates DOM commands to content scripts.
+              </p>
+            </div>
+          </div>
+        )}
+
+        {/* Section 5: Troubleshooting */}
+        {activeSection === "troubleshooting" && (
+          <div className="space-y-10">
+            <div>
+              <div className="text-xs font-label-mono text-[#cfbcff] uppercase tracking-wider mb-2">
+                Diagnostics
+              </div>
+              <h1 className="text-3xl sm:text-4xl font-extrabold text-white">
+                Troubleshooting & FAQs
+              </h1>
+              <p className="text-[#cbc4d2] text-base mt-2 max-w-2xl">
+                Solutions for common setup hurdles and network edge cases.
+              </p>
+            </div>
+
+            <div className="space-y-6">
+              <div className="glass-card p-6 rounded-xl border border-white/10 space-y-3">
+                <h3 className="text-sm sm:text-base font-bold text-white flex items-center gap-2">
+                  <span className="material-symbols-outlined text-[#ffb4ab]">error</span>
+                  Extension popup shows red &quot;Disconnected&quot; badge
+                </h3>
+                <p className="text-xs sm:text-sm text-[#cbc4d2] leading-relaxed">
+                  This occurs if the local MCP server is not currently running. Open a terminal and run <code className="text-[#cfbcff]">npx xtradevpilot-mcp</code>. Once the WebSocket server binds to port <code className="text-[#cfbcff]">42819</code>, click the <strong>Reconnect</strong> button in the popup.
+                </p>
+              </div>
+
+              <div className="glass-card p-6 rounded-xl border border-white/10 space-y-3">
+                <h3 className="text-sm sm:text-base font-bold text-white flex items-center gap-2">
+                  <span className="material-symbols-outlined text-[#e7c365]">warning</span>
+                  Port 42819 is in use by another process
+                </h3>
+                <p className="text-xs sm:text-sm text-[#cbc4d2] leading-relaxed">
+                  If another Node instance holds port 42819, terminate it using your OS process manager or run:
+                </p>
+                <div className="bg-[#0f0d13] p-2.5 rounded border border-white/5 font-label-mono text-xs text-[#cbc4d2]">
+                  <code>Get-Process -Id (Get-NetTCPConnection -LocalPort 42819).OwningProcess | Stop-Process</code>
                 </div>
               </div>
 
-              {/* Footer */}
-              <div className="mt-8 pt-4 border-t border-white/10 flex justify-end">
-                <button
-                  onClick={() => setShowModal(false)}
-                  className="px-5 py-2 border border-white/10 text-on-surface hover:bg-white/5 font-label-mono text-xs rounded-sm transition-all cursor-pointer"
-                >
-                  Close
-                </button>
+              <div className="glass-card p-6 rounded-xl border border-white/10 space-y-3">
+                <h3 className="text-sm sm:text-base font-bold text-white flex items-center gap-2">
+                  <span className="material-symbols-outlined text-[#22d3ee]">help</span>
+                  Targeting complex Tailwind classes with colons and brackets
+                </h3>
+                <p className="text-xs sm:text-sm text-[#cbc4d2] leading-relaxed">
+                  Xtra DevPilot has built-in selector normalization! You can pass arbitrary classes like <code className="text-[#cfbcff]">span.ml-[10px]</code> or <code className="text-[#cfbcff]">button.group-hover:opacity-100</code> directly without manual backslash escaping.
+                </p>
               </div>
             </div>
           </div>
-        </div>
-      )}
+        )}
 
-      {/* Toast Notification */}
+        {/* Section 6: Settings */}
+        {activeSection === "settings" && (
+          <div className="space-y-10">
+            <div>
+              <div className="text-xs font-label-mono text-[#cfbcff] uppercase tracking-wider mb-2">
+                Preferences
+              </div>
+              <h1 className="text-3xl sm:text-4xl font-extrabold text-white">
+                Extension Settings
+              </h1>
+              <p className="text-[#cbc4d2] text-base mt-2 max-w-2xl">
+                Configure connection host and recording defaults inside the extension popup.
+              </p>
+            </div>
+
+            <div className="glass-card p-6 rounded-xl border border-white/10 space-y-4">
+              <h3 className="text-base font-bold text-white">Custom Bridge Host</h3>
+              <p className="text-xs sm:text-sm text-[#cbc4d2]">
+                If running your MCP client inside WSL, Docker, or a VM, update the target WebSocket URL:
+              </p>
+              <div className="bg-[#0f0d13] p-3 rounded border border-white/5 font-label-mono text-xs text-[#cfbcff]">
+                ws://127.0.0.1:42819
+              </div>
+            </div>
+          </div>
+        )}
+      </main>
+
+      {/* Floating Toast Notification */}
       <div
-        className={`fixed bottom-6 right-6 z-[100] flex items-center gap-3 px-4 py-3 bg-[#141218] border border-primary/30 text-on-surface rounded-sm shadow-lg backdrop-blur-md transition-all duration-300 ${
-          toastMessage ? "opacity-100 translate-y-0" : "opacity-0 translate-y-4 pointer-events-none"
+        className={`fixed bottom-6 right-6 z-[120] flex items-center gap-3 px-4 py-3 bg-[#141218]/95 border border-[#cfbcff]/40 text-white rounded-lg shadow-2xl backdrop-blur-xl transition-all duration-300 ${
+          toastMessage ? "opacity-100 translate-y-0 scale-100" : "opacity-0 translate-y-4 scale-95 pointer-events-none"
         }`}
       >
-        <span className="material-symbols-outlined text-primary">info</span>
-        <span className="font-label-mono text-sm">{toastMessage}</span>
+        <span className="material-symbols-outlined text-[#cfbcff] text-xl">info</span>
+        <span className="font-label-mono text-xs">{toastMessage}</span>
       </div>
     </div>
   );

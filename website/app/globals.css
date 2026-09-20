@@ -163,6 +163,38 @@ body {
   50% { opacity: 1; filter: blur(0px); }
 }
 
+.hero-grid-pattern {
+  background-image: radial-gradient(rgba(207, 188, 255, 0.12) 1px, transparent 1px);
+  background-size: 32px 32px;
+}
+
+.luminous-spotlight {
+  background: radial-gradient(circle at 50% 0%, rgba(103, 80, 164, 0.35) 0%, rgba(207, 188, 255, 0.1) 40%, transparent 75%);
+}
+
+.glass-pill {
+  background: rgba(255, 255, 255, 0.05);
+  backdrop-filter: blur(24px);
+  -webkit-backdrop-filter: blur(24px);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3), inset 0 1px 0 rgba(255, 255, 255, 0.15);
+}
+
+.glass-pill:hover {
+  border-color: rgba(207, 188, 255, 0.35);
+  background: rgba(255, 255, 255, 0.08);
+}
+
+@keyframes beamSweep {
+  0% { transform: translateX(-100%); }
+  50% { transform: translateX(100%); }
+  100% { transform: translateX(200%); }
+}
+
+.animate-beam-sweep {
+  animation: beamSweep 3s infinite linear;
+}
+
 /* Explicit Utility Classes */
 .px-margin-desktop {
   padding-left: 1.5rem;

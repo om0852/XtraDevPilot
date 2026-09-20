@@ -2,8 +2,8 @@ import type { Metadata } from "next";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "Xtra DevPilot | Elite AI Frontend Engineering",
-  description: "Xtra DevPilot is a highly advanced, next-generation AI Developer Tool that seamlessly bridges your live Chrome Browser with your AI-powered IDE.",
+  title: "Xtra DevPilot | The Local AI Browser Bridge for Developers & AI Agents",
+  description: "Xtra DevPilot is a next-generation Model Context Protocol bridge connecting live Chrome sessions with AI agents, IDEs, QA automation, and developer workflows with zero cloud latency.",
   icons: {
     icon: [
       { url: "/favicon.ico" },
