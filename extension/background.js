@@ -2,12 +2,23 @@ let socket = null;
 let networkLogsByTab = {};
 let consoleLogsByTab = {};
 
+const BRIDGE_URLS = ['ws://127.0.0.1:42819', 'ws://localhost:42819'];
+let bridgeUrlIndex = 0;
+
 function connectWebSocket() {
-  console.log("[DevPilot] Connecting to WebSocket...");
-  socket = new WebSocket('ws://localhost:42819');
+  const url = BRIDGE_URLS[bridgeUrlIndex % BRIDGE_URLS.length];
+  console.log(`[DevPilot] Connecting to WebSocket bridge at ${url}...`);
+  try {
+    socket = new WebSocket(url);
+  } catch (err) {
+    console.error("[DevPilot] WebSocket init error:", err);
+    bridgeUrlIndex++;
+    setTimeout(connectWebSocket, 2000);
+    return;
+  }
 
   socket.onopen = () => {
-    console.log("[DevPilot] Connected to IDE Bridge.");
+    console.log(`[DevPilot] Connected to IDE Bridge at ${url}`);
     socket.send(JSON.stringify({ role: 'extension' }));
   };
 
@@ -52,7 +63,7 @@ function getActiveTabLogs(logsObj) {
   });
 }
 
-async function handleAction(action, payload) {
+async function handleAction(action, payload = {}) {
   switch (action) {
     case 'OPEN_TAB':
     case 'NAVIGATE':
@@ -60,6 +71,11 @@ async function handleAction(action, payload) {
         const url = payload.url || 'https://google.com';
         if (action === 'OPEN_TAB' || payload.newTab) {
           chrome.tabs.create({ url, active: true }, (tab) => {
+            if (chrome.runtime.lastError) return reject(new Error(chrome.runtime.lastError.message));
+            resolve({ tabId: tab.id, url: tab.url, status: tab.status });
+          });
+        } else if (payload.tabId) {
+          chrome.tabs.update(payload.tabId, { url }, (tab) => {
             if (chrome.runtime.lastError) return reject(new Error(chrome.runtime.lastError.message));
             resolve({ tabId: tab.id, url: tab.url, status: tab.status });
           });
@@ -75,18 +91,39 @@ async function handleAction(action, payload) {
       });
     case 'GET_TAB_INFO':
       return new Promise((resolve, reject) => {
-        chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
-          if (tabs.length === 0) return reject(new Error("No active tab found."));
-          const tab = tabs[0];
-          resolve({
-            id: tab.id,
-            title: tab.title,
-            url: tab.url,
-            favIconUrl: tab.favIconUrl,
-            width: tab.width,
-            height: tab.height,
-            status: tab.status
+        const parseTab = (tab) => ({
+          id: tab.id,
+          title: tab.title,
+          url: tab.url,
+          favIconUrl: tab.favIconUrl,
+          width: tab.width,
+          height: tab.height,
+          status: tab.status
+        });
+
+        if (payload.tabId) {
+          chrome.tabs.get(payload.tabId, (tab) => {
+            if (chrome.runtime.lastError || !tab) return reject(new Error(`Tab ID ${payload.tabId} not found.`));
+            resolve(parseTab(tab));
           });
+        } else {
+          chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
+            if (tabs.length === 0) return reject(new Error("No active tab found."));
+            resolve(parseTab(tabs[0]));
+          });
+        }
+      });
+    case 'LIST_TABS':
+      return new Promise((resolve, reject) => {
+        chrome.tabs.query({}, (tabs) => {
+          if (chrome.runtime.lastError) return reject(new Error(chrome.runtime.lastError.message));
+          resolve(tabs.map(t => ({
+            id: t.id,
+            title: t.title,
+            url: t.url,
+            active: t.active,
+            status: t.status
+          })));
         });
       });
     case 'GET_NETWORK_LOGS':
@@ -99,6 +136,17 @@ async function handleAction(action, payload) {
     case 'WAIT_FOR_CLICK':
     case 'CLICK_ELEMENT':
     case 'TYPE_TEXT':
+    case 'UPLOAD_FILE':
+    case 'BATCH_FILL_FORM':
+    case 'WAIT_FOR_ELEMENT':
+    case 'SMART_SELECT_COMBOBOX':
+    case 'EXTRACT_JOB_DETAILS':
+    case 'EXECUTE_SCRIPT':
+    case 'SCROLL_PAGE':
+    case 'EXTRACT_STRUCTURED_DATA':
+    case 'ASSERT_ELEMENT_STATE':
+    case 'RECORD_FLOW':
+    case 'MANAGE_STORAGE':
     case 'MOCK_NETWORK_RESPONSE':
     case 'CLEAR_NETWORK_MOCKS':
     case 'GET_STORAGE':
@@ -108,15 +156,84 @@ async function handleAction(action, payload) {
     case 'RUN_SECURITY_AUDIT':
     case 'RUN_ACCESSIBILITY_AUDIT':
       return await askContentScript(action, payload);
+    case 'MANAGE_COOKIES':
+      return new Promise((resolve, reject) => {
+        if (!chrome.cookies) return reject(new Error("Cookies permission not available."));
+        const op = payload.operation;
+        if (op === 'get_all') {
+          const filter = {};
+          if (payload.domain) filter.domain = payload.domain;
+          if (payload.url) filter.url = payload.url;
+          chrome.cookies.getAll(filter, (cookies) => {
+            if (chrome.runtime.lastError) return reject(new Error(chrome.runtime.lastError.message));
+            resolve(cookies.map(c => ({ name: c.name, value: c.value, domain: c.domain, path: c.path, secure: c.secure, httpOnly: c.httpOnly })));
+          });
+        } else if (op === 'get') {
+          chrome.cookies.get({ url: payload.url, name: payload.name }, (cookie) => {
+            if (chrome.runtime.lastError) return reject(new Error(chrome.runtime.lastError.message));
+            resolve(cookie ? { name: cookie.name, value: cookie.value, domain: cookie.domain } : null);
+          });
+        } else if (op === 'set') {
+          const details = {
+            url: payload.url,
+            name: payload.name,
+            value: payload.value,
+            domain: payload.domain,
+            path: payload.path || '/',
+            secure: payload.secure !== undefined ? payload.secure : false,
+            httpOnly: payload.httpOnly !== undefined ? payload.httpOnly : false
+          };
+          chrome.cookies.set(details, (cookie) => {
+            if (chrome.runtime.lastError) return reject(new Error(chrome.runtime.lastError.message));
+            resolve(`Cookie '${payload.name}' set successfully.`);
+          });
+        } else if (op === 'remove') {
+          chrome.cookies.remove({ url: payload.url, name: payload.name }, (details) => {
+            if (chrome.runtime.lastError) return reject(new Error(chrome.runtime.lastError.message));
+            resolve(`Cookie '${payload.name}' removed.`);
+          });
+        } else {
+          reject(new Error(`Unknown cookie operation: ${op}`));
+        }
+      });
     case 'CAPTURE_SCREENSHOT':
       return new Promise((resolve, reject) => {
-        chrome.tabs.captureVisibleTab(null, { format: 'png' }, (dataUrl) => {
-          if (chrome.runtime.lastError) {
-            return reject(new Error(chrome.runtime.lastError.message));
-          }
-          resolve(dataUrl);
-        });
+        const capture = (windowId) => {
+          chrome.tabs.captureVisibleTab(windowId, { format: 'png' }, (dataUrl) => {
+            if (chrome.runtime.lastError) {
+              return reject(new Error(chrome.runtime.lastError.message));
+            }
+            resolve(dataUrl);
+          });
+        };
+
+        if (payload.tabId) {
+          chrome.tabs.get(payload.tabId, (tab) => {
+            if (chrome.runtime.lastError || !tab) return capture(null);
+            chrome.tabs.update(tab.id, { active: true }, () => {
+              chrome.windows.update(tab.windowId, { focused: true }, () => {
+                setTimeout(() => capture(tab.windowId), 150);
+              });
+            });
+          });
+        } else {
+          chrome.windows.getCurrent((win) => {
+            const winId = win ? win.id : null;
+            if (winId) {
+              chrome.windows.update(winId, { focused: true }, () => {
+                setTimeout(() => capture(winId), 100);
+              });
+            } else {
+              capture(null);
+            }
+          });
+        }
       });
+    case 'RELOAD_EXTENSION':
+      setTimeout(() => {
+        chrome.runtime.reload();
+      }, 150);
+      return "Extension reloading initiated.";
     case 'SET_VIEWPORT_SIZE':
       return new Promise((resolve, reject) => {
         chrome.windows.getCurrent((win) => {
@@ -137,17 +254,12 @@ async function handleAction(action, payload) {
 
 async function askContentScript(action, payload = {}) {
   return new Promise((resolve, reject) => {
-    chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
-      if (tabs.length === 0) {
-        return reject(new Error("No active tab found."));
-      }
-      const activeTab = tabs[0];
-      
-      if (activeTab.url.startsWith('chrome://')) {
+    const sendToTab = (tabId, tabUrl) => {
+      if (tabUrl && tabUrl.startsWith('chrome://')) {
         return reject(new Error("Cannot access chrome:// pages."));
       }
 
-      chrome.tabs.sendMessage(activeTab.id, { action, ...payload }, (response) => {
+      chrome.tabs.sendMessage(tabId, { action, ...payload }, (response) => {
         if (chrome.runtime.lastError) {
           reject(new Error(chrome.runtime.lastError.message));
         } else if (response && response.error) {
@@ -156,7 +268,23 @@ async function askContentScript(action, payload = {}) {
           resolve(response ? response.result : null);
         }
       });
-    });
+    };
+
+    if (payload.tabId) {
+      chrome.tabs.get(payload.tabId, (tab) => {
+        if (chrome.runtime.lastError || !tab) {
+          return reject(new Error(`Tab with ID ${payload.tabId} not found: ${chrome.runtime.lastError ? chrome.runtime.lastError.message : ''}`));
+        }
+        sendToTab(tab.id, tab.url);
+      });
+    } else {
+      chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
+        if (tabs.length === 0) {
+          return reject(new Error("No active tab found."));
+        }
+        sendToTab(tabs[0].id, tabs[0].url);
+      });
+    }
   });
 }
 

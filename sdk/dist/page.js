@@ -227,6 +227,97 @@ class Page {
         this.logger.info('Entering select mode, waiting for user click in browser...');
         return await this.transport.sendRequest('wait_for_user_click');
     }
+    /**
+     * Uploads a local file (e.g. resume PDF) to a file input or drag-and-drop zone.
+     */
+    async uploadFile(filePath, selector, tabId) {
+        this.logger.info(`Uploading file '${filePath}' to selector '${selector || 'input[type="file"]'}'`);
+        return await this.transport.sendRequest('upload_file', { filePath, selector, tabId });
+    }
+    /**
+     * Fills multiple form fields in a single rapid roundtrip.
+     */
+    async batchFill(actions, tabId) {
+        this.logger.info(`Batch filling ${actions.length} fields...`);
+        return await this.transport.sendRequest('batch_fill_form', { actions, tabId });
+    }
+    /**
+     * Selects an option from modern searchable custom dropdowns (Workday, Greenhouse, ARIA comboboxes).
+     */
+    async smartSelectCombobox(triggerSelector, optionText, searchQuery, tabId) {
+        this.logger.info(`Selecting '${optionText}' in combobox '${triggerSelector}'`);
+        return await this.transport.sendRequest('smart_select_combobox', {
+            triggerSelector,
+            optionText,
+            searchQuery,
+            tabId
+        });
+    }
+    /**
+     * Extracts structured job posting details from the active job page.
+     */
+    async extractJobDetails(tabId) {
+        this.logger.info('Extracting structured job details...');
+        return await this.transport.sendRequest('extract_job_details', { tabId });
+    }
+    /**
+     * Lists all open tabs in Chrome.
+     */
+    async listTabs() {
+        return await this.transport.sendRequest('list_tabs', {});
+    }
+    /**
+     * Evaluates arbitrary JavaScript in the webpage execution context.
+     */
+    async evaluate(script, tabId) {
+        this.logger.debug(`Evaluating script: ${script.substring(0, 80)}...`);
+        return await this.transport.sendRequest('execute_script', { script, tabId });
+    }
+    /**
+     * Scrolls the page or a scrollable inner container.
+     */
+    async scroll(options = {}, tabId) {
+        return await this.transport.sendRequest('scroll_page', { ...options, tabId });
+    }
+    /**
+     * Extracts structured data from HTML tables, lists, or card grids.
+     */
+    async extractStructuredData(targetSelector, type, itemSelector, tabId) {
+        return await this.transport.sendRequest('extract_structured_data', {
+            targetSelector,
+            type,
+            itemSelector,
+            tabId
+        });
+    }
+    /**
+     * QA assertion engine to check element state.
+     */
+    async assertElement(selector, condition, expected, tabId) {
+        return await this.transport.sendRequest('assert_element_state', {
+            selector,
+            condition,
+            expected,
+            tabId
+        });
+    }
+    /**
+     * Storage and cookie management.
+     */
+    async manageStorage(type, operation, options = {}, tabId) {
+        return await this.transport.sendRequest('manage_storage_and_cookies', {
+            type,
+            operation,
+            ...options,
+            tabId
+        });
+    }
+    /**
+     * Records user interaction flow and compiles it into a Playwright test.
+     */
+    async recordFlow(action, tabId) {
+        return await this.transport.sendRequest('record_user_flow', { action, tabId });
+    }
 }
 exports.Page = Page;
 //# sourceMappingURL=page.js.map

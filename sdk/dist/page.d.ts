@@ -98,5 +98,65 @@ export declare class Page {
      * Pauses execution until the user clicks any element in Chrome.
      */
     waitForUserClick(): Promise<any>;
+    /**
+     * Uploads a local file (e.g. resume PDF) to a file input or drag-and-drop zone.
+     */
+    uploadFile(filePath: string, selector?: string, tabId?: number): Promise<any>;
+    /**
+     * Fills multiple form fields in a single rapid roundtrip.
+     */
+    batchFill(actions: Array<{
+        selector: string;
+        value?: string;
+        action?: 'type' | 'select' | 'click' | 'check' | 'uncheck';
+        waitMs?: number;
+    }>, tabId?: number): Promise<any>;
+    /**
+     * Selects an option from modern searchable custom dropdowns (Workday, Greenhouse, ARIA comboboxes).
+     */
+    smartSelectCombobox(triggerSelector: string, optionText: string, searchQuery?: string, tabId?: number): Promise<any>;
+    /**
+     * Extracts structured job posting details from the active job page.
+     */
+    extractJobDetails(tabId?: number): Promise<any>;
+    /**
+     * Lists all open tabs in Chrome.
+     */
+    listTabs(): Promise<any>;
+    /**
+     * Evaluates arbitrary JavaScript in the webpage execution context.
+     */
+    evaluate(script: string, tabId?: number): Promise<any>;
+    /**
+     * Scrolls the page or a scrollable inner container.
+     */
+    scroll(options?: {
+        direction?: 'down' | 'up' | 'top' | 'bottom';
+        amount?: number;
+        scrollToSelector?: string;
+        containerSelector?: string;
+        smooth?: boolean;
+    }, tabId?: number): Promise<any>;
+    /**
+     * Extracts structured data from HTML tables, lists, or card grids.
+     */
+    extractStructuredData(targetSelector?: string, type?: 'auto' | 'table' | 'cards' | 'list', itemSelector?: string, tabId?: number): Promise<any>;
+    /**
+     * QA assertion engine to check element state.
+     */
+    assertElement(selector: string, condition: 'is_visible' | 'is_hidden' | 'is_enabled' | 'is_disabled' | 'contains_text' | 'has_value' | 'has_attribute', expected?: string, tabId?: number): Promise<any>;
+    /**
+     * Storage and cookie management.
+     */
+    manageStorage(type: 'cookie' | 'local_storage' | 'session_storage', operation: 'get' | 'get_all' | 'set' | 'remove' | 'clear', options?: {
+        name?: string;
+        value?: string;
+        url?: string;
+        domain?: string;
+    }, tabId?: number): Promise<any>;
+    /**
+     * Records user interaction flow and compiles it into a Playwright test.
+     */
+    recordFlow(action: 'start' | 'stop' | 'status', tabId?: number): Promise<any>;
 }
 //# sourceMappingURL=page.d.ts.map

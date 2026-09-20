@@ -1,192 +1,206 @@
-# Xtra DevPilot
+# XtraDevPilot 🚀
 
-<p align="center">
-  <img src="assets/android-chrome-512x512.png" alt="Xtra DevPilot Logo" width="128" height="128" />
-</p>
+> **Autonomous Browser Engineering, QA Automation & Live IDE Bridge powered by the Model Context Protocol (MCP)**
 
-An open-source **AI Browser Bridge** for your IDE. Connect Google Chrome directly to any Model Context Protocol (MCP) compatible AI assistant (such as Cursor Composer, Windsurf, or Claude Desktop) so it can inspect the live DOM, capture screenshots, intercept network requests, read console logs, and interact with the page—all without you leaving your editor.
+[![MCP Compatible](https://img.shields.io/badge/MCP-1.0.0-blue.svg)](https://modelcontextprotocol.io/)
+[![Chrome Extension](https://img.shields.io/badge/Chrome_Extension-Manifest_V3-green.svg)](https://developer.chrome.com/docs/extensions/)
+[![TypeScript SDK](https://img.shields.io/badge/TypeScript-SDK-3178c6.svg)](https://www.typescriptlang.org/)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
----
-
-## 🚀 Key Features
-
-* 🌐 **AI Browser Bridge**: Gives your IDE agent "eyes and hands" inside Google Chrome.
-* 🛡️ **Local-First & Secure**: Runs entirely on a local loopback network (`127.0.0.1:42819`). Your source code and browser data never leave your device.
-* 📸 **Visual Debugging**: Allows your agent to request viewport screenshots and extract LLM-friendly DOM snapshots.
-* 🖱️ **Full Element Interaction**: Supports click simulation, keyboard typing, scrolling, and custom JavaScript execution.
-* 🩺 **Console Hooks**: Directly reports browser logs and exceptions to assist in real-time debugging.
+**XtraDevPilot** seamlessly bridges your local AI pair programmer (Google Antigravity, Claude Desktop, Cursor) directly into your live, authenticated Chrome browser. Unlike headless browsers that get blocked by Cloudflare and CAPTCHAs, XtraDevPilot runs inside your real Chrome session—preserving cookies, active logins, credentials, and extensions.
 
 ---
 
-## 📐 Architecture Overview
+## 🏛️ System Architecture
 
-Xtra DevPilot uses a three-part local architecture to establish a secure link between Chrome and your editor:
+```mermaid
+flowchart TD
+    subgraph IDE_Agent["🤖 AI Agent & IDE Environment"]
+        Agent["AI Assistant / Antigravity IDE"]
+        SDK["@xtradevpilot/sdk (TypeScript / Node.js)"]
+        Agent -->|MCP Protocol / Stdio| MCPServer["MCP Server (mcp-server/index.js)"]
+        SDK -->|WebSocket :42819| BridgeWS["WebSocket Bridge"]
+    end
 
+    subgraph Bridge_Layer["🔌 Local Bridge Layer"]
+        MCPServer <-->|ws://localhost:42819| BridgeWS
+    end
+
+    subgraph Chrome_Browser["🌐 Google Chrome (Authenticated Session)"]
+        BridgeWS <-->|WebSocket Client| BG["background.js (Service Worker)"]
+        BG <-->|chrome.tabs.sendMessage| CS["content.js (ISOLATED World)"]
+        CS <-->|window.postMessage| INJ["injected.js (MAIN World)"]
+        
+        subgraph DOM_Context["Active Webpage Execution Context"]
+            INJ <--> WebApp["Live DOM / React / Vue / Redux State"]
+            CS <--> FormFields["Inputs / Dropdowns / File Dropzones"]
+        end
+    end
+
+    classDef ide fill:#1e293b,stroke:#38bdf8,stroke-width:2px,color:#f8fafc;
+    classDef bridge fill:#0f172a,stroke:#818cf8,stroke-width:2px,color:#f8fafc;
+    classDef chrome fill:#022c22,stroke:#34d399,stroke-width:2px,color:#f8fafc;
+    
+    class Agent,SDK,MCPServer ide;
+    class BridgeWS bridge;
+    class BG,CS,INJ,WebApp,FormFields chrome;
 ```
-+--------------------------+                 +--------------------------+
-|                          |    WebSocket    |                          |
-|     Chrome Extension     |<--------------->|     Local MCP Server     |
-| (Inspects DOM & console) |  (Port 42819)   |   (Stdio MCP Transport)  |
-|                          |                 |                          |
-+--------------------------+                 +--------------------------+
-                                                          ^
-                                                          | stdio (JSON-RPC)
-                                                          v
-                                             +--------------------------+
-                                             |                          |
-                                             |     IDE / MCP Client     |
-                                             |  (Cursor, Claude, etc.)  |
-                                             |                          |
-                                             +--------------------------+
-```
 
 ---
 
-## 🛠️ Quick Start
+## 🧰 Complete Catalog of MCP Tools (27 Available)
 
-### Prerequisites
-* **Node.js** v18.0.0 or higher.
-* **Google Chrome** (or any Chromium-based browser like Brave or Edge).
-* An **MCP-compatible client** (e.g., Cursor, Claude Desktop).
+XtraDevPilot exposes **27 production-ready MCP tools** organized across key engineering domains:
+
+### 1. Frontend & Full-Stack Development
+| Tool Name | Description | Key Parameters |
+| :--- | :--- | :--- |
+| `execute_script` | Evaluates arbitrary JavaScript in the webpage's `MAIN` execution context. Accesses Redux stores, Zustand, Pinia, window globals, or triggers custom events. | `script`, `tabId` |
+| `inject_css` | Dynamically injects raw CSS rules into the live page without reloading. | `cssString` |
+| `toggle_layout_debug_mode` | Toggles high-contrast red outlines on all DOM elements to reveal overflow, box boundaries, and margin issues. | _None_ |
+| `highlight_element` | Highlights a DOM element with a smooth transition and scrolls it into center view. | `selector`, `tabId` |
+| `wait_for_user_click` | Enters "Select Mode" (Inspector Pencil), pausing until the user clicks an element in Chrome, returning clean HTML, computed styles, and inline events. | _None_ |
+| `set_viewport_size` | Resizes the Chrome window to test responsive design breakpoints (mobile, tablet, desktop). | `width`, `height` |
+
+### 2. QA Engineering & Automated Testing
+| Tool Name | Description | Key Parameters |
+| :--- | :--- | :--- |
+| `assert_element_state` | Deterministic QA assertion engine (`is_visible`, `is_hidden`, `is_enabled`, `is_disabled`, `contains_text`, `has_value`, `has_attribute`). | `selector`, `condition`, `expected`, `tabId` |
+| `record_user_flow` | Captures live user clicks, typing, and navigation, automatically compiling them into a production-ready **Playwright** test file (`.spec.ts`). | `action` (`start`/`stop`/`status`), `tabId` |
+| `get_web_vitals` | Audits Core Web Vitals (LCP, CLS, FCP) and resource timing waterfall. | _None_ |
+| `run_accessibility_audit` | Scans active page for a11y flaws (missing alt tags, missing button aria-labels, skipped heading levels). | _None_ |
+| `run_security_audit` | Scans for plain-text JWTs/secrets in storage, insecure forms, and non-HTTPS traffic. | _None_ |
+| `mock_network_response` | Mocks browser `fetch` calls matching a URL pattern with custom status and JSON payloads. | `urlPattern`, `responseBody`, `status` |
+| `clear_network_mocks` | Clears all registered in-browser network mocks. | _None_ |
+
+### 3. Web Scraping & RPA Automation
+| Tool Name | Description | Key Parameters |
+| :--- | :--- | :--- |
+| `extract_structured_data` | Universal table and card grid scraper. Parses HTML `<table>` elements and repeated lists into structured JSON. | `targetSelector`, `type` (`table`/`cards`/`list`), `tabId` |
+| `scroll_page` | Directional scrolling (`up`, `down`, `top`, `bottom`), pixel delta scrolling, `scrollToSelector`, and inner container scrolling (`overflow: scroll`). | `direction`, `amount`, `scrollToSelector`, `containerSelector`, `tabId` |
+| `manage_storage_and_cookies` | Full CRUD on `localStorage`, `sessionStorage`, and Chrome `cookies` (`get`, `set`, `remove`, `clear`). Enables instant persona switching. | `type`, `operation`, `name`, `value`, `domain`, `tabId` |
+| `get_storage` | Returns snapshot of local storage, session storage, and active cookies. | _None_ |
+| `get_network_logs` | Returns recent network requests made by the tab (methods, status codes, URLs). | _None_ |
+| `get_console_logs` | Returns recent browser console errors, warnings, and log messages. | _None_ |
+| `capture_screenshot` | Captures visible tab screenshot and saves as a PNG artifact. | `tabId` |
+
+### 4. Enterprise Form & Career Portal Automation
+| Tool Name | Description | Key Parameters |
+| :--- | :--- | :--- |
+| `upload_file` | Attaches local files (`.pdf`, `.docx`) to `<input type="file">` and drag-and-drop zones using `DataTransfer`. | `filePath`, `selector`, `tabId` |
+| `batch_fill_form` | Executes 20+ form field assignments in ~200ms using React prototype value setters and auto-selector normalization. | `actions` (`selector`, `value`, `action`), `tabId` |
+| `smart_select_combobox` | Automates custom searchable dropdowns (Workday, Greenhouse, ARIA comboboxes, Phenom). | `triggerSelector`, `optionText`, `searchQuery`, `tabId` |
+| `extract_job_details` | Scrapes structured job postings and detects the ATS platform (Workday, Phenom, Greenhouse, Lever, LinkedIn). | `tabId` |
+| `wait_for_element` | Waits for dynamic elements to appear, become visible, or detach. | `selector`, `timeoutMs`, `state`, `tabId` |
+| `type_text` | Simulates user typing with React-compatible event dispatching and 3s auto-wait. | `selector`, `text`, `timeoutMs`, `tabId` |
+| `click_element` | Dispatches click with auto-wait and smooth scroll. | `selector`, `timeoutMs`, `tabId` |
+
+### 5. Multi-Tab & Session Management
+| Tool Name | Description | Key Parameters |
+| :--- | :--- | :--- |
+| `open_tab` | Opens a new tab in Chrome and navigates to the URL. | `url` |
+| `navigate` | Navigates the target tab to a URL. | `url`, `tabId` |
+| `list_tabs` | Lists all open tabs with IDs, titles, URLs, and active states. | _None_ |
+| `get_tab_info` | Returns dimensions, URL, status, and favicon of a tab. | `tabId` |
+| `get_dom_snapshot` | Returns raw DOM structure. | `tabId` |
+| `get_clean_dom_snapshot` | Returns LLM-optimized DOM with optional `rootSelector` scope. | `rootSelector`, `tabId` |
 
 ---
 
-### Step 1: Install the Chrome Extension
+## ⚡ TypeScript SDK Guide
 
-1. Clone this repository to your local machine:
-   ```bash
-   git clone https://github.com/om0852/XtraDevPilot.git
-   ```
-2. Open Chrome and navigate to: `chrome://extensions/`
-3. In the top-right corner, toggle **Developer mode** to **ON**.
-4. In the top-left corner, click **Load unpacked**.
-5. Select the `extension/` folder inside your cloned `XtraDevPilot` directory.
-6. The Xtra DevPilot extension icon will now appear in your browser toolbar. We recommend pinning it for easy access.
-
----
-
-### Step 2: Start the MCP Server
-
-The server acts as the Stdio bridge. You can run the server directly from NPM using `npx`:
+Install and use the native TypeScript / Node.js SDK:
 
 ```bash
-npx xtradevpilot-mcp
-```
-
-*Alternatively, if running from source:*
-```bash
-cd mcp-server
+cd sdk
 npm install
-npm start
+npm run build
+```
+
+### SDK Example: Automated Dev & QA Workflow
+
+```typescript
+import { Browser } from '@xtradevpilot/sdk';
+
+async function run() {
+  const browser = new Browser({ port: 42819 });
+  const page = await browser.getPage();
+
+  // 1. Navigate to target application
+  await page.goto('http://localhost:3000');
+
+  // 2. Evaluate runtime Redux store in MAIN context
+  const state = await page.evaluate('window.__REDUX_STORE__?.getState()');
+  console.log('App state:', state);
+
+  // 3. Batch fill a form in one shot
+  await page.batchFill([
+    { selector: '#username', value: 'developer', action: 'type' },
+    { selector: '#roleSelect', value: 'admin', action: 'select' },
+    { selector: '#termsCheckbox', action: 'check' }
+  ]);
+
+  // 4. Attach Resume / Document
+  await page.uploadFile('./assets/resume.pdf', '#fileUpload');
+
+  // 5. Scrape financial table data
+  const report = await page.extractStructuredData('#transactions-table', 'table');
+  console.log(`Scraped ${report.count} rows:`, report.data);
+
+  // 6. QA Assertion
+  const assertion = await page.assertElement('#success-badge', 'is_visible');
+  console.log('Test Passed:', assertion.passed);
+
+  await browser.close();
+}
+
+run();
 ```
 
 ---
 
-### Step 3: Configure your IDE / Client
+## 🖥️ Chrome Extension 1-Click Popup
 
-Add the local MCP server command to your client configurations.
+The XtraDevPilot Chrome Extension features an interactive **Quick Actions Dashboard**:
 
-#### 1. Cursor IDE Setup
-1. Open **Cursor Settings** and select the **Features** tab.
-2. Scroll down to the **MCP** section.
-3. Click **+ Add New MCP Server**.
-4. Enter the configuration:
-   * **Name**: `Xtra DevPilot`
-   * **Type**: `command`
-   * **Command**: `npx -y xtradevpilot-mcp`
-5. Click **Save**.
+- ⚡ **1-Click Profile Autofill**: Automatically fills candidate details across Phenom People, Workday, Greenhouse, and standard forms.
+- ⏺️ **Record Playwright Test**: Click Start, perform manual actions in Chrome, and click Stop to instantly generate and copy a ready-to-run Playwright test script.
+- 📊 **Scrape Table to JSON**: 1-click scrapes tables/grids on the active tab and copies the JSON payload to your clipboard.
+- 📐 **Toggle Layout Debugger**: Outlines all elements in red to diagnose flexbox, grid, and margin alignment bugs.
+- ✏️ **Inspect Element for AI**: Click-to-select element inspector that sends computed styles and HTML back to your IDE.
 
-#### 2. Claude Desktop Setup
-Open your Claude Desktop config file (located at `%appdata%\Claude\claude_desktop_config.json` on Windows or `~/Library/Application Support/Claude/claude_desktop_config.json` on macOS) and add:
+---
+
+## 🚀 Quickstart Setup
+
+### 1. Configure in Antigravity / Gemini IDE
+Add XtraDevPilot to your `mcp_config.json` (`~/.gemini/config/mcp_config.json`):
 
 ```json
 {
   "mcpServers": {
-    "xtra-devpilot": {
-      "command": "npx",
-      "args": ["-y", "xtradevpilot-mcp"]
+    "xtradevpilot": {
+      "command": "node",
+      "args": [
+        "C:\\Users\\salun\\OneDrive - smarttech\\Desktop\\D folder\\xtradevpilot\\mcp-server\\index.js"
+      ]
     }
   }
 }
 ```
 
----
+### 2. Load Chrome Extension
+1. Open Chrome and go to `chrome://extensions/`.
+2. Enable **Developer mode** (top-right toggle).
+3. Click **Load unpacked** and select the `extension/` folder.
+4. The extension icon will show a green badge when connected to the IDE bridge.
 
-## 🧰 Available MCP Tools
-
-Once connected, Xtra DevPilot provides your AI agent with these capabilities:
-
-| Tool Name | Parameters | Description |
-|---|---|---|
-| `get_dom_snapshot` | None | Returns a condensed, LLM-friendly structural snapshot of the active page DOM. |
-| `capture_screenshot` | None | Captures a high-resolution base64 screenshot of the active browser viewport. |
-| `interact_with_page` | `action` ("click" / "type" / "scroll"), `selector`, `text` | Simulates user inputs like clicks, scrolling, and entering values on page elements. |
-| `evaluate_javascript` | `code` | Evaluates custom JavaScript in the context of the active webpage and returns output. |
-
----
-
-## 💡 Example Prompt Instructions
-
-Try using these prompts inside Cursor Composer or your agent window:
-* > "Inspect the DOM of my current webpage and tell me why the submit button isn't clickable."
-* > "Click the login link, then type my email into the input field."
-* > "Evaluate `window.performance.timing` on my current tab and report the metrics."
-* > "Check the active page console and summarize any warnings or errors."
-
----
-
-## 🤖 Node.js Automation SDK
-
-You can also use Xtra DevPilot as a programmatic browser automation SDK to run step-by-step test scripts directly in Node.js.
-
-### Quick Start
-
-```javascript
-import { XtraDevPilot } from './sdk/index.js';
-
-const pilot = new XtraDevPilot();
-
-// Connect to Chrome extension via MCP bridge
-await pilot.connect();
-
-// Perform browser automation steps sequentially
-await pilot.type('#email-input', 'test@example.com');
-await pilot.click('#submit-btn');
-
-// Capture screenshot & DOM
-const dom = await pilot.getCleanDomSnapshot();
-const screenshot = await pilot.captureScreenshot();
-
-// Run security & a11y checks
-const secReport = await pilot.runSecurityAudit();
-
-await pilot.disconnect();
-```
-
-To run the bundled example automation test script:
-```bash
-node sdk/examples/test_automation.js
-```
-
-
-## 🔧 Troubleshooting
-
-* **Extension shows red status**: Check that the server process is running and WebSocket port `42819` is free. Try clicking **Reconnect** in the extension popup.
-* **WSL / Containers**: If running your IDE inside WSL, you may need to forward port `42819` to your Windows host so the extension can connect.
-* **Permission issues**: Make sure the Chrome extension has permission to access your active tab pages.
-
----
-
-## 🤝 Contributing
-
-We welcome open-source contributions!
-1. Fork the repo and create your feature branch: `git checkout -b feature/my-new-feature`.
-2. Commit your changes: `git commit -am 'Add some feature'`.
-3. Push to the branch: `git push origin feature/my-new-feature`.
-4. Submit a Pull Request.
+### 3. Verification Testbeds
+Open the local testbed pages in Chrome to verify features:
+- [test_dev_qa.html](file:///c:/Users/salun/OneDrive%20-%20smarttech/Desktop/D%20folder/xtradevpilot/test_dev_qa.html): Runtime JS evaluation, table scraping, QA assertions, and scrolling.
+- [test_automation.html](file:///c:/Users/salun/OneDrive%20-%20smarttech/Desktop/D%20folder/xtradevpilot/test_automation.html): 1-shot batch form filling, PDF resume uploads, and comboboxes.
 
 ---
 
 ## 📄 License
-
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+MIT © XtraDevPilot Team

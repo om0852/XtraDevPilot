@@ -9,34 +9,37 @@
   <style>
     :root {
       --bg: #0d1117;
-      --card-bg: rgba(22, 27, 34, 0.9);
+      --card-bg: rgba(22, 27, 34, 0.95);
       --border: rgba(48, 54, 61, 0.8);
       --text: #c9d1d9;
+      --text-bright: #f0f6fc;
       --accent: #58a6ff;
-      --accent-glow: rgba(88, 166, 255, 0.4);
+      --accent-glow: rgba(88, 166, 255, 0.3);
       --success: #2ea043;
       --error: #f85149;
+      --purple: #bc8cff;
+      --amber: #d29922;
     }
 
     * { box-sizing: border-box; }
 
     body {
-      width: 320px;
+      width: 360px;
       margin: 0;
       padding: 0;
       font-family: 'Poppins', sans-serif;
       background-color: var(--bg);
       color: var(--text);
+      overflow-x: hidden;
     }
 
     .container {
       background: var(--card-bg);
-      padding: 20px;
+      padding: 16px 18px;
       position: relative;
-      overflow: hidden;
       display: flex;
       flex-direction: column;
-      gap: 16px;
+      gap: 14px;
       border-bottom: 1px solid var(--border);
     }
 
@@ -47,7 +50,7 @@
       left: 0;
       width: 100%;
       height: 3px;
-      background: linear-gradient(90deg, #1f6feb, var(--accent), #1f6feb);
+      background: linear-gradient(90deg, #1f6feb, var(--accent), #bc8cff);
       box-shadow: 0 0 10px var(--accent-glow);
     }
 
@@ -58,7 +61,7 @@
     }
 
     .title {
-      font-size: 1.2rem;
+      font-size: 1.15rem;
       font-weight: 700;
       color: #fff;
       display: flex;
@@ -67,21 +70,21 @@
     }
 
     .logo-img {
-      width: 28px;
-      height: 28px;
-      border-radius: 8px;
+      width: 26px;
+      height: 26px;
+      border-radius: 6px;
       object-fit: cover;
-      box-shadow: 0 0 12px var(--accent-glow);
+      box-shadow: 0 0 10px var(--accent-glow);
     }
 
     .status-badge {
       display: flex;
       align-items: center;
       gap: 6px;
-      font-size: 0.8rem;
+      font-size: 0.75rem;
       background: rgba(46, 160, 67, 0.1);
       color: var(--success);
-      padding: 5px 12px;
+      padding: 4px 10px;
       border-radius: 20px;
       border: 1px solid rgba(46, 160, 67, 0.3);
       font-weight: 600;
@@ -95,23 +98,23 @@
     }
 
     .status-dot {
-      width: 8px;
-      height: 8px;
+      width: 7px;
+      height: 7px;
       border-radius: 50%;
       background-color: var(--success);
-      box-shadow: 0 0 8px var(--success);
+      box-shadow: 0 0 6px var(--success);
       animation: pulse 2s infinite;
     }
 
     .disconnected .status-dot {
       background-color: var(--error);
-      box-shadow: 0 0 8px var(--error);
+      box-shadow: 0 0 6px var(--error);
       animation: none;
     }
 
     @keyframes pulse {
       0% { box-shadow: 0 0 0 0 rgba(46, 160, 67, 0.4); }
-      70% { box-shadow: 0 0 0 6px rgba(46, 160, 67, 0); }
+      70% { box-shadow: 0 0 0 5px rgba(46, 160, 67, 0); }
       100% { box-shadow: 0 0 0 0 rgba(46, 160, 67, 0); }
     }
 
@@ -120,102 +123,209 @@
       background: rgba(88, 166, 255, 0.1);
       color: var(--accent);
       border: 1px solid rgba(88, 166, 255, 0.4);
-      padding: 5px 12px;
+      padding: 4px 10px;
       border-radius: 20px;
-      font-size: 0.8rem;
+      font-size: 0.75rem;
       font-weight: 600;
       cursor: pointer;
-      transition: all 0.2s;
-    }
-
-    #reconnectBtn:hover {
-      background: rgba(88, 166, 255, 0.2);
     }
 
     .stats-grid {
       display: grid;
       grid-template-columns: 1fr 1fr;
-      gap: 12px;
-      margin-top: 8px;
+      gap: 10px;
     }
 
     .stat-card {
-      background: rgba(0, 0, 0, 0.4);
+      background: rgba(0, 0, 0, 0.3);
       border: 1px solid var(--border);
-      border-radius: 10px;
-      padding: 16px 12px;
+      border-radius: 8px;
+      padding: 10px;
       display: flex;
       flex-direction: column;
       align-items: center;
       justify-content: center;
-      transition: transform 0.2s, border-color 0.2s;
-    }
-
-    .stat-card:hover {
-      transform: translateY(-2px);
-      border-color: var(--accent);
     }
 
     .stat-value {
-      font-size: 1.8rem;
+      font-size: 1.4rem;
       font-weight: 800;
       color: #fff;
       line-height: 1;
     }
 
     .stat-label {
-      font-size: 0.75rem;
+      font-size: 0.7rem;
       color: #8b949e;
-      margin-top: 8px;
+      margin-top: 4px;
       text-transform: uppercase;
-      letter-spacing: 0.5px;
       font-weight: 600;
-    }
-    
-    .actions {
-      padding: 16px 20px;
-      display: flex;
-      flex-direction: column;
-      gap: 10px;
+      letter-spacing: 0.5px;
     }
 
-    .btn-danger {
-      width: 100%;
-      padding: 12px;
-      background: rgba(248, 81, 73, 0.1);
-      border: 1px solid rgba(248, 81, 73, 0.3);
-      color: var(--error);
-      border-radius: 8px;
-      cursor: pointer;
-      font-weight: 600;
-      font-size: 0.9rem;
-      transition: all 0.2s;
+    .section-title {
+      font-size: 0.75rem;
+      font-weight: 700;
+      color: #8b949e;
+      text-transform: uppercase;
+      letter-spacing: 0.6px;
+      margin-top: 4px;
+      margin-bottom: 8px;
       display: flex;
       align-items: center;
-      justify-content: center;
+      justify-content: space-between;
+    }
+
+    .quick-tools {
+      padding: 14px 18px;
+      display: flex;
+      flex-direction: column;
       gap: 8px;
     }
 
-    .btn-danger:hover {
-      background: rgba(248, 81, 73, 0.2);
-      border-color: rgba(248, 81, 73, 0.5);
+    .tool-btn {
+      width: 100%;
+      padding: 9px 12px;
+      border-radius: 7px;
+      cursor: pointer;
+      font-weight: 600;
+      font-size: 0.82rem;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      transition: all 0.15s ease-in-out;
+      border: 1px solid transparent;
+      font-family: inherit;
+    }
+
+    .btn-autofill {
+      background: rgba(88, 166, 255, 0.12);
+      border-color: rgba(88, 166, 255, 0.35);
+      color: var(--accent);
+    }
+    .btn-autofill:hover { background: rgba(88, 166, 255, 0.22); }
+
+    .btn-record {
+      background: rgba(248, 81, 73, 0.12);
+      border-color: rgba(248, 81, 73, 0.35);
+      color: #ff7b72;
+    }
+    .btn-record:hover { background: rgba(248, 81, 73, 0.22); }
+    .btn-record.recording {
+      background: rgba(248, 81, 73, 0.3);
+      border-color: var(--error);
+      color: #fff;
+      animation: pulse-red 1.5s infinite;
+    }
+
+    @keyframes pulse-red {
+      0% { box-shadow: 0 0 0 0 rgba(248, 81, 73, 0.5); }
+      70% { box-shadow: 0 0 0 6px rgba(248, 81, 73, 0); }
+      100% { box-shadow: 0 0 0 0 rgba(248, 81, 73, 0); }
+    }
+
+    .btn-scrape {
+      background: rgba(188, 140, 255, 0.12);
+      border-color: rgba(188, 140, 255, 0.35);
+      color: var(--purple);
+    }
+    .btn-scrape:hover { background: rgba(188, 140, 255, 0.22); }
+
+    .btn-layout {
+      background: rgba(210, 153, 34, 0.12);
+      border-color: rgba(210, 153, 34, 0.35);
+      color: var(--amber);
+    }
+    .btn-layout:hover { background: rgba(210, 153, 34, 0.22); }
+
+    .btn-select {
+      background: rgba(46, 160, 67, 0.12);
+      border-color: rgba(46, 160, 67, 0.35);
+      color: var(--success);
+    }
+    .btn-select:hover { background: rgba(46, 160, 67, 0.22); }
+
+    .btn-danger {
+      width: 100%;
+      padding: 8px 12px;
+      background: transparent;
+      border: 1px solid rgba(248, 81, 73, 0.3);
+      color: var(--error);
+      border-radius: 6px;
+      cursor: pointer;
+      font-weight: 500;
+      font-size: 0.75rem;
+      transition: all 0.2s;
+    }
+    .btn-danger:hover { background: rgba(248, 81, 73, 0.15); }
+
+    /* Toast Notification */
+    #toast {
+      display: none;
+      background: #1f6feb;
+      color: white;
+      padding: 8px 12px;
+      border-radius: 6px;
+      font-size: 0.78rem;
+      font-weight: 600;
+      margin: 0 18px 8px 18px;
+      text-align: center;
+      animation: slide-in 0.2s ease-out;
+    }
+
+    @keyframes slide-in {
+      from { transform: translateY(-8px); opacity: 0; }
+      to { transform: translateY(0); opacity: 1; }
+    }
+
+    /* Code Modal / Output Box */
+    #codeDrawer {
+      display: none;
+      margin: 0 18px 12px 18px;
+      background: #090d16;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 10px;
+    }
+    #codeDrawer textarea {
+      width: 100%;
+      height: 110px;
+      background: transparent;
+      border: none;
+      color: #7ee787;
+      font-family: monospace;
+      font-size: 11px;
+      resize: none;
+      outline: none;
+    }
+    .drawer-actions {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-top: 6px;
+    }
+    .btn-copy {
+      background: #238636;
+      color: white;
+      border: none;
+      padding: 4px 10px;
+      border-radius: 4px;
+      font-size: 0.75rem;
+      font-weight: 600;
+      cursor: pointer;
     }
 
     .footer {
-      font-size: 0.75rem;
+      font-size: 0.72rem;
       color: #8b949e;
       text-align: center;
-      margin-bottom: 16px;
+      padding-bottom: 12px;
     }
-    
     .footer a {
       color: var(--accent);
       text-decoration: none;
     }
-    
-    .footer a:hover {
-      text-decoration: underline;
-    }
+    .footer a:hover { text-decoration: underline; }
   </style>
 </head>
 <body>
@@ -237,23 +347,69 @@
     <div class="stats-grid">
       <div class="stat-card">
         <div class="stat-value" id="networkCount">0</div>
-        <div class="stat-label">Network</div>
+        <div class="stat-label">Network Logs</div>
       </div>
       <div class="stat-card">
         <div class="stat-value" id="consoleCount">0</div>
-        <div class="stat-label">Console</div>
+        <div class="stat-label">Console Logs</div>
       </div>
     </div>
   </div>
 
-  <div class="actions">
-    <button id="selectElementBtn" style="width: 100%; padding: 12px; background: rgba(88, 166, 255, 0.1); border: 1px solid rgba(88, 166, 255, 0.4); color: var(--accent); border-radius: 8px; cursor: pointer; font-weight: 600; font-size: 0.9rem; transition: all 0.2s; display: flex; align-items: center; justify-content: center; gap: 8px; margin-bottom: 8px;">
-      ✏️ Select Element for AI
+  <div class="quick-tools">
+    <div class="section-title">
+      <span>1-Click Developer & QA Tools</span>
+    </div>
+
+    <!-- 1-Click Profile Autofill -->
+    <button id="autofillBtn" class="tool-btn btn-autofill">
+      <span>⚡ Autofill Candidate Profile</span>
+      <span style="font-size: 0.75rem; opacity: 0.8;">Om Salunke</span>
     </button>
-    <button id="manageExtensionBtn" class="btn-danger">
-      Turn Off for the Day
+
+    <!-- Playwright Test Recorder -->
+    <button id="recordPlaywrightBtn" class="tool-btn btn-record">
+      <span id="recordBtnText">⏺️ Record Playwright Test</span>
+      <span id="recordBadge" style="font-size: 0.75rem; opacity: 0.8;">Start</span>
     </button>
+
+    <!-- Scrape Table/Cards to JSON -->
+    <button id="scrapeTableBtn" class="tool-btn btn-scrape">
+      <span>📊 Scrape Table / Grid to JSON</span>
+      <span style="font-size: 0.75rem; opacity: 0.8;">Copy</span>
+    </button>
+
+    <!-- Toggle Layout Debugger -->
+    <button id="toggleLayoutBtn" class="tool-btn btn-layout">
+      <span>📐 Toggle Layout Debugger</span>
+      <span style="font-size: 0.75rem; opacity: 0.8;">Red Outlines</span>
+    </button>
+
+    <!-- Select Element for AI (Original Inspector) -->
+    <button id="selectElementBtn" class="tool-btn btn-select">
+      <span>✏️ Inspect Element for IDE</span>
+      <span style="font-size: 0.75rem; opacity: 0.8;">Picker</span>
+    </button>
+
+    <div style="margin-top: 6px;">
+      <button id="manageExtensionBtn" class="btn-danger">
+        Turn Off for the Day
+      </button>
+    </div>
   </div>
+
+  <!-- Output & Script Drawer -->
+  <div id="codeDrawer">
+    <div style="font-size: 0.72rem; color: #8b949e; margin-bottom: 4px;" id="drawerTitle">Generated Output:</div>
+    <textarea id="drawerText" readonly></textarea>
+    <div class="drawer-actions">
+      <button id="copyDrawerBtn" class="btn-copy">Copy to Clipboard</button>
+      <button id="closeDrawerBtn" style="background: transparent; border: none; color: #8b949e; cursor: pointer; font-size: 0.75rem;">Close</button>
+    </div>
+  </div>
+
+  <!-- Toast Notification -->
+  <div id="toast"></div>
 
   <div class="footer">
     MCP Bridge Active • <a href="#" id="refreshBtn">Refresh Stats</a>

@@ -4,12 +4,29 @@
   "description": "MCP server bridging IDE to Chrome extension",
   "main": "index.js",
   "bin": {
+    "xtradevpilot-mcp": "./index.js",
     "xtra-devpilot": "./index.js"
   },
   "type": "module",
   "scripts": {
     "start": "node index.js"
   },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/om0852/XtraDevPilot.git"
+  },
+  "keywords": [
+    "mcp",
+    "model-context-protocol",
+    "chrome",
+    "browser-bridge",
+    "developer-tools",
+    "antigravity",
+    "claude",
+    "cursor"
+  ],
+  "author": "Om Salunke",
+  "license": "MIT",
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.0.0",
     "ws": "^8.18.0"

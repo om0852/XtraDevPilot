@@ -8,19 +8,29 @@
     "scripting",
     "activeTab",
     "tabs",
-    "webRequest"
+    "webRequest",
+    "cookies"
   ],
   "host_permissions": [
     "<all_urls>"
   ],
   "icons": {
+    "16": "icon.png",
+    "32": "icon.png",
+    "48": "icon.png",
     "128": "icon.png"
   },
   "background": {
     "service_worker": "background.js"
   },
   "action": {
-    "default_popup": "popup.html"
+    "default_popup": "popup.html",
+    "default_icon": {
+      "16": "icon.png",
+      "32": "icon.png",
+      "48": "icon.png",
+      "128": "icon.png"
+    }
   },
   "content_scripts": [
     {

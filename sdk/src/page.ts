@@ -265,4 +265,145 @@ export class Page {
     this.logger.info('Entering select mode, waiting for user click in browser...');
     return await this.transport.sendRequest('wait_for_user_click');
   }
+
+  /**
+   * Uploads a local file (e.g. resume PDF) to a file input or drag-and-drop zone.
+   */
+  public async uploadFile(filePath: string, selector?: string, tabId?: number): Promise<any> {
+    this.logger.info(`Uploading file '${filePath}' to selector '${selector || 'input[type="file"]'}'`);
+    return await this.transport.sendRequest('upload_file', { filePath, selector, tabId });
+  }
+
+  /**
+   * Fills multiple form fields in a single rapid roundtrip.
+   */
+  public async batchFill(
+    actions: Array<{
+      selector: string;
+      value?: string;
+      action?: 'type' | 'select' | 'click' | 'check' | 'uncheck';
+      waitMs?: number;
+    }>,
+    tabId?: number
+  ): Promise<any> {
+    this.logger.info(`Batch filling ${actions.length} fields...`);
+    return await this.transport.sendRequest('batch_fill_form', { actions, tabId });
+  }
+
+  /**
+   * Selects an option from modern searchable custom dropdowns (Workday, Greenhouse, ARIA comboboxes).
+   */
+  public async smartSelectCombobox(
+    triggerSelector: string,
+    optionText: string,
+    searchQuery?: string,
+    tabId?: number
+  ): Promise<any> {
+    this.logger.info(`Selecting '${optionText}' in combobox '${triggerSelector}'`);
+    return await this.transport.sendRequest('smart_select_combobox', {
+      triggerSelector,
+      optionText,
+      searchQuery,
+      tabId
+    });
+  }
+
+  /**
+   * Extracts structured job posting details from the active job page.
+   */
+  public async extractJobDetails(tabId?: number): Promise<any> {
+    this.logger.info('Extracting structured job details...');
+    return await this.transport.sendRequest('extract_job_details', { tabId });
+  }
+
+  /**
+   * Lists all open tabs in Chrome.
+   */
+  public async listTabs(): Promise<any> {
+    return await this.transport.sendRequest('list_tabs', {});
+  }
+
+  /**
+   * Evaluates arbitrary JavaScript in the webpage execution context.
+   */
+  public async evaluate(script: string, tabId?: number): Promise<any> {
+    this.logger.debug(`Evaluating script: ${script.substring(0, 80)}...`);
+    return await this.transport.sendRequest('execute_script', { script, tabId });
+  }
+
+  /**
+   * Scrolls the page or a scrollable inner container.
+   */
+  public async scroll(
+    options: {
+      direction?: 'down' | 'up' | 'top' | 'bottom';
+      amount?: number;
+      scrollToSelector?: string;
+      containerSelector?: string;
+      smooth?: boolean;
+    } = {},
+    tabId?: number
+  ): Promise<any> {
+    return await this.transport.sendRequest('scroll_page', { ...options, tabId });
+  }
+
+  /**
+   * Extracts structured data from HTML tables, lists, or card grids.
+   */
+  public async extractStructuredData(
+    targetSelector?: string,
+    type?: 'auto' | 'table' | 'cards' | 'list',
+    itemSelector?: string,
+    tabId?: number
+  ): Promise<any> {
+    return await this.transport.sendRequest('extract_structured_data', {
+      targetSelector,
+      type,
+      itemSelector,
+      tabId
+    });
+  }
+
+  /**
+   * QA assertion engine to check element state.
+   */
+  public async assertElement(
+    selector: string,
+    condition: 'is_visible' | 'is_hidden' | 'is_enabled' | 'is_disabled' | 'contains_text' | 'has_value' | 'has_attribute',
+    expected?: string,
+    tabId?: number
+  ): Promise<any> {
+    return await this.transport.sendRequest('assert_element_state', {
+      selector,
+      condition,
+      expected,
+      tabId
+    });
+  }
+
+  /**
+   * Storage and cookie management.
+   */
+  public async manageStorage(
+    type: 'cookie' | 'local_storage' | 'session_storage',
+    operation: 'get' | 'get_all' | 'set' | 'remove' | 'clear',
+    options: { name?: string; value?: string; url?: string; domain?: string } = {},
+    tabId?: number
+  ): Promise<any> {
+    return await this.transport.sendRequest('manage_storage_and_cookies', {
+      type,
+      operation,
+      ...options,
+      tabId
+    });
+  }
+
+  /**
+   * Records user interaction flow and compiles it into a Playwright test.
+   */
+  public async recordFlow(action: 'start' | 'stop' | 'status', tabId?: number): Promise<any> {
+    return await this.transport.sendRequest('record_user_flow', { action, tabId });
+  }
 }
+
+

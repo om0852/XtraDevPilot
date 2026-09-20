@@ -33,7 +33,7 @@
     return originalFetch.apply(this, args);
   };
 
-  window.addEventListener('message', (event) => {
+  window.addEventListener('message', async (event) => {
     if (event.source !== window) return;
     if (event.data && event.data.type === 'DEVPILOT_ADD_MOCK') {
       activeMocks.push(event.data.mock);
@@ -42,6 +42,26 @@
     if (event.data && event.data.type === 'DEVPILOT_CLEAR_MOCKS') {
       activeMocks = [];
       originalConsole.info(`[DevPilot] Cleared all network mocks`);
+    }
+    if (event.data && event.data.type === 'DEVPILOT_EXEC_SCRIPT') {
+      const { execId, script } = event.data;
+      try {
+        const cleanScript = (script || '').trim();
+        let fn;
+        if (/^\s*return\b/m.test(cleanScript)) {
+          fn = new Function(`return (async () => { ${cleanScript} })()`);
+        } else {
+          try {
+            fn = new Function(`return (async () => { return (${cleanScript}); })()`);
+          } catch {
+            fn = new Function(`return (async () => { ${cleanScript} })()`);
+          }
+        }
+        const result = await fn();
+        window.postMessage({ type: 'DEVPILOT_EXEC_RESULT', execId, result: result !== undefined ? result : null }, '*');
+      } catch (err) {
+        window.postMessage({ type: 'DEVPILOT_EXEC_RESULT', execId, error: err.message }, '*');
+      }
     }
   });
 

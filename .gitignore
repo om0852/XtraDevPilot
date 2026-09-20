@@ -1,2 +1,51 @@
-mcp-server/node_modules
-sdk/node_modules
+# Dependencies
+node_modules/
+*/node_modules/
+mcp-server/node_modules/
+sdk/node_modules/
+website/node_modules/
+
+# Next.js & Build Outputs
+.next/
+*/.next/
+website/.next/
+website/out/
+build/
+coverage/
+*.tsbuildinfo
+
+# Personal, Confidential & Job Search Files
+APPLICATION_PROCESS.md
+JOB_APPLICATION_LINKS.md
+Om_Salunke_Resume_AI_SDE.pdf
+*.pdf
+
+# Temporary & Local Scratch Test Files
+test_automation.html
+test_dev_qa.html
+test_features.js
+temp.html
+mcp-server/check_active_tab.js
+.devpilot-screenshot.png
+*.tmp
+
+# Logs & Debugging
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.pnpm-debug.log*
+
+# Environment & Secrets
+.env
+.env.local
+.env.*.local
+.env*.local
+
+# IDE, OS & Agent Workspaces
+.agents/
+.gemini/
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db

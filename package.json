@@ -1,0 +1,11 @@
+{
+  "name": "xtradevpilot-workspace",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Xtra DevPilot workspace root",
+  "scripts": {
+    "start": "node mcp-server/index.js",
+    "mcp": "node mcp-server/index.js",
+    "mcp:check": "node --check mcp-server/index.js"
+  }
+}
