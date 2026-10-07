@@ -1,11 +1,11 @@
 {
   "name": "xtradevpilot-mcp",
-  "version": "1.0.0",
+  "version": "2.0.1",
   "description": "MCP server bridging IDE to Chrome extension",
   "main": "index.js",
   "bin": {
-    "xtradevpilot-mcp": "./index.js",
-    "xtra-devpilot": "./index.js"
+    "xtradevpilot-mcp": "index.js",
+    "xtra-devpilot": "index.js"
   },
   "type": "module",
   "scripts": {
@@ -13,7 +13,7 @@
   },
   "repository": {
     "type": "git",
-    "url": "https://github.com/om0852/XtraDevPilot.git"
+    "url": "git+https://github.com/om0852/XtraDevPilot.git"
   },
   "keywords": [
     "mcp",
