@@ -349,10 +349,295 @@ const ALL_DOC_TOOLS: DocTool[] = [
   }
 ];
 
+interface CliCommandDoc {
+  name: string;
+  category: "reverse-engineering" | "navigation" | "automation" | "qa" | "observability";
+  syntax: string;
+  example: string;
+  description: string;
+  badge: string;
+  badgeColor: string;
+}
+
+const ALL_CLI_COMMANDS: CliCommandDoc[] = [
+  // 1. Reverse Engineering & Forensics
+  {
+    name: "download-sources",
+    category: "reverse-engineering",
+    syntax: "xtradevpilot download-sources [-o <dir>] [--types scripts,styles,sourcemaps,images] [--selector <sel>] [--no-maps]",
+    example: "npx xtradevpilot download-sources -o ./sources",
+    description: "Downloads in-scope client-side scripts, stylesheets, sourcemaps, images, and fonts from the active Chrome tab with a structured manifest.",
+    badge: "Core REA",
+    badgeColor: "text-[#cfbcff] bg-[#cfbcff]/10 border-[#cfbcff]/30"
+  },
+  {
+    name: "reconstruct",
+    category: "reverse-engineering",
+    syntax: "xtradevpilot reconstruct <inputDir> [-o <outputDir>]",
+    example: "npx xtradevpilot reconstruct ./sources -o ./src",
+    description: "Unpacks .map sourcemaps, recreates original frontend source tree (React, Vue, Svelte, TypeScript), and detects tech stacks.",
+    badge: "Code Recovery",
+    badgeColor: "text-emerald-400 bg-emerald-400/10 border-emerald-400/30"
+  },
+  {
+    name: "extract-endpoints",
+    category: "reverse-engineering",
+    syntax: "xtradevpilot extract-endpoints [dir|file|har] [-o <output.json>]",
+    example: "npx xtradevpilot extract-endpoints ./sources -o openapi.json",
+    description: "Statically scans JS bundles, HAR captures, or REA Evidence bundles to discover REST API routes and generate OpenAPI 3.0 specs.",
+    badge: "OpenAPI 3.0",
+    badgeColor: "text-[#22d3ee] bg-[#22d3ee]/10 border-[#22d3ee]/30"
+  },
+  {
+    name: "export-rea",
+    category: "reverse-engineering",
+    syntax: "xtradevpilot export-rea [-o <path.json>]",
+    example: "npx xtradevpilot export-rea -o session-evidence.json",
+    description: "Exports live authenticated browser state (DOM, HAR waterfalls, cookies, storage, endpoints) into canonical REA Schema 2.0.0 bundles.",
+    badge: "Forensics",
+    badgeColor: "text-emerald-400 bg-emerald-400/10 border-emerald-400/30"
+  },
+  {
+    name: "trace-action",
+    category: "reverse-engineering",
+    syntax: "xtradevpilot trace-action <selector> [--action click|type] [--text <str>] [--wait <ms>]",
+    example: 'npx xtradevpilot trace-action "#submit-btn" --action click --wait 2000',
+    description: "Dispatches user interaction on target DOM selector and isolates all outgoing HTTP/fetch requests and mutations triggered.",
+    badge: "API Correlator",
+    badgeColor: "text-[#e7c365] bg-[#e7c365]/10 border-[#e7c365]/30"
+  },
+  {
+    name: "download-html",
+    category: "reverse-engineering",
+    syntax: "xtradevpilot download-html [-o <path>] [--clean] [--selector <sel>]",
+    example: "npx xtradevpilot download-html -o ./page.html --clean",
+    description: "Downloads clean outerHTML for the full page or a scoped component, stripping bloated inline SVGs, script tags, and comments.",
+    badge: "DOM Export",
+    badgeColor: "text-[#cfbcff] bg-[#cfbcff]/10 border-[#cfbcff]/30"
+  },
+  {
+    name: "export-har",
+    category: "reverse-engineering",
+    syntax: "xtradevpilot export-har [-o <path>] [--clear]",
+    example: "npx xtradevpilot export-har -o ./traffic.har",
+    description: "Captures full browser network activity into standard HAR 1.2 format with request/response payloads, timing waterfalls, and headers.",
+    badge: "Network Log",
+    badgeColor: "text-[#22d3ee] bg-[#22d3ee]/10 border-[#22d3ee]/30"
+  },
+
+  // 2. Browser Navigation & Tabs
+  {
+    name: "status",
+    category: "navigation",
+    syntax: "xtradevpilot status",
+    example: "npx xtradevpilot status",
+    description: "Checks real-time connection status and ping latency to the Chrome Extension WebSocket bridge (ws://127.0.0.1:42819).",
+    badge: "Health",
+    badgeColor: "text-emerald-400 bg-emerald-400/10 border-emerald-400/30"
+  },
+  {
+    name: "tabs",
+    category: "navigation",
+    syntax: "xtradevpilot tabs [--json]",
+    example: "npx xtradevpilot tabs",
+    description: "Lists all open Chrome tabs with their unique tab IDs, window IDs, page titles, URLs, and active states.",
+    badge: "Multi-Tab",
+    badgeColor: "text-[#cfbcff] bg-[#cfbcff]/10 border-[#cfbcff]/30"
+  },
+  {
+    name: "open",
+    category: "navigation",
+    syntax: "xtradevpilot open <url>",
+    example: "npx xtradevpilot open https://github.com",
+    description: "Opens a brand-new browser tab in Google Chrome and navigates immediately to the specified URL.",
+    badge: "Navigation",
+    badgeColor: "text-[#22d3ee] bg-[#22d3ee]/10 border-[#22d3ee]/30"
+  },
+  {
+    name: "goto",
+    category: "navigation",
+    syntax: "xtradevpilot goto <url> [--tab-id <id>]",
+    example: "npx xtradevpilot goto https://google.com",
+    description: "Navigates the currently active or targeted Chrome tab to a target URL, waiting for DOM readiness.",
+    badge: "Navigation",
+    badgeColor: "text-[#22d3ee] bg-[#22d3ee]/10 border-[#22d3ee]/30"
+  },
+  {
+    name: "tab-info",
+    category: "navigation",
+    syntax: "xtradevpilot tab-info [--tab-id <id>]",
+    example: "npx xtradevpilot tab-info",
+    description: "Extracts metadata for active or targeted tab including viewport dimensions, favicon URL, audible state, and load status.",
+    badge: "Metadata",
+    badgeColor: "text-[#e7c365] bg-[#e7c365]/10 border-[#e7c365]/30"
+  },
+
+  // 3. DOM Interaction & Automation
+  {
+    name: "dom",
+    category: "automation",
+    syntax: "xtradevpilot dom [--clean] [--selector <sel>] [-o <path>]",
+    example: 'npx xtradevpilot dom --clean --selector "main"',
+    description: "Captures live DOM outerHTML. Passing --clean strips heavy SVGs and styles to save up to 94% LLM context tokens.",
+    badge: "Context Saver",
+    badgeColor: "text-emerald-400 bg-emerald-400/10 border-emerald-400/30"
+  },
+  {
+    name: "click",
+    category: "automation",
+    syntax: "xtradevpilot click <selector> [--timeout <ms>]",
+    example: 'npx xtradevpilot click "button.submit-btn"',
+    description: "Simulates a natural mouse click on an element with automatic polling wait and Tailwind selector resilience.",
+    badge: "Automation",
+    badgeColor: "text-[#cfbcff] bg-[#cfbcff]/10 border-[#cfbcff]/30"
+  },
+  {
+    name: "type",
+    category: "automation",
+    syntax: "xtradevpilot type <selector> <text> [--timeout <ms>]",
+    example: 'npx xtradevpilot type "input[type=\'search\']" "XtraDevPilot"',
+    description: "Types text into an input or textarea using React-compatible state setters and input event triggers.",
+    badge: "Input",
+    badgeColor: "text-[#cfbcff] bg-[#cfbcff]/10 border-[#cfbcff]/30"
+  },
+  {
+    name: "fill",
+    category: "automation",
+    syntax: "xtradevpilot fill <jsonFile|jsonString>",
+    example: "npx xtradevpilot fill form-data.json",
+    description: "Batch fills form inputs (text, dropdowns, checkboxes, radios) in a single rapid roundtrip (<200ms).",
+    badge: "Form Batch",
+    badgeColor: "text-[#22d3ee] bg-[#22d3ee]/10 border-[#22d3ee]/30"
+  },
+  {
+    name: "combobox",
+    category: "automation",
+    syntax: "xtradevpilot combobox <triggerSelector> <optionText> [--search <query>]",
+    example: 'npx xtradevpilot combobox "#country-select" "India"',
+    description: "Selects options from modern searchable comboboxes, ARIA custom dropdowns, and headless UI menus.",
+    badge: "ARIA Dropdown",
+    badgeColor: "text-[#e7c365] bg-[#e7c365]/10 border-[#e7c365]/30"
+  },
+  {
+    name: "upload",
+    category: "automation",
+    syntax: "xtradevpilot upload <filePath> [--selector <sel>]",
+    example: "npx xtradevpilot upload ./resume.pdf",
+    description: "Attaches a local file directly into a file input or drag-and-drop zone without OS dialog prompts.",
+    badge: "File Attach",
+    badgeColor: "text-emerald-400 bg-emerald-400/10 border-emerald-400/30"
+  },
+  {
+    name: "screenshot",
+    category: "automation",
+    syntax: "xtradevpilot screenshot [-o <path>]",
+    example: "npx xtradevpilot screenshot -o ./viewport.png",
+    description: "Captures a high-resolution screenshot of the visible browser viewport and saves PNG locally.",
+    badge: "Visual Capture",
+    badgeColor: "text-[#cfbcff] bg-[#cfbcff]/10 border-[#cfbcff]/30"
+  },
+
+  // 4. Deterministic QA & Testing
+  {
+    name: "assert",
+    category: "qa",
+    syntax: "xtradevpilot assert <selector> <condition> [expected]",
+    example: 'npx xtradevpilot assert "body" is_visible',
+    description: "Runs deterministic QA assertions: is_visible, is_hidden, is_enabled, is_disabled, contains_text, has_value, has_attribute.",
+    badge: "Deterministic QA",
+    badgeColor: "text-emerald-400 bg-emerald-400/10 border-emerald-400/30"
+  },
+  {
+    name: "eval",
+    category: "qa",
+    syntax: "xtradevpilot eval <javascript>",
+    example: 'npx xtradevpilot eval "document.title"',
+    description: "Evaluates runtime JavaScript in the page's MAIN execution context (access window globals, Redux stores, Zustand, Pinia).",
+    badge: "Main World JS",
+    badgeColor: "text-[#22d3ee] bg-[#22d3ee]/10 border-[#22d3ee]/30"
+  },
+  {
+    name: "record",
+    category: "qa",
+    syntax: "xtradevpilot record <start|stop|status> [-o <script.spec.ts>]",
+    example: "npx xtradevpilot record start",
+    description: "Records user browser interactions and compiles them into a clean, ready-to-run Playwright test suite.",
+    badge: "Playwright",
+    badgeColor: "text-[#e7c365] bg-[#e7c365]/10 border-[#e7c365]/30"
+  },
+  {
+    name: "audit",
+    category: "qa",
+    syntax: "xtradevpilot audit <security|a11y> [--json]",
+    example: "npx xtradevpilot audit security",
+    description: "Performs instant browser security audits (CSP headers, mixed content, cookies) or WCAG accessibility scans.",
+    badge: "Security / A11y",
+    badgeColor: "text-red-400 bg-red-400/10 border-red-400/30"
+  },
+
+  // 5. Observability & Runtime
+  {
+    name: "network",
+    category: "observability",
+    syntax: "xtradevpilot network [--limit <n>]",
+    example: "npx xtradevpilot network --limit 20",
+    description: "Displays live HTTP/fetch network request log table with methods, status codes, durations, and URLs.",
+    badge: "Traffic",
+    badgeColor: "text-[#22d3ee] bg-[#22d3ee]/10 border-[#22d3ee]/30"
+  },
+  {
+    name: "console",
+    category: "observability",
+    syntax: "xtradevpilot console [--limit <n>]",
+    example: "npx xtradevpilot console --limit 25",
+    description: "Displays recent browser console output (errors, warnings, logs, info messages) with timestamps.",
+    badge: "Logs",
+    badgeColor: "text-[#e7c365] bg-[#e7c365]/10 border-[#e7c365]/30"
+  },
+  {
+    name: "storage",
+    category: "observability",
+    syntax: "xtradevpilot storage <local|session|cookie> <get|set|clear|remove> [key] [val]",
+    example: "npx xtradevpilot storage local get authToken",
+    description: "Inspects and manipulates localStorage, sessionStorage, and browser cookies with full CRUD control.",
+    badge: "Storage & State",
+    badgeColor: "text-[#cfbcff] bg-[#cfbcff]/10 border-[#cfbcff]/30"
+  },
+  {
+    name: "inject-css",
+    category: "observability",
+    syntax: "xtradevpilot inject-css <cssString>",
+    example: 'npx xtradevpilot inject-css "body { filter: invert(1); }"',
+    description: "Injects raw CSS stylesheets into the live tab without triggering a page reload.",
+    badge: "CSS Patch",
+    badgeColor: "text-[#cfbcff] bg-[#cfbcff]/10 border-[#cfbcff]/30"
+  },
+  {
+    name: "debug-layout",
+    category: "observability",
+    syntax: "xtradevpilot debug-layout",
+    example: "npx xtradevpilot debug-layout",
+    description: "Toggles high-contrast red outline bounding box mode to instantly diagnose CSS alignment and overflow flaws.",
+    badge: "Visual Debug",
+    badgeColor: "text-red-400 bg-red-400/10 border-red-400/30"
+  },
+  {
+    name: "mcp",
+    category: "observability",
+    syntax: "xtradevpilot mcp",
+    example: "npx xtradevpilot mcp",
+    description: "Launches the Model Context Protocol (MCP) server over stdio for IDEs (Claude Desktop, Cursor, Antigravity).",
+    badge: "MCP Bridge",
+    badgeColor: "text-purple-400 bg-purple-400/10 border-purple-400/30"
+  }
+];
+
 export default function DocsPage() {
   const [activeSection, setActiveSection] = useState<"installation" | "configuration" | "reconstruction" | "cli" | "tools" | "architecture" | "troubleshooting" | "settings">("installation");
   const [toolCategory, setToolCategory] = useState<string>("all");
   const [searchQuery, setSearchQuery] = useState("");
+  const [cliCategory, setCliCategory] = useState<string>("all");
+  const [cliSearchQuery, setCliSearchQuery] = useState("");
   const [toastMessage, setToastMessage] = useState<string | null>(null);
   const [copiedKey, setCopiedKey] = useState<string | null>(null);
 
@@ -379,6 +664,17 @@ export default function DocsPage() {
       return matchCat && matchQuery;
     });
   }, [toolCategory, searchQuery]);
+
+  const filteredCliCommands = useMemo(() => {
+    return ALL_CLI_COMMANDS.filter((c) => {
+      const matchCat = cliCategory === "all" || c.category === cliCategory;
+      const matchQuery =
+        c.name.toLowerCase().includes(cliSearchQuery.toLowerCase()) ||
+        c.description.toLowerCase().includes(cliSearchQuery.toLowerCase()) ||
+        c.syntax.toLowerCase().includes(cliSearchQuery.toLowerCase());
+      return matchCat && matchQuery;
+    });
+  }, [cliCategory, cliSearchQuery]);
 
   return (
     <div className="selection:bg-[#cfbcff]/30 min-h-screen flex flex-col bg-[#0b0912] text-[#e6e0e9] relative overflow-x-hidden">
@@ -803,86 +1099,235 @@ console.log(dom);`}
         {activeSection === "cli" && (
           <div className="space-y-10">
             <div>
-              <div className="text-xs font-label-mono text-[#cfbcff] uppercase tracking-wider mb-2">
-                CLI Command Reference
+              <div className="flex flex-wrap items-center gap-2 mb-2">
+                <span className="text-xs font-label-mono text-[#cfbcff] uppercase tracking-wider">
+                  CLI Command Reference
+                </span>
+                <span className="text-[10px] font-label-mono px-2 py-0.5 rounded-full bg-emerald-500/15 text-emerald-400 border border-emerald-500/30 font-semibold">
+                  v2.1.0 Live on npm
+                </span>
+                <span className="text-[10px] font-label-mono px-2 py-0.5 rounded-full bg-[#cfbcff]/15 text-[#cfbcff] border border-[#cfbcff]/30 font-semibold">
+                  Dual Aliases: xtradevpilot &amp; devpilot
+                </span>
               </div>
               <h1 className="text-3xl sm:text-4xl font-extrabold text-white">
                 DevPilot Universal CLI
               </h1>
               <p className="text-[#cbc4d2] text-base mt-2 max-w-2xl">
-                Run browser commands, extract source code, and automate testing directly from your terminal or AI shell subagent.
+                Run browser commands, download frontend source code, trace API causality, and run deterministic assertions directly from your terminal or AI shell subagent.
               </p>
             </div>
 
+            {/* Quickstart Installation & Run */}
+            <div className="grid md:grid-cols-2 gap-6">
+              <div className="glass-panel p-6 rounded-xl border border-white/10 space-y-3">
+                <div className="flex items-center justify-between">
+                  <h3 className="text-sm font-bold text-white flex items-center gap-2">
+                    <span className="material-symbols-outlined text-[#cfbcff] text-base">download</span>
+                    Global Installation
+                  </h3>
+                  <button
+                    onClick={() => copyCode("npm install -g xtradevpilot", "cli-g", "npm install")}
+                    className="text-xs text-[#cfbcff] font-label-mono hover:underline cursor-pointer"
+                  >
+                    {copiedKey === "cli-g" ? "✔ Copied" : "Copy"}
+                  </button>
+                </div>
+                <p className="text-xs text-[#cbc4d2]">
+                  Installs both <code className="text-[#cfbcff]">xtradevpilot</code> and <code className="text-[#cfbcff]">devpilot</code> binaries globally.
+                </p>
+                <pre className="bg-black/50 p-3 rounded font-label-mono text-xs text-[#cfbcff]">
+npm install -g xtradevpilot
+                </pre>
+              </div>
+
+              <div className="glass-panel p-6 rounded-xl border border-white/10 space-y-3">
+                <div className="flex items-center justify-between">
+                  <h3 className="text-sm font-bold text-white flex items-center gap-2">
+                    <span className="material-symbols-outlined text-[#22d3ee] text-base">bolt</span>
+                    Zero-Install (npx)
+                  </h3>
+                  <button
+                    onClick={() => copyCode("npx xtradevpilot --help", "cli-npx", "npx command")}
+                    className="text-xs text-[#22d3ee] font-label-mono hover:underline cursor-pointer"
+                  >
+                    {copiedKey === "cli-npx" ? "✔ Copied" : "Copy"}
+                  </button>
+                </div>
+                <p className="text-xs text-[#cbc4d2]">
+                  Execute any command instantly without prior installation using npm&apos;s runner.
+                </p>
+                <pre className="bg-black/50 p-3 rounded font-label-mono text-xs text-[#22d3ee]">
+npx xtradevpilot --help
+                </pre>
+              </div>
+            </div>
+
+            {/* 4-Step Reverse Engineering Pipeline */}
             <div className="glass-panel p-6 rounded-xl border border-white/10 space-y-4">
               <div className="flex items-center justify-between">
-                <h3 className="text-base font-bold text-white">Global Installation</h3>
-                <button
-                  onClick={() => copyCode("npm install -g xtradevpilot", "cli-g", "npm install")}
-                  className="text-xs text-[#cfbcff] font-label-mono hover:underline cursor-pointer"
-                >
-                  {copiedKey === "cli-g" ? "✔ Copied" : "Copy"}
-                </button>
+                <h3 className="text-base font-bold text-white flex items-center gap-2">
+                  <span className="material-symbols-outlined text-emerald-400">biotech</span>
+                  Reverse Engineering &amp; Forensics Pipeline
+                </h3>
+                <span className="text-[10px] font-label-mono px-2 py-0.5 rounded bg-emerald-500/10 text-emerald-300 border border-emerald-500/20">
+                  Standard Recipe
+                </span>
               </div>
-              <pre className="bg-black/50 p-3 rounded border border-white/10 font-label-mono text-xs text-[#cfbcff]">
-npm install -g xtradevpilot
-# or run via npx
-npx xtradevpilot --help
-              </pre>
+              <p className="text-xs text-[#cbc4d2] leading-relaxed">
+                Execute this 4-step sequence against any open authenticated Chrome tab to unpack its source code, discover backend routes, and export evidence:
+              </p>
+              <div className="bg-black/60 p-4 rounded-lg font-label-mono text-xs space-y-2 text-[#cbc4d2] border border-white/5 overflow-x-auto">
+                <div className="text-white/40"># 1. Harvest all client JavaScript bundles, styles &amp; sourcemaps</div>
+                <div className="text-emerald-400 font-semibold">npx xtradevpilot download-sources -o ./sources</div>
+                <div className="text-white/40 mt-2"># 2. Reconstruct original React/TypeScript source code from sourcemaps</div>
+                <div className="text-[#cfbcff] font-semibold">npx xtradevpilot reconstruct ./sources -o ./src</div>
+                <div className="text-white/40 mt-2"># 3. Statically analyze routes &amp; generate OpenAPI 3.0 specification</div>
+                <div className="text-[#22d3ee] font-semibold">npx xtradevpilot extract-endpoints ./sources -o openapi.json</div>
+                <div className="text-white/40 mt-2"># 4. Export authenticated forensic evidence bundle (HAR, DOM, Cookies, Storage)</div>
+                <div className="text-[#e7c365] font-semibold">npx xtradevpilot export-rea -o session-evidence.json</div>
+              </div>
+            </div>
+
+            {/* Filter & Search Bar for CLI */}
+            <div className="flex flex-col sm:flex-row gap-4 justify-between items-center">
+              <div className="flex flex-wrap gap-2">
+                {[
+                  { id: "all", label: `All Commands (${ALL_CLI_COMMANDS.length})` },
+                  { id: "reverse-engineering", label: "Reverse Eng (7)" },
+                  { id: "navigation", label: "Navigation (5)" },
+                  { id: "automation", label: "Automation (7)" },
+                  { id: "qa", label: "QA & Testing (4)" },
+                  { id: "observability", label: "Observability (5)" },
+                ].map((c) => (
+                  <button
+                    key={c.id}
+                    onClick={() => setCliCategory(c.id)}
+                    className={`px-3 py-1 rounded text-xs font-label-mono transition-colors cursor-pointer ${
+                      cliCategory === c.id
+                        ? "bg-[#cfbcff] text-[#381e72] font-bold"
+                        : "bg-white/5 text-[#cbc4d2] hover:bg-white/10"
+                    }`}
+                  >
+                    {c.label}
+                  </button>
+                ))}
+              </div>
+
+              <input
+                type="text"
+                value={cliSearchQuery}
+                onChange={(e) => setCliSearchQuery(e.target.value)}
+                placeholder="Search CLI commands..."
+                className="bg-[#141218] border border-white/15 px-3 py-1.5 rounded text-xs font-label-mono text-white placeholder:text-[#948e9c] focus:outline-none focus:border-[#cfbcff] w-full sm:w-60"
+              />
             </div>
 
             {/* CLI Commands Grid */}
-            <div className="space-y-6">
-              <div className="glass-panel p-6 rounded-xl border border-white/10 space-y-3">
-                <div className="flex items-center justify-between">
-                  <code className="text-sm font-bold text-white font-label-mono text-[#cfbcff]">devpilot reconstruct &lt;inputDir&gt;</code>
-                  <span className="text-[10px] font-label-mono px-2 py-0.5 rounded bg-white/10 text-emerald-400">Code Recovery</span>
-                </div>
-                <p className="text-xs text-[#cbc4d2]">
-                  Unpacks all .map sourcemaps in inputDir, reconstructs the original project directory tree, and detects frameworks (React, Vue, Svelte).
-                </p>
-                <div className="bg-black/50 p-3 rounded font-label-mono text-xs text-[#cbc4d2]">
-                  devpilot reconstruct ./downloads/sources -o ./reconstructed
-                </div>
-              </div>
+            <div className="grid md:grid-cols-2 gap-6">
+              {filteredCliCommands.map((cmd) => (
+                <div key={cmd.name} className="glass-panel p-5 rounded-xl border border-white/10 space-y-3 flex flex-col justify-between">
+                  <div className="space-y-2">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <span className="material-symbols-outlined text-sm text-[#cfbcff]">terminal</span>
+                        <code className="text-sm font-bold text-white font-label-mono">
+                          {cmd.name}
+                        </code>
+                      </div>
+                      <span className={`text-[10px] font-label-mono px-2 py-0.5 rounded border ${cmd.badgeColor}`}>
+                        {cmd.badge}
+                      </span>
+                    </div>
+                    <p className="text-xs text-[#cbc4d2] leading-relaxed">
+                      {cmd.description}
+                    </p>
+                    <div className="text-[11px] font-label-mono text-white/50 pt-1">
+                      <span className="text-white/30">Syntax: </span>
+                      <code className="text-white/80">{cmd.syntax}</code>
+                    </div>
+                  </div>
 
-              <div className="glass-panel p-6 rounded-xl border border-white/10 space-y-3">
-                <div className="flex items-center justify-between">
-                  <code className="text-sm font-bold text-white font-label-mono text-[#e7c365]">devpilot trace-action &lt;selector&gt;</code>
-                  <span className="text-[10px] font-label-mono px-2 py-0.5 rounded bg-white/10 text-[#e7c365]">API Correlator</span>
+                  <div className="space-y-1.5 pt-2">
+                    <div className="flex items-center justify-between">
+                      <span className="text-[10px] font-label-mono text-white/40 uppercase tracking-wider">Example</span>
+                      <button
+                        onClick={() => copyCode(cmd.example, `cmd-${cmd.name}`, cmd.name)}
+                        className="text-[11px] text-[#cfbcff] font-label-mono hover:underline cursor-pointer flex items-center gap-1"
+                      >
+                        <span className="material-symbols-outlined text-xs">content_copy</span>
+                        {copiedKey === `cmd-${cmd.name}` ? "Copied" : "Copy"}
+                      </button>
+                    </div>
+                    <pre className="bg-black/60 p-2.5 rounded font-label-mono text-xs text-[#cfbcff] border border-white/5 overflow-x-auto">
+{cmd.example}
+                    </pre>
+                  </div>
                 </div>
-                <p className="text-xs text-[#cbc4d2]">
-                  Simulates user interaction on the target DOM selector and captures correlated outgoing HTTP/fetch requests and responses.
-                </p>
-                <div className="bg-black/50 p-3 rounded font-label-mono text-xs text-[#cbc4d2]">
-                  devpilot trace-action &quot;#submit-btn&quot; --action click --wait 2000
-                </div>
-              </div>
+              ))}
+            </div>
 
-              <div className="glass-panel p-6 rounded-xl border border-white/10 space-y-3">
-                <div className="flex items-center justify-between">
-                  <code className="text-sm font-bold text-white font-label-mono text-emerald-400">devpilot export-rea</code>
-                  <span className="text-[10px] font-label-mono px-2 py-0.5 rounded bg-white/10 text-emerald-400">REA Bridge</span>
-                </div>
-                <p className="text-xs text-[#cbc4d2]">
-                  Exports canonical REA Evidence bundle (schema 2.0.0) containing DOM snapshots, HAR waterfalls, and discovered API routes.
-                </p>
-                <div className="bg-black/50 p-3 rounded font-label-mono text-xs text-[#cbc4d2]">
-                  devpilot export-rea -o ./session-evidence.json
-                </div>
-              </div>
-
-              <div className="glass-panel p-6 rounded-xl border border-white/10 space-y-3">
-                <div className="flex items-center justify-between">
-                  <code className="text-sm font-bold text-white font-label-mono text-[#22d3ee]">devpilot extract-endpoints &lt;inputPath&gt;</code>
-                  <span className="text-[10px] font-label-mono px-2 py-0.5 rounded bg-white/10 text-[#22d3ee]">OpenAPI</span>
-                </div>
-                <p className="text-xs text-[#cbc4d2]">
-                  Statically scans JavaScript bundles and HAR captures for REST API routes and outputs an OpenAPI 3.0 specification.
-                </p>
-                <div className="bg-black/50 p-3 rounded font-label-mono text-xs text-[#cbc4d2]">
-                  devpilot extract-endpoints ./sources -o ./openapi.json
-                </div>
+            {/* Global Options Table */}
+            <div className="glass-panel p-6 rounded-xl border border-white/10 space-y-4">
+              <h3 className="text-base font-bold text-white flex items-center gap-2">
+                <span className="material-symbols-outlined text-[#cfbcff]">tune</span>
+                Global Flags &amp; Options
+              </h3>
+              <p className="text-xs text-[#cbc4d2]">
+                These options can be passed to all DevPilot CLI commands:
+              </p>
+              <div className="overflow-x-auto">
+                <table className="w-full text-left text-xs font-label-mono border-collapse">
+                  <thead>
+                    <tr className="border-b border-white/10 text-white/60">
+                      <th className="py-2 px-3">Flag</th>
+                      <th className="py-2 px-3">Type</th>
+                      <th className="py-2 px-3">Description</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-white/5 text-[#cbc4d2]">
+                    <tr>
+                      <td className="py-2.5 px-3 font-bold text-[#cfbcff]">--json</td>
+                      <td className="py-2.5 px-3 text-white/40">boolean</td>
+                      <td className="py-2.5 px-3">Outputs strictly formatted JSON suitable for AI agents, subagents, and automated pipelines.</td>
+                    </tr>
+                    <tr>
+                      <td className="py-2.5 px-3 font-bold text-[#cfbcff]">--tab-id &lt;id&gt;</td>
+                      <td className="py-2.5 px-3 text-white/40">integer</td>
+                      <td className="py-2.5 px-3">Targets a specific Chrome tab ID instead of the currently active foreground tab.</td>
+                    </tr>
+                    <tr>
+                      <td className="py-2.5 px-3 font-bold text-[#cfbcff]">-o, --output &lt;path&gt;</td>
+                      <td className="py-2.5 px-3 text-white/40">string</td>
+                      <td className="py-2.5 px-3">Specifies custom output destination path for files, directories, specs, or bundles.</td>
+                    </tr>
+                    <tr>
+                      <td className="py-2.5 px-3 font-bold text-[#cfbcff]">-s, --selector &lt;sel&gt;</td>
+                      <td className="py-2.5 px-3 text-white/40">string</td>
+                      <td className="py-2.5 px-3">Scopes DOM extraction, clicks, inputs, or tracing to a specific CSS selector.</td>
+                    </tr>
+                    <tr>
+                      <td className="py-2.5 px-3 font-bold text-[#cfbcff]">-c, --clean</td>
+                      <td className="py-2.5 px-3 text-white/40">boolean</td>
+                      <td className="py-2.5 px-3">Strips noisy SVG paths, inline styles, and script tags to save up to 94% context tokens.</td>
+                    </tr>
+                    <tr>
+                      <td className="py-2.5 px-3 font-bold text-[#cfbcff]">-t, --timeout &lt;ms&gt;</td>
+                      <td className="py-2.5 px-3 text-white/40">number</td>
+                      <td className="py-2.5 px-3">Custom timeout in milliseconds for element polling and bridge responses (default: 3000ms).</td>
+                    </tr>
+                    <tr>
+                      <td className="py-2.5 px-3 font-bold text-[#cfbcff]">--no-maps</td>
+                      <td className="py-2.5 px-3 text-white/40">boolean</td>
+                      <td className="py-2.5 px-3">Skips downloading and searching for .map sourcemaps in <code className="text-white">download-sources</code>.</td>
+                    </tr>
+                    <tr>
+                      <td className="py-2.5 px-3 font-bold text-[#cfbcff]">--clear</td>
+                      <td className="py-2.5 px-3 text-white/40">boolean</td>
+                      <td className="py-2.5 px-3">Clears buffered network traffic or logs after exporting in <code className="text-white">export-har</code>.</td>
+                    </tr>
+                  </tbody>
+                </table>
               </div>
             </div>
           </div>

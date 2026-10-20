@@ -3,10 +3,12 @@
 > **The Local-First AI Browser Bridge for Developers & AI Agents (v2.0)**  
 > Seamlessly connect Google Antigravity, Claude Desktop, Cursor, and autonomous AI agents directly to your real, authenticated Google Chrome browser via the Model Context Protocol (MCP).
 
-[![Version](https://img.shields.io/badge/version-2.0.0-blue.svg)](https://github.com/om0852/XtraDevPilot)
+[![Version](https://img.shields.io/badge/version-2.1.0-blue.svg)](https://github.com/om0852/XtraDevPilot)
+[![npm version](https://img.shields.io/npm/v/xtradevpilot.svg?color=cb3837&label=npm%20xtradevpilot)](https://www.npmjs.com/package/xtradevpilot)
+[![npm mcp version](https://img.shields.io/npm/v/xtradevpilot-mcp.svg?color=818cf8&label=npm%20xtradevpilot-mcp)](https://www.npmjs.com/package/xtradevpilot-mcp)
 [![MCP Protocol](https://img.shields.io/badge/MCP-1.0.0-818cf8.svg)](https://modelcontextprotocol.io/)
 [![Chrome Extension](https://img.shields.io/badge/Chrome_Extension-Manifest_V3-34d399.svg)](https://developer.chrome.com/docs/extensions/)
-[![Live Tools Verified](https://img.shields.io/badge/Tools_Verified-33%20Live-brightgreen.svg)](#-master-tools-catalog-33-live-verified-tools)
+[![Live Tools Verified](https://img.shields.io/badge/Tools_Verified-40%20Live-brightgreen.svg)](#-master-tools-catalog-40-live-verified-tools)
 [![Local First](https://img.shields.io/badge/Architecture-Local--First_ws%3A%2F%2F127.0.0.1%3A42819-orange.svg)](#%EF%B8%8F-system-architecture)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
@@ -127,9 +129,77 @@ All 33 tools have been verified with 100% pass rates against active Chrome sessi
 | `mock_network_response` | Intercepts `window.fetch` calls matching a URL pattern and returns custom mock JSON payloads without a backend. | `urlPattern` *(required)*, `responseBody` *(required)*, `status` |
 | `clear_network_mocks` | Removes all registered URL network intercept mocks, restoring standard network execution. | _None_ |
 | `reload_extension` | Reloads the Chrome extension background service worker and active connections. | _None_ |
-| `download_page_html` | Downloads the live, complete HTML of the page or a specific feature component directly to disk. | `outputPath`, `selector`, `clean`, `tabId` |
-| `export_har` | Exports captured network traffic into a standard HAR 1.2 specification file (`.har`) for DevTools and API clients. | `outputPath`, `clearAfterExport`, `tabId` |
-| `download_sources` | Scans and downloads all source assets (JS bundles, CSS, images, fonts, `.map` source maps) into an organized local directory. | `outputDir`, `types`, `selector`, `includeSourceMaps`, `tabId` |
+
+### 7. 🧬 Autonomous Reverse Engineering Architecture (REA)
+| Tool Name | Description | Key Arguments |
+| :--- | :--- | :--- |
+| `download_page_html` | Downloads clean outerHTML of the live page or scoped selector, stripping noisy inline SVGs, script tags, and comments. | `outputPath`, `selector`, `clean`, `tabId` |
+| `export_har` | Exports captured network traffic into a standard HAR 1.2 specification file (`.har`) with request/response payloads and waterfall timings. | `outputPath`, `clearAfterExport`, `tabId` |
+| `download_sources` | Scans and downloads all client assets (JS bundles, CSS, images, fonts, `.map` sourcemaps) into an organized local directory with manifest. | `outputDir`, `types`, `selector`, `includeSourceMaps`, `tabId` |
+| `reconstruct_source_tree` | Parses downloaded `.map` sourcemaps, extracts `sourcesContent`, resolves relative file paths, and recreates the pristine frontend source tree (`src/`). | `inputDir`, `outputDir` |
+| `trace_action_network` | Dispatches a UI click or type and isolates all correlated outgoing HTTP/fetch requests and mutations triggered. | `selector` *(required)*, `action`, `waitDurationMs`, `tabId` |
+| `extract_api_endpoints` | Statically scans JS bundles, HAR files, or REA bundles to discover REST routes and compiles an OpenAPI 3.0 specification. | `inputPath`, `outputPath` |
+| `export_rea_evidence` | Exports complete authenticated session state (DOM, HAR, cookies, storage, endpoints) into canonical REA Schema 2.0.0 bundles. | `outputPath`, `includeStorage`, `tabId` |
+
+---
+
+## 💻 DevPilot Universal CLI (`xtradevpilot`)
+
+Xtra DevPilot includes a universal terminal CLI published publicly to npm as **[`xtradevpilot`](https://www.npmjs.com/package/xtradevpilot)** (dual bin aliases: `xtradevpilot` and `devpilot`):
+
+```bash
+# Global install (recommended)
+npm install -g xtradevpilot
+
+# Or zero-install run via npx
+npx xtradevpilot --help
+```
+
+### 🔬 4-Step Autonomous Reverse Engineering Recipe
+Execute this sequence against any authenticated Chrome tab to unpack its codebase, discover routes, and export evidence:
+
+```bash
+# 1. Harvest client JS bundles, CSS & sourcemaps from active Chrome tab
+npx xtradevpilot download-sources -o ./sources
+
+# 2. Reconstruct original React/TypeScript source files from sourcemaps
+npx xtradevpilot reconstruct ./sources -o ./src
+
+# 3. Discover REST endpoints and generate OpenAPI 3.0 specification
+npx xtradevpilot extract-endpoints ./sources -o openapi.json
+
+# 4. Export complete authenticated forensic evidence bundle
+npx xtradevpilot export-rea -o session-evidence.json
+```
+
+### 📋 CLI Command Reference (28 Commands)
+| Category | Command | Description |
+| :--- | :--- | :--- |
+| **Reverse Eng** | `download-sources -o <dir>` | Harvests JS chunks, styles, and sourcemaps from active Chrome tab |
+| **Reverse Eng** | `reconstruct <inputDir> -o <outDir>` | Unpacks `.map` files into original React/TypeScript source directory |
+| **Reverse Eng** | `extract-endpoints <path> -o <out.json>` | Discovers REST routes & compiles OpenAPI 3.0 specification |
+| **Reverse Eng** | `export-rea -o <evidence.json>` | Exports complete forensic evidence bundle (HAR, DOM, Storage, Cookies) |
+| **Reverse Eng** | `trace-action <selector>` | Dispatches UI action and captures correlated outgoing HTTP mutations |
+| **Reverse Eng** | `download-html -o <path> [--clean]` | Downloads clean outerHTML for full page or scoped component |
+| **Reverse Eng** | `export-har -o <path>` | Exports network traffic to standard HAR 1.2 format |
+| **Navigation** | `status` | Checks real-time connection status & latency to Chrome WebSocket bridge |
+| **Navigation** | `tabs` | Lists all open Chrome tabs with IDs, titles, and URLs |
+| **Navigation** | `open <url>` / `goto <url>` | Opens or navigates active tab to target URL |
+| **Navigation** | `tab-info [--tab-id <id>]` | Extracts metadata, dimensions, and state for tab |
+| **Automation** | `dom [--clean] [--selector <sel>]` | Captures live DOM (supports token-saving `--clean` flag) |
+| **Automation** | `click <selector>` / `type <sel> <text>` | Simulates natural user interactions with Tailwind resilience |
+| **Automation** | `fill <jsonFile\|jsonString>` | Batch fills forms in a single sub-200ms roundtrip |
+| **Automation** | `combobox <trigger> <option>` | Selects option from searchable combobox or ARIA dropdown |
+| **Automation** | `upload <filePath>` | Attaches file directly to input without OS dialogs |
+| **Automation** | `screenshot [-o <path>]` | Captures visible viewport screenshot |
+| **Testing** | `assert <selector> <condition> [exp]` | Runs deterministic QA checks (`is_visible`, `contains_text`, etc.) |
+| **Testing** | `eval <javascript>` | Evaluates JS in page's MAIN execution context (Redux, Zustand, Pinia) |
+| **Testing** | `record <start\|stop\|status>` | Records user flow directly into Playwright test script (`.spec.ts`) |
+| **Testing** | `audit <security\|a11y>` | Runs security scan or WCAG accessibility audit |
+| **Observability** | `network` / `console` / `storage` | Inspects live network logs, console messages, and browser cookies |
+| **Observability** | `inject-css <cssString>` | Injects custom CSS rules without page reload |
+| **Observability** | `debug-layout` | Toggles high-contrast red outline bounding box mode |
+| **Server** | `mcp` | Launches Model Context Protocol (MCP) server over stdio for IDEs |
 
 ---
 

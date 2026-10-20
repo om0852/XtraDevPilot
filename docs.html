@@ -232,24 +232,151 @@ body { font-family: 'Geist', sans-serif; }
     </section>
 
     <!-- 4. CLI Suite -->
+    <!-- 4. CLI Suite -->
     <section class="space-y-6" id="cli">
       <div>
-        <div class="text-xs font-label-mono text-[#cfbcff] uppercase tracking-wider mb-2">CLI Suite</div>
+        <div class="flex flex-wrap items-center gap-2 mb-2">
+          <span class="text-xs font-label-mono text-[#cfbcff] uppercase tracking-wider">CLI Suite</span>
+          <span class="text-[10px] font-label-mono px-2 py-0.5 rounded-full bg-emerald-500/15 text-emerald-400 border border-emerald-500/30 font-semibold">v2.1.0 on npm</span>
+          <span class="text-[10px] font-label-mono px-2 py-0.5 rounded-full bg-[#cfbcff]/15 text-[#cfbcff] border border-[#cfbcff]/30 font-semibold">xtradevpilot / devpilot</span>
+        </div>
         <h2 class="text-3xl font-extrabold text-white">DevPilot Universal CLI</h2>
+        <p class="text-[#cbc4d2] text-sm mt-2">Control Chrome, harvest assets, reverse engineer codebases, and automate testing directly from your terminal or AI shell subagent.</p>
       </div>
 
-      <div class="space-y-4">
-        <div class="glass-panel p-5 rounded-xl border border-white/10 space-y-2">
-          <code class="text-sm font-bold text-[#cfbcff] font-label-mono">devpilot reconstruct &lt;inputDir&gt; -o &lt;outputDir&gt;</code>
-          <p class="text-xs text-[#cbc4d2]">Unpacks all .map sourcemaps in input directory and reconstructs original source tree.</p>
+      <!-- Quickstart Box -->
+      <div class="glass-panel p-6 rounded-2xl border border-white/10 space-y-3">
+        <h3 class="text-base font-bold text-white flex items-center gap-2">
+          <span class="material-symbols-outlined text-[#cfbcff] text-base">download</span>
+          Installation &amp; Execution
+        </h3>
+        <pre class="bg-black/50 p-3 rounded-xl border border-white/10 font-label-mono text-xs text-[#cfbcff]"><code># Global installation
+npm install -g xtradevpilot
+
+# Or instant zero-install run via npx
+npx xtradevpilot --help</code></pre>
+      </div>
+
+      <!-- 4-Step Reverse Engineering Sequence -->
+      <div class="glass-panel p-6 rounded-2xl border border-white/10 space-y-3">
+        <div class="flex items-center justify-between">
+          <h3 class="text-base font-bold text-white flex items-center gap-2">
+            <span class="material-symbols-outlined text-emerald-400">biotech</span>
+            Reverse Engineering 4-Step Sequence
+          </h3>
+          <span class="text-[10px] font-label-mono px-2 py-0.5 rounded bg-emerald-500/10 text-emerald-300 border border-emerald-500/20">Recommended Recipe</span>
         </div>
+        <pre class="bg-black/60 p-4 rounded-xl border border-white/10 font-label-mono text-xs text-[#cbc4d2] space-y-1"><code># 1. Harvest client JS bundles, CSS &amp; sourcemaps from active Chrome tab
+npx xtradevpilot download-sources -o ./sources
+
+# 2. Reconstruct original React/TypeScript source files from sourcemaps
+npx xtradevpilot reconstruct ./sources -o ./src
+
+# 3. Discover REST endpoints and generate OpenAPI 3.0 specification
+npx xtradevpilot extract-endpoints ./sources -o openapi.json
+
+# 4. Export complete authenticated forensic evidence bundle
+npx xtradevpilot export-rea -o session-evidence.json</code></pre>
+      </div>
+
+      <!-- Command Cards Grid -->
+      <div class="grid md:grid-cols-2 gap-4">
         <div class="glass-panel p-5 rounded-xl border border-white/10 space-y-2">
-          <code class="text-sm font-bold text-[#e7c365] font-label-mono">devpilot trace-action &quot;&lt;selector&gt;&quot; --action click</code>
-          <p class="text-xs text-[#cbc4d2]">Simulates interaction and captures correlated HTTP/fetch network mutations.</p>
+          <div class="flex items-center justify-between">
+            <code class="text-xs font-bold text-[#cfbcff] font-label-mono">download-sources</code>
+            <span class="text-[10px] font-label-mono px-2 py-0.5 rounded border text-[#cfbcff] border-[#cfbcff]/30">REA Core</span>
+          </div>
+          <p class="text-xs text-[#cbc4d2]">Downloads client JS, CSS, sourcemaps, and assets from active tab with structured manifest.</p>
+          <pre class="bg-black/50 p-2 rounded font-label-mono text-[11px] text-[#cfbcff]"><code>npx xtradevpilot download-sources -o ./sources</code></pre>
         </div>
+
         <div class="glass-panel p-5 rounded-xl border border-white/10 space-y-2">
-          <code class="text-sm font-bold text-emerald-400 font-label-mono">devpilot export-rea -o evidence.json</code>
-          <p class="text-xs text-[#cbc4d2]">Exports live browser evidence (DOM, HAR, cookies, routes) into canonical REA schema.</p>
+          <div class="flex items-center justify-between">
+            <code class="text-xs font-bold text-emerald-400 font-label-mono">reconstruct</code>
+            <span class="text-[10px] font-label-mono px-2 py-0.5 rounded border text-emerald-400 border-emerald-400/30">Code Recovery</span>
+          </div>
+          <p class="text-xs text-[#cbc4d2]">Unpacks .map sourcemaps and recreates pristine original project directory tree.</p>
+          <pre class="bg-black/50 p-2 rounded font-label-mono text-[11px] text-emerald-400"><code>npx xtradevpilot reconstruct ./sources -o ./src</code></pre>
+        </div>
+
+        <div class="glass-panel p-5 rounded-xl border border-white/10 space-y-2">
+          <div class="flex items-center justify-between">
+            <code class="text-xs font-bold text-[#22d3ee] font-label-mono">extract-endpoints</code>
+            <span class="text-[10px] font-label-mono px-2 py-0.5 rounded border text-[#22d3ee] border-[#22d3ee]/30">OpenAPI 3.0</span>
+          </div>
+          <p class="text-xs text-[#cbc4d2]">Statically scans JS or HAR files and outputs an OpenAPI 3.0 REST spec.</p>
+          <pre class="bg-black/50 p-2 rounded font-label-mono text-[11px] text-[#22d3ee]"><code>npx xtradevpilot extract-endpoints ./sources -o openapi.json</code></pre>
+        </div>
+
+        <div class="glass-panel p-5 rounded-xl border border-white/10 space-y-2">
+          <div class="flex items-center justify-between">
+            <code class="text-xs font-bold text-[#e7c365] font-label-mono">export-rea</code>
+            <span class="text-[10px] font-label-mono px-2 py-0.5 rounded border text-[#e7c365] border-[#e7c365]/30">Forensics</span>
+          </div>
+          <p class="text-xs text-[#cbc4d2]">Exports live DOM, HAR waterfall, cookies, storage, and routes into canonical REA format.</p>
+          <pre class="bg-black/50 p-2 rounded font-label-mono text-[11px] text-[#e7c365]"><code>npx xtradevpilot export-rea -o session-evidence.json</code></pre>
+        </div>
+
+        <div class="glass-panel p-5 rounded-xl border border-white/10 space-y-2">
+          <div class="flex items-center justify-between">
+            <code class="text-xs font-bold text-[#cfbcff] font-label-mono">trace-action &lt;sel&gt;</code>
+            <span class="text-[10px] font-label-mono px-2 py-0.5 rounded border text-[#cfbcff] border-[#cfbcff]/30">Correlator</span>
+          </div>
+          <p class="text-xs text-[#cbc4d2]">Clicks or types into an element and isolates all triggered network requests.</p>
+          <pre class="bg-black/50 p-2 rounded font-label-mono text-[11px] text-[#cfbcff]"><code>npx xtradevpilot trace-action "#submit-btn" --action click</code></pre>
+        </div>
+
+        <div class="glass-panel p-5 rounded-xl border border-white/10 space-y-2">
+          <div class="flex items-center justify-between">
+            <code class="text-xs font-bold text-emerald-400 font-label-mono">assert &lt;sel&gt; &lt;cond&gt;</code>
+            <span class="text-[10px] font-label-mono px-2 py-0.5 rounded border text-emerald-400 border-emerald-400/30">QA Engine</span>
+          </div>
+          <p class="text-xs text-[#cbc4d2]">Deterministic assertions: is_visible, is_hidden, contains_text, has_value.</p>
+          <pre class="bg-black/50 p-2 rounded font-label-mono text-[11px] text-emerald-400"><code>npx xtradevpilot assert "body" is_visible</code></pre>
+        </div>
+
+        <div class="glass-panel p-5 rounded-xl border border-white/10 space-y-2">
+          <div class="flex items-center justify-between">
+            <code class="text-xs font-bold text-[#22d3ee] font-label-mono">dom [--clean]</code>
+            <span class="text-[10px] font-label-mono px-2 py-0.5 rounded border text-[#22d3ee] border-[#22d3ee]/30">Context Saver</span>
+          </div>
+          <p class="text-xs text-[#cbc4d2]">Extracts live outerHTML DOM. --clean strips SVGs and styles for 94% token savings.</p>
+          <pre class="bg-black/50 p-2 rounded font-label-mono text-[11px] text-[#22d3ee]"><code>npx xtradevpilot dom --clean --selector "main"</code></pre>
+        </div>
+
+        <div class="glass-panel p-5 rounded-xl border border-white/10 space-y-2">
+          <div class="flex items-center justify-between">
+            <code class="text-xs font-bold text-[#e7c365] font-label-mono">eval &lt;javascript&gt;</code>
+            <span class="text-[10px] font-label-mono px-2 py-0.5 rounded border text-[#e7c365] border-[#e7c365]/30">Runtime JS</span>
+          </div>
+          <p class="text-xs text-[#cbc4d2]">Evaluates JavaScript inside the page's MAIN execution context (Redux, Zustand, Pinia).</p>
+          <pre class="bg-black/50 p-2 rounded font-label-mono text-[11px] text-[#e7c365]"><code>npx xtradevpilot eval "document.title"</code></pre>
+        </div>
+      </div>
+
+      <!-- Global Flags Reference -->
+      <div class="glass-panel p-6 rounded-2xl border border-white/10 space-y-3">
+        <h3 class="text-base font-bold text-white flex items-center gap-2">
+          <span class="material-symbols-outlined text-[#cfbcff]">tune</span>
+          Global Options Reference
+        </h3>
+        <div class="overflow-x-auto text-xs font-label-mono">
+          <table class="w-full text-left border-collapse">
+            <thead>
+              <tr class="border-b border-white/10 text-white/50">
+                <th class="py-2 px-3">Option</th>
+                <th class="py-2 px-3">Description</th>
+              </tr>
+            </thead>
+            <tbody class="divide-y divide-white/5 text-[#cbc4d2]">
+              <tr><td class="py-2 px-3 text-[#cfbcff] font-bold">--json</td><td class="py-2 px-3">Emit machine-readable JSON output for AI subagents and scripts.</td></tr>
+              <tr><td class="py-2 px-3 text-[#cfbcff] font-bold">--tab-id &lt;id&gt;</td><td class="py-2 px-3">Target a specific Chrome tab ID instead of active foreground tab.</td></tr>
+              <tr><td class="py-2 px-3 text-[#cfbcff] font-bold">-o, --output &lt;path&gt;</td><td class="py-2 px-3">Destination file or directory for saved outputs.</td></tr>
+              <tr><td class="py-2 px-3 text-[#cfbcff] font-bold">-s, --selector &lt;sel&gt;</td><td class="py-2 px-3">Scope DOM inspection, clicks, inputs, or tracing to CSS selector.</td></tr>
+              <tr><td class="py-2 px-3 text-[#cfbcff] font-bold">-c, --clean</td><td class="py-2 px-3">Strip noisy SVG paths, script tags, and comments to save tokens.</td></tr>
+              <tr><td class="py-2 px-3 text-[#cfbcff] font-bold">-t, --timeout &lt;ms&gt;</td><td class="py-2 px-3">Custom timeout in milliseconds for element polling (default: 3000ms).</td></tr>
+            </tbody>
+          </table>
         </div>
       </div>
     </section>
