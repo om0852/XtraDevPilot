@@ -1,6 +1,6 @@
 {
   "name": "xtradevpilot",
-  "version": "2.1.0",
+  "version": "2.2.0",
   "description": "Universal CLI & Autonomous Reverse Engineering Suite for Xtra DevPilot browser bridge",
   "type": "module",
   "main": "cli/index.js",

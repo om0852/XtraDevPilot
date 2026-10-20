@@ -3,7 +3,7 @@
 > **The Local-First AI Browser Bridge for Developers & AI Agents (v2.0)**  
 > Seamlessly connect Google Antigravity, Claude Desktop, Cursor, and autonomous AI agents directly to your real, authenticated Google Chrome browser via the Model Context Protocol (MCP).
 
-[![Version](https://img.shields.io/badge/version-2.1.0-blue.svg)](https://github.com/om0852/XtraDevPilot)
+[![Version](https://img.shields.io/badge/version-2.2.0-blue.svg)](https://github.com/om0852/XtraDevPilot)
 [![npm version](https://img.shields.io/npm/v/xtradevpilot.svg?color=cb3837&label=npm%20xtradevpilot)](https://www.npmjs.com/package/xtradevpilot)
 [![npm mcp version](https://img.shields.io/npm/v/xtradevpilot-mcp.svg?color=818cf8&label=npm%20xtradevpilot-mcp)](https://www.npmjs.com/package/xtradevpilot-mcp)
 [![MCP Protocol](https://img.shields.io/badge/MCP-1.0.0-818cf8.svg)](https://modelcontextprotocol.io/)

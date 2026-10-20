@@ -133,7 +133,10 @@ export async function runCli(argv = process.argv.slice(2)) {
     const isGlobal = Boolean(flags.global);
     const createdFiles = [];
 
-    const templatePath = path.resolve(__dirname, '..', '.agents', 'skills', 'xtradevpilot', 'SKILL.md');
+    const bundledTemplate = path.resolve(__dirname, 'templates', 'SKILL.md');
+    const localTemplate = path.resolve(__dirname, '..', '.agents', 'skills', 'xtradevpilot', 'SKILL.md');
+    const templatePath = fs.existsSync(bundledTemplate) ? bundledTemplate : localTemplate;
+
     let skillContent = '';
     if (fs.existsSync(templatePath)) {
       skillContent = fs.readFileSync(templatePath, 'utf8');
@@ -165,11 +168,29 @@ Connects to real Google Chrome via ws://127.0.0.1:42819.
     fs.writeFileSync(skillFilePath, skillContent, 'utf8');
     createdFiles.push(skillFilePath);
 
+    // Copy references if bundled
+    const bundledRefs = path.resolve(__dirname, 'templates', 'references');
+    if (fs.existsSync(bundledRefs)) {
+      const targetRefsDir = path.join(skillDir, 'references');
+      if (!fs.existsSync(targetRefsDir)) fs.mkdirSync(targetRefsDir, { recursive: true });
+      for (const refFile of fs.readdirSync(bundledRefs)) {
+        const srcRef = path.join(bundledRefs, refFile);
+        const destRef = path.join(targetRefsDir, refFile);
+        fs.copyFileSync(srcRef, destRef);
+        createdFiles.push(destRef);
+      }
+    }
+
     if (target === 'cursor' || target === 'all' || flags.cursor) {
       const cursorDir = path.resolve(process.cwd(), '.cursor', 'rules');
       if (!fs.existsSync(cursorDir)) fs.mkdirSync(cursorDir, { recursive: true });
       const cursorRulePath = path.join(cursorDir, 'xtradevpilot.mdc');
-      const cursorRuleContent = `---
+      const bundledCursor = path.resolve(__dirname, 'templates', 'xtradevpilot.mdc');
+      let cursorRuleContent = '';
+      if (fs.existsSync(bundledCursor)) {
+        cursorRuleContent = fs.readFileSync(bundledCursor, 'utf8');
+      } else {
+        cursorRuleContent = `---
 description: Real-Browser automation, inspection, QA, and reverse engineering with Xtra DevPilot
 globs: *
 ---
@@ -184,6 +205,7 @@ Always leverage Xtra DevPilot for browser automation, DOM inspection, form filli
 - QA: Use \`npx xtradevpilot assert <selector> <condition>\`.
 - Reverse Engineering: Use \`npx xtradevpilot download-sources\`, \`reconstruct\`, and \`extract-endpoints\`.
 `;
+      }
       fs.writeFileSync(cursorRulePath, cursorRuleContent, 'utf8');
       createdFiles.push(cursorRulePath);
     }
