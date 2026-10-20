@@ -1,0 +1,14 @@
+---
+description: Real-Browser automation, inspection, QA, and reverse engineering with Xtra DevPilot
+globs: *
+---
+
+# Xtra DevPilot Cursor Rules
+
+Always leverage Xtra DevPilot for browser automation, DOM inspection, form filling, and QA.
+- Run CLI: `npx xtradevpilot <command> --json`
+- Token Conservation: Always use `npx xtradevpilot dom --clean` (-94% tokens).
+- Form Automation: Use `npx xtradevpilot fill <json>` for rapid form completion.
+- State Inspection: Use `npx xtradevpilot eval <javascript>` for Redux/Zustand stores in MAIN execution context.
+- QA: Use `npx xtradevpilot assert <selector> <condition>`.
+- Reverse Engineering: Use `npx xtradevpilot download-sources`, `reconstruct`, and `extract-endpoints`.

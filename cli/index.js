@@ -89,6 +89,7 @@ ${fmt.bold('COMMANDS:')}
   ${fmt.cyan('inject-css <cssString>')}                Inject CSS rules without page reload
   ${fmt.cyan('debug-layout')}                          Toggle red outline layout debug mode
   ${fmt.cyan('mcp')}                                   Launch stdio MCP server for IDEs
+  ${fmt.cyan('init-skill')}                            Initialize AI agent skill for Antigravity, Cursor, and IDEs
 
 ${fmt.bold('GLOBAL OPTIONS:')}
   --json                     Output strictly structured JSON for AI tools & automation
@@ -125,6 +126,79 @@ export async function runCli(argv = process.argv.slice(2)) {
 
   const command = positional[0]?.toLowerCase();
   const args = positional.slice(1);
+
+  // Initialize AI agent skill for Antigravity, Cursor, and IDEs
+  if (command === 'init-skill') {
+    const target = flags.target || 'antigravity';
+    const isGlobal = Boolean(flags.global);
+    const createdFiles = [];
+
+    const templatePath = path.resolve(__dirname, '..', '.agents', 'skills', 'xtradevpilot', 'SKILL.md');
+    let skillContent = '';
+    if (fs.existsSync(templatePath)) {
+      skillContent = fs.readFileSync(templatePath, 'utf8');
+    } else {
+      skillContent = `---
+name: xtradevpilot
+description: Expert runbook for controlling, inspecting, automating, debugging, and reverse engineering web pages using Xtra DevPilot.
+---
+
+# Xtra DevPilot Agent Skill
+Connects to real Google Chrome via ws://127.0.0.1:42819.
+- Always use get_clean_dom_snapshot or npx xtradevpilot dom --clean to save up to 94% tokens.
+- Use batch_fill_form or npx xtradevpilot fill for sub-200ms form completion.
+- Use execute_script or npx xtradevpilot eval for runtime JS and Redux/Zustand store inspection.
+- Use assert_element_state or npx xtradevpilot assert for deterministic QA.
+- Use download-sources and extract-endpoints for reverse engineering.
+`;
+    }
+
+    let skillDir;
+    if (isGlobal) {
+      const home = process.env.USERPROFILE || process.env.HOME || '';
+      skillDir = path.resolve(home, '.gemini', 'config', 'skills', 'xtradevpilot');
+    } else {
+      skillDir = path.resolve(process.cwd(), '.agents', 'skills', 'xtradevpilot');
+    }
+    if (!fs.existsSync(skillDir)) fs.mkdirSync(skillDir, { recursive: true });
+    const skillFilePath = path.join(skillDir, 'SKILL.md');
+    fs.writeFileSync(skillFilePath, skillContent, 'utf8');
+    createdFiles.push(skillFilePath);
+
+    if (target === 'cursor' || target === 'all' || flags.cursor) {
+      const cursorDir = path.resolve(process.cwd(), '.cursor', 'rules');
+      if (!fs.existsSync(cursorDir)) fs.mkdirSync(cursorDir, { recursive: true });
+      const cursorRulePath = path.join(cursorDir, 'xtradevpilot.mdc');
+      const cursorRuleContent = `---
+description: Real-Browser automation, inspection, QA, and reverse engineering with Xtra DevPilot
+globs: *
+---
+
+# Xtra DevPilot Cursor Rules
+
+Always leverage Xtra DevPilot for browser automation, DOM inspection, form filling, and QA.
+- Run CLI: \`npx xtradevpilot <command> --json\`
+- Token Conservation: Always use \`npx xtradevpilot dom --clean\` (-94% tokens).
+- Form Automation: Use \`npx xtradevpilot fill <json>\` for rapid form completion.
+- State Inspection: Use \`npx xtradevpilot eval <javascript>\` for Redux/Zustand stores in MAIN execution context.
+- QA: Use \`npx xtradevpilot assert <selector> <condition>\`.
+- Reverse Engineering: Use \`npx xtradevpilot download-sources\`, \`reconstruct\`, and \`extract-endpoints\`.
+`;
+      fs.writeFileSync(cursorRulePath, cursorRuleContent, 'utf8');
+      createdFiles.push(cursorRulePath);
+    }
+
+    if (isJson) {
+      fmt.printJson({ status: 'success', createdFiles, target, isGlobal });
+    } else {
+      console.log(fmt.success("Successfully initialized XtraDevPilot Agent Skill:"));
+      for (const f of createdFiles) {
+        console.log(`  ✔ ${f}`);
+      }
+      console.log(fmt.cyan("\nYour AI agent can now drive, inspect, automate, and test via Xtra DevPilot!"));
+    }
+    return 0;
+  }
 
   // Standalone MCP runner
   if (command === 'mcp') {

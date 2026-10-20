@@ -310,6 +310,70 @@ Add to your MCP settings file (`cline_mcp_settings.json` or `roo_code_mcp_settin
 
 ---
 
+## 🤖 AI Agent Skill (`SKILL.md`) & 1-Click Setup
+
+Xtra DevPilot is **not just for reverse engineering**—it equips your AI coding agent (Google Antigravity, Cursor, Windsurf, Claude Desktop, Copilot) with an intelligent browser automation, inspection, debugging, and testing bridge inside real Google Chrome.
+
+### ⚡ 1-Click Skill Initializer (CLI)
+Initialize the AI agent skill and IDE rule files in any repository with a single terminal command:
+
+```bash
+# Initialize for Google Antigravity (.agents/skills/xtradevpilot/SKILL.md)
+npx xtradevpilot init-skill
+
+# Initialize for Cursor AI (.cursor/rules/xtradevpilot.mdc)
+npx xtradevpilot init-skill --target cursor
+
+# Initialize for all supported IDEs (Antigravity, Cursor, Windsurf)
+npx xtradevpilot init-skill --target all
+
+# Install globally to your home directory (~/.gemini/config/skills/)
+npx xtradevpilot init-skill --global
+```
+
+### 🌟 The 10 Superpowers Covered in the Skill:
+1. **Token-Efficient DOM**: Strip SVGs, scripts, and noise for up to 94% prompt token savings (`get_clean_dom_snapshot`).
+2. **Rapid Batch Forms**: Populate 20+ form fields in 1 single roundtrip (<200ms) with React/Vue setter bypasses (`batch_fill_form`).
+3. **Modern ARIA Comboboxes**: Reliable search and selection in complex Workday, Greenhouse, and headless UI dropdowns (`smart_select_combobox`).
+4. **Native File Uploads**: Attach local resumes, PDFs, and images to inputs or dropzones (`upload_file`).
+5. **Runtime JS & Store Inspection**: Access Redux, Zustand, Pinia, and window runtime variables in the `MAIN` context (`execute_script`).
+6. **Layout Debugging & Live CSS**: Highlight bounding boxes, toggle red debug outlines, and live-inject CSS styles without reload (`inject_css`, `toggle_layout_debug_mode`).
+7. **Deterministic QA & Playwright Synthesis**: Assert element visibility, text, and values, or auto-generate Playwright `.spec.ts` test suites (`assert_element_state`, `record_user_flow`).
+8. **Network Mocking & Cookie CRUD**: Intercept HTTP calls, mock responses, and inspect or mutate cookies and localStorage (`mock_network_response`, `manage_storage_and_cookies`).
+9. **Web Scraping & Web Vitals**: Scrape structured tables and cards, run security audits, and capture Core Web Vitals (`extract_structured_data`, `get_web_vitals`).
+10. **Reverse Engineering & Asset Harvesting**: Scope HTML, harvest sourcemaps, reconstruct source trees, and trace action-to-API flows (`reconstruct_source_tree`, `trace_action_network`).
+
+---
+
+## 💻 Universal DevPilot CLI Suite
+
+You can also control Chrome and automate tasks directly from your terminal or AI shell subagent:
+
+```bash
+# Extract clean, token-efficient DOM scoped to a selector
+npx xtradevpilot dom --clean --selector "main"
+
+# Evaluate JavaScript inside the page's MAIN context
+npx xtradevpilot eval "document.title"
+
+# Run deterministic QA assertion
+npx xtradevpilot assert "#login-btn" is_visible
+
+# Trace network API calls triggered by a click
+npx xtradevpilot trace-action "#submit-btn" --action click
+
+# Generate OpenAPI 3.0 specification from harvested sources
+npx xtradevpilot extract-endpoints ./sources -o openapi.json
+
+# Export canonical REA forensic evidence bundle
+npx xtradevpilot export-rea -o session-evidence.json
+
+# Initialize AI Agent Skill in current repository
+npx xtradevpilot init-skill --target all
+```
+
+---
+
 ## ⚡ TypeScript / Node.js Automation SDK
 
 For automated test suites, CI/CD pipelines, or programmatic scripts, install and import the typed SDK:

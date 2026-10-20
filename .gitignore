@@ -58,7 +58,9 @@ yarn-error.log*
 .env*.local
 
 # IDE, OS & Agent Workspaces
-.agents/
+.agents/*
+!.agents/skills/
+!.agents/AGENTS.md
 .gemini/
 .vscode/
 .idea/

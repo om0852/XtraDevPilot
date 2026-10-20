@@ -629,11 +629,20 @@ const ALL_CLI_COMMANDS: CliCommandDoc[] = [
     description: "Launches the Model Context Protocol (MCP) server over stdio for IDEs (Claude Desktop, Cursor, Antigravity).",
     badge: "MCP Bridge",
     badgeColor: "text-purple-400 bg-purple-400/10 border-purple-400/30"
+  },
+  {
+    name: "init-skill",
+    category: "observability",
+    syntax: "xtradevpilot init-skill [--target antigravity|cursor|all] [--global]",
+    example: "npx xtradevpilot init-skill",
+    description: "Initializes the comprehensive XtraDevPilot AI Agent Skill in the current project or globally across all projects.",
+    badge: "Agent Skill",
+    badgeColor: "text-purple-400 bg-purple-400/10 border-purple-400/30"
   }
 ];
 
 export default function DocsPage() {
-  const [activeSection, setActiveSection] = useState<"installation" | "configuration" | "reconstruction" | "cli" | "tools" | "architecture" | "troubleshooting" | "settings">("installation");
+  const [activeSection, setActiveSection] = useState<"installation" | "configuration" | "skill" | "reconstruction" | "cli" | "tools" | "architecture" | "troubleshooting" | "settings">("installation");
   const [toolCategory, setToolCategory] = useState<string>("all");
   const [searchQuery, setSearchQuery] = useState("");
   const [cliCategory, setCliCategory] = useState<string>("all");
@@ -742,6 +751,7 @@ export default function DocsPage() {
             {[
               { id: "installation", label: "Installation Guide", icon: "download" },
               { id: "configuration", label: "IDE Configurations", icon: "settings" },
+              { id: "skill", label: "AI Agent Skill", icon: "psychology" },
               { id: "reconstruction", label: "Reverse Engineering", icon: "biotech" },
               { id: "cli", label: "DevPilot CLI Suite", icon: "terminal" },
               { id: "tools", label: "40 Tools Reference", icon: "list_alt" },
@@ -1011,6 +1021,297 @@ await client.connect();
 
 const dom = await client.getCleanDomSnapshot({ rootSelector: "main" });
 console.log(dom);`}
+              </pre>
+            </div>
+          </div>
+        )}
+
+        {/* Section: AI Agent Skill */}
+        {activeSection === "skill" && (
+          <div className="space-y-10">
+            <div>
+              <div className="flex flex-wrap items-center gap-2 mb-2">
+                <span className="text-xs font-label-mono text-[#cfbcff] uppercase tracking-wider">
+                  AI Agent Integration
+                </span>
+                <span className="text-[10px] font-label-mono px-2 py-0.5 rounded-full bg-purple-500/15 text-purple-300 border border-purple-500/30 font-semibold">
+                  SKILL.md Spec
+                </span>
+                <span className="text-[10px] font-label-mono px-2 py-0.5 rounded-full bg-emerald-500/15 text-emerald-400 border border-emerald-500/30 font-semibold">
+                  Dual CLI + MCP Compatible
+                </span>
+              </div>
+              <h1 className="text-3xl sm:text-4xl font-extrabold text-white">
+                AI Agent Skill (`SKILL.md`)
+              </h1>
+              <p className="text-[#cbc4d2] text-base mt-2 max-w-2xl">
+                Equip your AI pair programmer (Google Antigravity, Cursor, Claude Desktop) with the authoritative knowledge base to drive, automate, inspect, and reverse engineer real web applications.
+              </p>
+            </div>
+
+            {/* 1-Command Initializer */}
+            <div className="glass-panel p-6 rounded-xl border border-white/10 space-y-4">
+              <div className="flex items-center justify-between">
+                <h3 className="text-base font-bold text-white flex items-center gap-2">
+                  <span className="material-symbols-outlined text-[#cfbcff]">flash_on</span>
+                  1-Click Skill Initializer (CLI)
+                </h3>
+                <span className="text-[10px] font-label-mono px-2 py-0.5 rounded bg-[#cfbcff]/10 text-[#cfbcff] border border-[#cfbcff]/20">
+                  Instant Drop-In
+                </span>
+              </div>
+              <p className="text-xs text-[#cbc4d2]">
+                Run this command in any project root to automatically generate the complete agent skill for your IDE:
+              </p>
+              <div className="grid sm:grid-cols-3 gap-3">
+                <div className="bg-black/50 p-3 rounded-lg border border-white/5 space-y-1.5 flex flex-col justify-between">
+                  <div>
+                    <div className="text-xs font-bold text-white">Antigravity (Workspace)</div>
+                    <div className="text-[11px] text-white/50">Writes .agents/skills/xtradevpilot/SKILL.md</div>
+                  </div>
+                  <button
+                    onClick={() => copyCode("npx xtradevpilot init-skill", "init-ag", "Antigravity command")}
+                    className="w-full text-left bg-black/60 p-2 rounded text-[11px] font-label-mono text-[#cfbcff] border border-white/10 hover:border-[#cfbcff]/40 transition-colors cursor-pointer"
+                  >
+                    {copiedKey === "init-ag" ? "✔ Copied" : "npx xtradevpilot init-skill"}
+                  </button>
+                </div>
+
+                <div className="bg-black/50 p-3 rounded-lg border border-white/5 space-y-1.5 flex flex-col justify-between">
+                  <div>
+                    <div className="text-xs font-bold text-white">Cursor IDE</div>
+                    <div className="text-[11px] text-white/50">Writes .cursor/rules/xtradevpilot.mdc</div>
+                  </div>
+                  <button
+                    onClick={() => copyCode("npx xtradevpilot init-skill --target cursor", "init-cr", "Cursor command")}
+                    className="w-full text-left bg-black/60 p-2 rounded text-[11px] font-label-mono text-[#22d3ee] border border-white/10 hover:border-[#22d3ee]/40 transition-colors cursor-pointer"
+                  >
+                    {copiedKey === "init-cr" ? "✔ Copied" : "npx xtradevpilot init-skill --target cursor"}
+                  </button>
+                </div>
+
+                <div className="bg-black/50 p-3 rounded-lg border border-white/5 space-y-1.5 flex flex-col justify-between">
+                  <div>
+                    <div className="text-xs font-bold text-white">Global Machine-Wide</div>
+                    <div className="text-[11px] text-white/50">Active across all projects on your machine</div>
+                  </div>
+                  <button
+                    onClick={() => copyCode("npx xtradevpilot init-skill --global", "init-gb", "Global command")}
+                    className="w-full text-left bg-black/60 p-2 rounded text-[11px] font-label-mono text-emerald-400 border border-white/10 hover:border-emerald-400/40 transition-colors cursor-pointer"
+                  >
+                    {copiedKey === "init-gb" ? "✔ Copied" : "npx xtradevpilot init-skill --global"}
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            {/* The 10 Superpowers Unlocked Grid */}
+            <div className="space-y-4">
+              <div className="flex items-center justify-between">
+                <h3 className="text-base font-bold text-white flex items-center gap-2">
+                  <span className="material-symbols-outlined text-purple-400">auto_awesome</span>
+                  The 10 Operational Superpowers in the Skill
+                </h3>
+                <span className="text-[10px] font-label-mono text-white/50">Not Just Reverse Engineering</span>
+              </div>
+
+              <div className="grid md:grid-cols-2 gap-4">
+                <div className="glass-panel p-4 rounded-xl border border-white/10 space-y-1.5">
+                  <div className="flex items-center gap-2 text-sm font-bold text-[#cfbcff]">
+                    <span className="material-symbols-outlined text-base">compress</span>
+                    1. Token Conservation (-94% Tokens)
+                  </div>
+                  <p className="text-xs text-[#cbc4d2]">
+                    Instructs the agent to always use <code className="text-white">get_clean_dom_snapshot</code> or <code className="text-white">npx xtradevpilot dom --clean</code> to strip noisy SVGs and styles, preventing context overflow.
+                  </p>
+                </div>
+
+                <div className="glass-panel p-4 rounded-xl border border-white/10 space-y-1.5">
+                  <div className="flex items-center gap-2 text-sm font-bold text-emerald-400">
+                    <span className="material-symbols-outlined text-base">bolt</span>
+                    2. Rapid Batch Form Automation (&lt;200ms)
+                  </div>
+                  <p className="text-xs text-[#cbc4d2]">
+                    Avoids slow sequential typing. Uses <code className="text-white">batch_fill_form</code> with synthetic React/Vue prototype setters so form state updates immediately.
+                  </p>
+                </div>
+
+                <div className="glass-panel p-4 rounded-xl border border-white/10 space-y-1.5">
+                  <div className="flex items-center gap-2 text-sm font-bold text-[#22d3ee]">
+                    <span className="material-symbols-outlined text-base">dropdown</span>
+                    3. Modern Searchable Comboboxes
+                  </div>
+                  <p className="text-xs text-[#cbc4d2]">
+                    Directs the agent to use <code className="text-white">smart_select_combobox</code> for complex Workday, Greenhouse, ARIA comboboxes, and headless UI popovers.
+                  </p>
+                </div>
+
+                <div className="glass-panel p-4 rounded-xl border border-white/10 space-y-1.5">
+                  <div className="flex items-center gap-2 text-sm font-bold text-[#e7c365]">
+                    <span className="material-symbols-outlined text-base">upload_file</span>
+                    4. Direct File Attachments &amp; Dropzones
+                  </div>
+                  <p className="text-xs text-[#cbc4d2]">
+                    Synthesizes DataTransfer file uploads via <code className="text-white">upload_file</code> or <code className="text-white">upload</code> without triggering OS file dialogues.
+                  </p>
+                </div>
+
+                <div className="glass-panel p-4 rounded-xl border border-white/10 space-y-1.5">
+                  <div className="flex items-center gap-2 text-sm font-bold text-purple-400">
+                    <span className="material-symbols-outlined text-base">terminal</span>
+                    5. Runtime State &amp; Store Inspection
+                  </div>
+                  <p className="text-xs text-[#cbc4d2]">
+                    Evaluates code in page&apos;s MAIN execution context via <code className="text-white">execute_script</code> to inspect Redux stores (<code className="text-white">window.__REDUX_STORE__</code>), Zustand, and Pinia.
+                  </p>
+                </div>
+
+                <div className="glass-panel p-4 rounded-xl border border-white/10 space-y-1.5">
+                  <div className="flex items-center gap-2 text-sm font-bold text-red-400">
+                    <span className="material-symbols-outlined text-base">palette</span>
+                    6. Visual CSS Debugging &amp; Hot-Patching
+                  </div>
+                  <p className="text-xs text-[#cbc4d2]">
+                    Previews CSS fixes live with <code className="text-white">inject_css</code> and renders red bounding box outlines with <code className="text-white">toggle_layout_debug_mode</code>.
+                  </p>
+                </div>
+
+                <div className="glass-panel p-4 rounded-xl border border-white/10 space-y-1.5">
+                  <div className="flex items-center gap-2 text-sm font-bold text-emerald-400">
+                    <span className="material-symbols-outlined text-base">check_circle</span>
+                    7. Deterministic QA &amp; Playwright Synthesis
+                  </div>
+                  <p className="text-xs text-[#cbc4d2]">
+                    Executes deterministic assertions via <code className="text-white">assert_element_state</code> and compiles live user sessions into production-ready Playwright tests.
+                  </p>
+                </div>
+
+                <div className="glass-panel p-4 rounded-xl border border-white/10 space-y-1.5">
+                  <div className="flex items-center gap-2 text-sm font-bold text-[#22d3ee]">
+                    <span className="material-symbols-outlined text-base">hub</span>
+                    8. Network Interception &amp; Cookie Personas
+                  </div>
+                  <p className="text-xs text-[#cbc4d2]">
+                    Mocks backend fetch responses without servers and performs full CRUD on cookies and storage for instant persona switching.
+                  </p>
+                </div>
+
+                <div className="glass-panel p-4 rounded-xl border border-white/10 space-y-1.5">
+                  <div className="flex items-center gap-2 text-sm font-bold text-[#cfbcff]">
+                    <span className="material-symbols-outlined text-base">table_chart</span>
+                    9. Universal Web &amp; ATS Scraping
+                  </div>
+                  <p className="text-xs text-[#cbc4d2]">
+                    Extracts dynamic tables, cards, and ATS job descriptions (Workday, Greenhouse, Lever, LinkedIn) into typed JSON structures.
+                  </p>
+                </div>
+
+                <div className="glass-panel p-4 rounded-xl border border-white/10 space-y-1.5">
+                  <div className="flex items-center gap-2 text-sm font-bold text-emerald-400">
+                    <span className="material-symbols-outlined text-base">biotech</span>
+                    10. Autonomous Reverse Engineering (REA)
+                  </div>
+                  <p className="text-xs text-[#cbc4d2]">
+                    Recovers original TypeScript codebases from sourcemaps, discovers REST routes into OpenAPI 3.0, and packages forensic REA Evidence.
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            {/* IDE Setup Tabs */}
+            <div className="glass-panel p-6 rounded-xl border border-white/10 space-y-4">
+              <h3 className="text-base font-bold text-white flex items-center gap-2">
+                <span className="material-symbols-outlined text-[#cfbcff]">settings</span>
+                Manual IDE Setup Instructions
+              </h3>
+              <div className="grid sm:grid-cols-2 gap-4 text-xs font-label-mono">
+                <div className="bg-black/50 p-4 rounded-lg border border-white/5 space-y-2">
+                  <div className="text-[#cfbcff] font-bold flex items-center gap-2">
+                    <span className="material-symbols-outlined text-sm">view_in_ar</span>
+                    Google Antigravity
+                  </div>
+                  <p className="text-[#cbc4d2] text-[11px] leading-relaxed">
+                    Create <code className="text-white">.agents/skills/xtradevpilot/SKILL.md</code> in your workspace root, or save globally to <code className="text-white">~/.gemini/config/skills/xtradevpilot/SKILL.md</code>. Antigravity discovers and activates it automatically.
+                  </p>
+                </div>
+
+                <div className="bg-black/50 p-4 rounded-lg border border-white/5 space-y-2">
+                  <div className="text-[#22d3ee] font-bold flex items-center gap-2">
+                    <span className="material-symbols-outlined text-sm">code</span>
+                    Cursor IDE
+                  </div>
+                  <p className="text-[#cbc4d2] text-[11px] leading-relaxed">
+                    Create <code className="text-white">.cursor/rules/xtradevpilot.mdc</code> or append to your <code className="text-white">.cursorrules</code> file. Include instructions to execute commands via <code className="text-white">npx xtradevpilot &lt;cmd&gt; --json</code>.
+                  </p>
+                </div>
+
+                <div className="bg-black/50 p-4 rounded-lg border border-white/5 space-y-2">
+                  <div className="text-purple-400 font-bold flex items-center gap-2">
+                    <span className="material-symbols-outlined text-sm">psychology</span>
+                    Claude Desktop
+                  </div>
+                  <p className="text-[#cbc4d2] text-[11px] leading-relaxed">
+                    Add the <code className="text-white">xtradevpilot</code> server entry to <code className="text-white">claude_desktop_config.json</code> with command <code className="text-white">npx -y xtradevpilot-mcp</code> to expose all 40 tools.
+                  </p>
+                </div>
+
+                <div className="bg-black/50 p-4 rounded-lg border border-white/5 space-y-2">
+                  <div className="text-emerald-400 font-bold flex items-center gap-2">
+                    <span className="material-symbols-outlined text-sm">terminal</span>
+                    Windsurf / VS Code / Roo Code
+                  </div>
+                  <p className="text-[#cbc4d2] text-[11px] leading-relaxed">
+                    Add the CLI workflow to system prompts: tell your agent to use <code className="text-white">npx xtradevpilot &lt;command&gt; --json</code> whenever browser actions or reverse engineering are required.
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            {/* Full-text SKILL.md Preview with 1-Click Copy */}
+            <div className="glass-panel p-6 rounded-xl border border-white/10 space-y-3">
+              <div className="flex items-center justify-between">
+                <h3 className="text-sm font-bold text-white flex items-center gap-2">
+                  <span className="material-symbols-outlined text-[#cfbcff] text-base">description</span>
+                  Full SKILL.md Content
+                </h3>
+                <button
+                  onClick={() => copyCode(`---\nname: xtradevpilot\ndescription: Definitive expert runbook for controlling, automating, inspecting, debugging, and reverse engineering web pages using Xtra DevPilot in real authenticated Google Chrome. Covers both MCP Tool calling and Universal CLI execution.\n---\n\n# Xtra DevPilot Agent Skill\nConnects to real Google Chrome on ws://127.0.0.1:42819.\n- Token Conservation: Always use get_clean_dom_snapshot or npx xtradevpilot dom --clean (-94% tokens).\n- Form Automation: Use batch_fill_form or npx xtradevpilot fill (<200ms).\n- Comboboxes: Use smart_select_combobox or npx xtradevpilot combobox.\n- File Uploads: Use upload_file or npx xtradevpilot upload.\n- State Stores: Use execute_script or npx xtradevpilot eval for Redux/Zustand in MAIN world.\n- CSS Debugging: Use inject_css or npx xtradevpilot inject-css; toggle_layout_debug_mode.\n- Deterministic QA: Use assert_element_state or npx xtradevpilot assert; record_user_flow.\n- Network & Mocking: Use mock_network_response, get_network_logs, manage_storage_and_cookies.\n- Reverse Engineering: Use download-sources, reconstruct, extract-endpoints, and export-rea.`, "full-skill", "Full SKILL.md")}
+                  className="text-xs text-[#cfbcff] font-label-mono hover:underline cursor-pointer flex items-center gap-1"
+                >
+                  <span className="material-symbols-outlined text-xs">content_copy</span>
+                  {copiedKey === "full-skill" ? "✔ Copied Full Skill" : "Copy Full SKILL.md"}
+                </button>
+              </div>
+              <pre className="bg-black/60 p-4 rounded-lg font-label-mono text-xs text-[#cbc4d2] border border-white/5 overflow-x-auto max-h-96">
+{`---
+name: xtradevpilot
+description: >-
+  Definitive expert runbook for controlling, automating, inspecting, debugging, and reverse engineering
+  web applications using Xtra DevPilot in real authenticated Google Chrome. Covers both MCP Tool calling
+  and Universal CLI execution. Use this skill whenever the user or task involves browser interaction,
+  form automation, DOM inspection, CSS debugging, deterministic QA, Playwright test generation,
+  network mocking, cookie/storage control, web scraping, or full-stack reverse engineering.
+---
+
+# Xtra DevPilot — Real-Browser AI Automation & Engineering Runbook
+
+Xtra DevPilot connects your AI agent directly to real, authenticated Google Chrome via WebSocket (ws://127.0.0.1:42819).
+
+## 🚀 Dual Interaction Modes:
+- MCP Protocol: call_mcp_tool (Server: xtradevpilot, Tool: ...)
+- Shell CLI: run_command ("npx xtradevpilot <cmd> [flags] --json")
+
+## 🌟 10 Core Superpowers:
+1. Token Conservation: get_clean_dom_snapshot / npx xtradevpilot dom --clean (-94% tokens)
+2. Batch Forms: batch_fill_form / npx xtradevpilot fill (<200ms with React prototype setters)
+3. Comboboxes: smart_select_combobox / npx xtradevpilot combobox (Workday, Greenhouse, ARIA)
+4. File Uploads: upload_file / npx xtradevpilot upload (DataTransfer injection, no dialogs)
+5. State Inspection: execute_script / npx xtradevpilot eval (Redux, Zustand, Pinia in MAIN world)
+6. CSS Hot-Patch: inject_css / npx xtradevpilot inject-css; toggle_layout_debug_mode
+7. QA & Testing: assert_element_state / npx xtradevpilot assert; record_user_flow (Playwright)
+8. Network & Mocking: mock_network_response, get_network_logs, manage_storage_and_cookies
+9. Web Scraping: extract_structured_data (tables/cards), extract_job_details (ATS jobs)
+10. Reverse Engineering: download-sources, reconstruct, extract-endpoints (OpenAPI 3.0), export-rea`}
               </pre>
             </div>
           </div>
