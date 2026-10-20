@@ -76,8 +76,8 @@ export function scanEndpoints(inputDirOrFile) {
       // Check if file is HAR
       if (f.endsWith('.har') || (f.endsWith('.json') && content.includes('"log"') && content.includes('"entries"'))) {
         try {
-          const har = JSON.parse(content);
-          const entries = har.log?.entries || [];
+          const parsed = JSON.parse(content);
+          const entries = parsed.log?.entries || parsed.raw_result?.har?.log?.entries || [];
           for (const entry of entries) {
             const req = entry.request;
             if (req && req.url) {

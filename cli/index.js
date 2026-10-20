@@ -111,7 +111,7 @@ export async function runCli(argv = process.argv.slice(2)) {
   }
 
   if (flags.version || flags.v) {
-    console.log("2.0.2");
+    console.log("2.1.0");
     return 0;
   }
 

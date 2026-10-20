@@ -1,18 +1,44 @@
 {
-  "name": "xtradevpilot-workspace",
-  "version": "1.0.0",
-  "private": true,
+  "name": "xtradevpilot",
+  "version": "2.1.0",
+  "description": "Universal CLI & Autonomous Reverse Engineering Suite for Xtra DevPilot browser bridge",
   "type": "module",
+  "main": "cli/index.js",
   "bin": {
-    "devpilot": "./bin/devpilot.js",
-    "xtradevpilot": "./bin/devpilot.js"
+    "xtradevpilot": "bin/devpilot.js",
+    "devpilot": "bin/devpilot.js"
   },
+  "files": [
+    "bin",
+    "cli",
+    "src",
+    "README.md",
+    "LICENSE"
+  ],
   "scripts": {
-    "start": "node mcp-server/index.js",
+    "start": "node bin/devpilot.js",
+    "cli": "node bin/devpilot.js",
     "mcp": "node mcp-server/index.js",
     "mcp:check": "node --check mcp-server/index.js",
-    "cli": "node bin/devpilot.js",
     "test": "node --test tests/cli_100_tests.test.js",
     "test:cli": "node --test tests/cli_100_tests.test.js"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/om0852/XtraDevPilot.git"
+  },
+  "keywords": [
+    "xtradevpilot",
+    "reverse-engineering",
+    "browser-automation",
+    "mcp",
+    "chrome",
+    "cli",
+    "developer-tools"
+  ],
+  "author": "Om Salunke",
+  "license": "MIT",
+  "dependencies": {
+    "ws": "^8.18.0"
   }
 }

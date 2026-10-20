@@ -30,6 +30,11 @@ mcp-server/check_active_tab.js
 downloaded-page.html
 downloads_test/
 network-traffic.har
+session-evidence.json
+openapi.json
+sources/
+downloaded-sources/
+reconstructed-codebase/
 test_artifacts/
 test_muse_e2e_suite.js
 test_muse_suite.js

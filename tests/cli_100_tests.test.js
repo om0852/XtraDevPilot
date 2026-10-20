@@ -75,16 +75,16 @@ test('02. -h shorthand displays usage and returns code 0', async () => {
   assert.match(res.stdout, /USAGE:/i);
 });
 
-test('03. --version displays 2.0.2 and returns code 0', async () => {
+test('03. --version displays 2.1.0 and returns code 0', async () => {
   const res = await runCli(['--version']);
   assert.equal(res.code, 0);
-  assert.equal(res.stdout, '2.0.2');
+  assert.equal(res.stdout, '2.1.0');
 });
 
 test('04. -v shorthand displays version and returns code 0', async () => {
   const res = await runCli(['-v']);
   assert.equal(res.code, 0);
-  assert.equal(res.stdout, '2.0.2');
+  assert.equal(res.stdout, '2.1.0');
 });
 
 test('05. No arguments provided prints help with code 0', async () => {
