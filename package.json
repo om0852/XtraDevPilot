@@ -2,10 +2,17 @@
   "name": "xtradevpilot-workspace",
   "version": "1.0.0",
   "private": true,
-  "description": "Xtra DevPilot workspace root",
+  "type": "module",
+  "bin": {
+    "devpilot": "./bin/devpilot.js",
+    "xtradevpilot": "./bin/devpilot.js"
+  },
   "scripts": {
     "start": "node mcp-server/index.js",
     "mcp": "node mcp-server/index.js",
-    "mcp:check": "node --check mcp-server/index.js"
+    "mcp:check": "node --check mcp-server/index.js",
+    "cli": "node bin/devpilot.js",
+    "test": "node --test tests/cli_100_tests.test.js",
+    "test:cli": "node --test tests/cli_100_tests.test.js"
   }
 }

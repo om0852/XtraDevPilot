@@ -318,6 +318,43 @@ class Page {
     async recordFlow(action, tabId) {
         return await this.transport.sendRequest('record_user_flow', { action, tabId });
     }
+    /**
+     * Downloads the live, complete HTML of the page or a specific feature/component subtree.
+     */
+    async downloadPageHtml(options, tabId) {
+        this.logger.info('Downloading page HTML...');
+        return await this.transport.sendRequest('download_page_html', {
+            outputPath: options?.outputPath,
+            selector: options?.selector,
+            clean: options?.clean,
+            tabId
+        });
+    }
+    /**
+     * Exports captured network requests into a standard HAR 1.2 file saved to disk.
+     */
+    async exportHar(options, tabId) {
+        this.logger.info('Exporting network HAR...');
+        return await this.transport.sendRequest('export_har', {
+            outputPath: options?.outputPath,
+            clearAfterExport: options?.clearAfterExport,
+            tabId
+        });
+    }
+    /**
+     * Scans the active page for all referenced source files (scripts, stylesheets, sourcemaps, images, fonts)
+     * and downloads them into an organized local directory.
+     */
+    async downloadSources(options, tabId) {
+        this.logger.info('Downloading page source assets...');
+        return await this.transport.sendRequest('download_sources', {
+            outputDir: options?.outputDir,
+            types: options?.types,
+            selector: options?.selector,
+            includeSourceMaps: options?.includeSourceMaps,
+            tabId
+        });
+    }
 }
 exports.Page = Page;
 //# sourceMappingURL=page.js.map

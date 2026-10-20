@@ -1,322 +1,437 @@
 "use client";
 
-import { useEffect, useState, useMemo } from "react";
+import { useEffect, useState, useMemo, useRef } from "react";
 import Link from "next/link";
+import CyberBackground from "./components/CyberBackground";
 
 interface ToolItem {
   name: string;
-  category: "tabs" | "inspection" | "automation" | "devqa" | "scraping" | "observability";
-  description: string;
+  category: "rea" | "dom" | "network" | "interaction" | "system";
   badge: string;
+  description: string;
   params: string;
+  returns: string;
   example: string;
 }
 
 const TOOLS_CATALOG: ToolItem[] = [
-  // Category 1: Tabs & Window
+  // Category 1: Reverse Engineering (REA)
   {
-    name: "list_tabs",
-    category: "tabs",
-    badge: "Tabs",
-    description: "Returns all open Chrome tabs with tab IDs, titles, URLs, active status, and window dimensions.",
-    params: "None",
-    example: "{}"
+    name: "rea_scope_app",
+    category: "rea",
+    badge: "01 / SCOPE",
+    description: "Holistic surface inspection of the active tab. Maps scripts, stylesheets, global namespaces, frameworks (React, Vue, Svelte), API roots, and state managers.",
+    params: "tabId (number, optional), depth (number, optional)",
+    returns: "AppTopologyReport",
+    example: '{"depth": 2}'
   },
   {
-    name: "open_tab",
-    category: "tabs",
-    badge: "Tabs",
-    description: "Opens a new browser tab and navigates directly to the specified target URL.",
-    params: "url (string, required)",
-    example: '{"url": "https://google.com"}'
+    name: "rea_sourcemap_reconstruct",
+    category: "rea",
+    badge: "02 / SOURCEMAP",
+    description: "Discovers inline or linked .map files across bundles. Automatically reconstructs the original unminified TypeScript/JavaScript source tree locally.",
+    params: "inputDir (string, optional), outputDir (string, optional)",
+    returns: "ReconstructionManifest",
+    example: '{"outputDir": "./src"}'
   },
   {
-    name: "navigate",
-    category: "tabs",
-    badge: "Tabs",
-    description: "Navigates an existing browser tab to any target URL with automatic page load synchronization.",
-    params: "url (string, required), tabId (number, optional)",
-    example: '{"url": "https://app.creatosaurus.io", "tabId": 414720296}'
+    name: "rea_reconstruct_types",
+    category: "rea",
+    badge: "03 / TYPES",
+    description: "Analyzes runtime objects, Redux/Zustand stores, network payloads, and GraphQL queries to infer exact TypeScript interfaces and Zod validation schemas.",
+    params: "format ('typescript'|'zod', optional)",
+    returns: "TypeDefinitions",
+    example: '{"format": "zod"}'
   },
   {
-    name: "get_tab_info",
-    category: "tabs",
-    badge: "Tabs",
-    description: "Extracts metadata of the active or target tab including dimensions, favicon, load status, and audio state.",
-    params: "tabId (number, optional)",
-    example: '{"tabId": 414720296}'
+    name: "rea_action_to_api",
+    category: "rea",
+    badge: "04 / FLOW",
+    description: "Correlates user UI interactions (button clicks, form inputs, route changes) with outgoing XHR/Fetch network calls to map business logic directly to endpoints.",
+    params: "selector (string, required), action ('click'|'type')",
+    returns: "ActionApiCorrelation",
+    example: '{"selector": "#btn-pay", "action": "click"}'
   },
   {
-    name: "set_viewport_size",
-    category: "tabs",
-    badge: "Window",
-    description: "Resizes the Chrome window to test responsive design breakpoints (mobile 375px, tablet 768px, desktop 1440px).",
-    params: "width (number), height (number)",
-    example: '{"width": 1200, "height": 800}'
+    name: "rea_generate_openapi",
+    category: "rea",
+    badge: "05 / OPENAPI",
+    description: "Synthesizes recorded network traffic, headers, query params, request bodies, and response schemas into a spec-compliant OpenAPI 3.1 YAML or JSON documentation.",
+    params: "outputPath (string, optional), version ('3.0'|'3.1')",
+    returns: "OpenApiSpecification",
+    example: '{"outputPath": "./openapi.json", "version": "3.1"}'
+  },
+  {
+    name: "rea_bundle",
+    category: "rea",
+    badge: "06 / SUITE",
+    description: "Runs the complete reverse-engineering pipeline in parallel. Bundles architecture reports, unminified source code, types, and API specs into a single developer archive.",
+    params: "outputPath (string, optional), archive (boolean)",
+    returns: "ReaBundleArtifact",
+    example: '{"archive": true, "outputPath": "./bundle.zip"}'
+  },
+  {
+    name: "download_sources",
+    category: "rea",
+    badge: "ASSET CRAWLER",
+    description: "Discovers and downloads all in-scope client-side scripts, stylesheets, sourcemaps, images, and fonts with a structured manifest.",
+    params: "outputDir (string, optional), types (string[], optional)",
+    returns: "DownloadedSourcesManifest",
+    example: '{"outputDir": "./sources", "types": ["scripts", "sourcemaps"]}'
   },
 
-  // Category 2: DOM & Inspection
-  {
-    name: "get_dom_snapshot",
-    category: "inspection",
-    badge: "Inspection",
-    description: "Captures full raw outerHTML DOM tree for complete offline analysis and layout structure debugging.",
-    params: "tabId (number, optional)",
-    example: '{"tabId": 414720296}'
-  },
+  // Category 2: DOM & Elements
   {
     name: "get_clean_dom_snapshot",
-    category: "inspection",
-    badge: "Inspection",
+    category: "dom",
+    badge: "CLEAN DOM",
     description: "Extracts an LLM-optimized HTML structure by stripping bulky SVG paths, styles, scripts, and classes to save 90% tokens.",
     params: "rootSelector (string, optional), tabId (number, optional)",
+    returns: "CleanDomString",
     example: '{"rootSelector": "main"}'
   },
   {
+    name: "get_dom_snapshot",
+    category: "dom",
+    badge: "RAW DOM",
+    description: "Captures full raw outerHTML DOM tree for complete offline analysis and layout structure debugging.",
+    params: "tabId (number, optional)",
+    returns: "RawHtmlString",
+    example: '{"tabId": 414736580}'
+  },
+  {
+    name: "get_ax_tree",
+    category: "dom",
+    badge: "A11Y TREE",
+    description: "Captures the Chrome Accessibility tree for screen readers, ARIA roles, states, and accessibility compliance checks.",
+    params: "tabId (number, optional)",
+    returns: "AxNodeTree",
+    example: "{}"
+  },
+  {
     name: "highlight_element",
-    category: "inspection",
-    badge: "Inspection",
+    category: "dom",
+    badge: "VISUAL OVERLAY",
     description: "Injects an animated neon pulsing border overlay on target elements and smoothly scrolls them into view.",
     params: "selector (string, required), tabId (number, optional)",
+    returns: "ElementBoundingBox",
     example: '{"selector": "button.submit-btn"}'
   },
   {
     name: "wait_for_user_click",
-    category: "inspection",
-    badge: "Inspection",
-    description: "Enters visual 'Pencil Mode'. Pauses until user clicks any element, then returns computed styles, classes, and HTML.",
-    params: "None",
+    category: "dom",
+    badge: "PENCIL MODE",
+    description: "Pauses until user clicks any element in the active tab, then returns computed styles, classes, and HTML hierarchy.",
+    params: "timeoutMs (number, optional)",
+    returns: "ClickedElementMetadata",
     example: "{}"
   },
   {
     name: "capture_screenshot",
-    category: "inspection",
-    badge: "Visual QA",
+    category: "dom",
+    badge: "VISUAL QA",
     description: "Captures a high-resolution PNG of the active viewport, automatically focusing window to prevent readback errors.",
-    params: "tabId (number, optional)",
-    example: '{"tabId": 414720296}'
-  },
-
-  // Category 3: Automation & Forms
-  {
-    name: "click_element",
-    category: "automation",
-    badge: "Automation",
-    description: "Simulates user clicks with automatic polling wait and resilient Tailwind selector normalization for bracket/colon classes.",
-    params: "selector (string, required), timeoutMs (number, optional)",
-    example: '{"selector": "span.ml-[10px]"}'
-  },
-  {
-    name: "type_text",
-    category: "automation",
-    badge: "Automation",
-    description: "Types text into input/textarea triggering React and Vue state setters (HTMLInputElement.prototype value dispatch).",
-    params: "selector (string, required), text (string, required)",
-    example: '{"selector": "input[type=\'search\']", "text": "Next.js 16"}'
-  },
-  {
-    name: "batch_fill_form",
-    category: "automation",
-    badge: "Speed QA",
-    description: "Fills dozens of form inputs, selects, and checkboxes in a single roundtrip (<200ms) with zero latency overhead.",
-    params: "actions (array of {selector, value, action, waitMs})",
-    example: '{"actions": [{"selector": "#name", "value": "Om Salunke"}]}'
-  },
-  {
-    name: "smart_select_combobox",
-    category: "automation",
-    badge: "Automation",
-    description: "Interacts with modern searchable custom dropdowns (Workday, ARIA comboboxes, headless UI, and Phenom).",
-    params: "triggerSelector (string), optionText (string), searchQuery (optional)",
-    example: '{"triggerSelector": "#country-btn", "optionText": "India"}'
-  },
-  {
-    name: "upload_file",
-    category: "automation",
-    badge: "Automation",
-    description: "Uploads local workspace files (PDF, PNG, DOCX) directly into file inputs or dropzones without OS dialog hurdles.",
-    params: "filePath (string, required), selector (string, optional)",
-    example: '{"filePath": "Om_Salunke_Resume_AI_SDE.pdf"}'
-  },
-  {
-    name: "scroll_page",
-    category: "automation",
-    badge: "Automation",
-    description: "Smoothly scrolls the page or inner scrollable container by pixel amount or directly into target element view.",
-    params: "direction (string), amount (number), scrollToSelector (string)",
-    example: '{"direction": "down", "amount": 600, "smooth": true}'
-  },
-  {
-    name: "wait_for_element",
-    category: "automation",
-    badge: "Automation",
-    description: "Waits via MutationObserver for an element to appear, become visible, or be detached from the DOM tree.",
-    params: "selector (string), timeoutMs (number), state ('visible'|'attached'|'detached')",
-    example: '{"selector": "#dashboard-grid", "timeoutMs": 5000}'
-  },
-
-  // Category 4: Developer & QA Engine
-  {
-    name: "execute_script",
-    category: "devqa",
-    badge: "Dev & QA",
-    description: "Evaluates arbitrary JS in the webpage context with automatic async IIFE wrapping, return statement safety, and Redux/window access.",
-    params: "script (string, required), tabId (number, optional)",
-    example: '{"script": "return window.__REDUX_STORE__?.getState()"}'
-  },
-  {
-    name: "assert_element_state",
-    category: "devqa",
-    badge: "Dev & QA",
-    description: "Deterministic QA assertion checking element visibility, enabled state, text contents, or attributes with pass/fail reports.",
-    params: "selector (string), condition (string), expected (string, optional)",
-    example: '{"selector": "h1", "condition": "contains_text", "expected": "Creator Studio"}'
-  },
-  {
-    name: "record_user_flow",
-    category: "devqa",
-    badge: "Playwright",
-    description: "Records user clicks and inputs in the browser, sanitizes Tailwind selectors, and generates ready-to-run Playwright test scripts.",
-    params: "action ('start' | 'stop' | 'status'), tabId (number, optional)",
-    example: '{"action": "start"}'
+    params: "outputPath (string, optional), tabId (number, optional)",
+    returns: "ScreenshotPath",
+    example: '{"outputPath": "./shot.png"}'
   },
   {
     name: "inject_css",
-    category: "devqa",
-    badge: "Styling",
-    description: "Dynamically injects custom CSS rules into the live DOM without reloading to test UI styling fixes instantly.",
+    category: "dom",
+    badge: "STYLE INJECT",
+    description: "Injects arbitrary CSS stylesheets into the active tab for instant style hot-reloading and UI experimentation.",
     params: "cssString (string, required)",
-    example: '{"cssString": "body { filter: contrast(1.1); }"}'
+    returns: "InjectionStatus",
+    example: '{"cssString": "body { filter: invert(1); }"}'
   },
   {
     name: "toggle_layout_debug_mode",
-    category: "devqa",
-    badge: "Styling",
-    description: "Toggles red outlines on all elements in the active browser tab to immediately spot overflow, padding, and alignment issues.",
-    params: "None",
-    example: "{}"
+    category: "dom",
+    badge: "LAYOUT DEBUG",
+    description: "Toggles high-contrast colored outlines on all DOM bounding boxes to rapidly diagnose layout shifts and overflow bugs.",
+    params: "enabled (boolean, optional)",
+    returns: "LayoutDebugState",
+    example: '{"enabled": true}'
+  },
+  {
+    name: "wait_for_element",
+    category: "dom",
+    badge: "SYNCHRONIZATION",
+    description: "Waits until a matching DOM element is rendered and reaches the specified visibility state (visible, hidden, attached).",
+    params: "selector (string, required), state ('visible'|'hidden')",
+    returns: "ElementState",
+    example: '{"selector": ".dashboard-grid", "state": "visible"}'
+  },
+  {
+    name: "scroll_page",
+    category: "dom",
+    badge: "VIEWPORT",
+    description: "Scrolls the page or inner scrollable container by direction, pixel distance, or directly into view of an element.",
+    params: "direction ('down'|'up'|'top'|'bottom'), amount (number)",
+    returns: "ScrollCoordinates",
+    example: '{"direction": "down", "amount": 500}'
   },
 
-  // Category 5: Scraping & Extraction
-  {
-    name: "extract_structured_data",
-    category: "scraping",
-    badge: "Scraping",
-    description: "Extracts repeated cards, tables, and product listings into clean typed JSON structures for LLM summarization.",
-    params: "targetSelector (string, optional), type ('auto'|'table'|'cards'|'list')",
-    example: '{"targetSelector": ".grid", "type": "cards"}'
-  },
-  {
-    name: "extract_job_details",
-    category: "scraping",
-    badge: "Scraping",
-    description: "Intelligently parses ATS platforms (Workday, Greenhouse, Lever) to extract title, company, location, requisition ID, and description.",
-    params: "tabId (number, optional)",
-    example: "{}"
-  },
-
-  // Category 6: Observability, Diagnostics & State
-  {
-    name: "get_console_logs",
-    category: "observability",
-    badge: "Diagnostics",
-    description: "Streams recent browser console errors, warnings, and log statements directly into your IDE chat.",
-    params: "None",
-    example: "{}"
-  },
+  // Category 3: Network, State & Observability
   {
     name: "get_network_logs",
-    category: "observability",
-    badge: "Diagnostics",
+    category: "network",
+    badge: "TRAFFIC",
     description: "Intercepts recent HTTP network requests, status codes, URLs, headers, and payload timings.",
-    params: "None",
+    params: "limit (number, optional)",
+    returns: "NetworkEntry[]",
+    example: '{"limit": 25}'
+  },
+  {
+    name: "export_har",
+    category: "network",
+    badge: "HAR ARCHIVE",
+    description: "Captures full network activity into standard HAR 1.2 format with request/response payloads and timing waterfalls.",
+    params: "outputPath (string, optional), clearAfterExport (boolean)",
+    returns: "HarFileSummary",
+    example: '{"outputPath": "./network.har"}'
+  },
+  {
+    name: "get_console_logs",
+    category: "network",
+    badge: "LOG STREAM",
+    description: "Streams recent browser console errors, warnings, and log statements directly into your IDE chat.",
+    params: "limit (number, optional)",
+    returns: "ConsoleLogEntry[]",
     example: "{}"
   },
   {
     name: "get_web_vitals",
-    category: "observability",
-    badge: "Performance",
+    category: "network",
+    badge: "CORE VITALS",
     description: "Measures Core Web Vitals (LCP, CLS, FCP) and full asset waterfalls directly from Chrome Performance API.",
-    params: "None",
+    params: "tabId (number, optional)",
+    returns: "WebVitalsReport",
     example: "{}"
   },
   {
     name: "run_security_audit",
-    category: "observability",
-    badge: "Security",
+    category: "network",
+    badge: "SECURITY",
     description: "Scans active tab for insecure forms, unencrypted transmission, and exposed JWTs or API keys stored in LocalStorage.",
     params: "None",
+    returns: "SecurityAuditReport",
     example: "{}"
   },
   {
     name: "run_accessibility_audit",
-    category: "observability",
-    badge: "A11y",
+    category: "network",
+    badge: "A11Y AUDIT",
     description: "Performs WCAG compliance audit scanning for missing alt attributes, unlabelled buttons, and improper heading hierarchies.",
     params: "None",
+    returns: "A11yViolationsList",
     example: "{}"
   },
   {
     name: "get_storage",
-    category: "observability",
-    badge: "State",
+    category: "network",
+    badge: "STORAGE",
     description: "Reads all localStorage, sessionStorage, and cookie entries to inspect authentication tokens and persisted state.",
-    params: "None",
-    example: "{}"
+    params: "type ('all'|'local'|'session'|'cookies')",
+    returns: "BrowserStorageMap",
+    example: '{"type": "local"}'
   },
   {
     name: "manage_storage_and_cookies",
-    category: "observability",
-    badge: "State",
+    category: "network",
+    badge: "AUTH STATE",
     description: "Inspects, sets, or clears browser cookies, localStorage, and sessionStorage to easily mock login sessions or reset test state.",
-    params: "type ('cookie'|'local_storage'|'session_storage'), operation ('get'|'set'|'remove'|'clear')",
+    params: "type ('cookie'|'local_storage'), operation ('get'|'set'|'remove')",
+    returns: "StorageOperationResult",
     example: '{"type": "local_storage", "operation": "get_all"}'
   },
   {
     name: "mock_network_response",
-    category: "observability",
-    badge: "Mocking",
+    category: "network",
+    badge: "MOCKING",
     description: "Intercepts window.fetch calls matching a URL pattern and returns custom mock JSON payloads without a backend.",
     params: "urlPattern (string), responseBody (string), status (number)",
+    returns: "MockRegistrationStatus",
     example: '{"urlPattern": "/api/profile", "responseBody": "{\\"name\\":\\"Om\\"}"}'
   },
+
+  // Category 4: Agent Action & Automation
   {
-    name: "clear_network_mocks",
-    category: "observability",
-    badge: "Mocking",
-    description: "Removes all registered URL network intercept mocks, restoring standard network execution.",
+    name: "click_element",
+    category: "interaction",
+    badge: "SYNTHETIC CLICK",
+    description: "Simulates user clicks with automatic polling wait and resilient Tailwind selector normalization for bracket/colon classes.",
+    params: "selector (string, required), timeoutMs (number, optional)",
+    returns: "ClickResult",
+    example: '{"selector": "button[type=\'submit\']"}'
+  },
+  {
+    name: "type_text",
+    category: "interaction",
+    badge: "INPUT DISPATCH",
+    description: "Types text into input/textarea triggering React and Vue state setters (HTMLInputElement.prototype value dispatch).",
+    params: "selector (string, required), text (string, required)",
+    returns: "TypeResult",
+    example: '{"selector": "input[type=\'search\']", "text": "XtraDevPilot"}'
+  },
+  {
+    name: "batch_fill_form",
+    category: "interaction",
+    badge: "SPEED QA",
+    description: "Fills entire multi-field forms in a single sub-200ms roundtrip with native React/Vue synthetic event triggers.",
+    params: "actions (array of { selector, value, action })",
+    returns: "BatchResult",
+    example: '{"actions": [{"selector": "#name", "value": "Om"}]}'
+  },
+  {
+    name: "smart_select_combobox",
+    category: "interaction",
+    badge: "COMBOBOX",
+    description: "Interacts with modern headless ARIA dropdowns, filtering, searching, and keyboard-selecting custom option nodes.",
+    params: "triggerSelector (string), optionText (string)",
+    returns: "SelectionResult",
+    example: '{"triggerSelector": "#country", "optionText": "India"}'
+  },
+  {
+    name: "upload_file",
+    category: "interaction",
+    badge: "FILE UPLOAD",
+    description: "Attaches local files directly to file input fields or drag-and-drop targets using synthetic DataTransfer events.",
+    params: "filePath (string, required), selector (string, optional)",
+    returns: "UploadResult",
+    example: '{"filePath": "./document.pdf"}'
+  },
+  {
+    name: "press_key",
+    category: "interaction",
+    badge: "KEYBOARD",
+    description: "Dispatches keyboard key events (Enter, Escape, Tab, ArrowDown, Backspace) with proper keyCodes and modifier flags.",
+    params: "key (string, required), modifiers (string[], optional)",
+    returns: "KeyEventResult",
+    example: '{"key": "Enter"}'
+  },
+  {
+    name: "mouse_action",
+    category: "interaction",
+    badge: "MOUSE GESTURE",
+    description: "Simulates mouse movement, hover states, drag-and-drop operations, and double-clicks on coordinate targets.",
+    params: "action ('hover'|'drag'|'dblclick'), selector (string)",
+    returns: "MouseActionResult",
+    example: '{"action": "hover", "selector": ".menu-item"}'
+  },
+  {
+    name: "assert_element_state",
+    category: "interaction",
+    badge: "ASSERTION",
+    description: "Performs deterministic QA assertions on element existence, text matching, visibility, or computed CSS properties.",
+    params: "selector (string), condition ('is_visible'|'contains_text')",
+    returns: "AssertionReport",
+    example: '{"selector": "h1", "condition": "is_visible"}'
+  },
+
+  // Category 5: System & Tabs
+  {
+    name: "list_tabs",
+    category: "system",
+    badge: "TABS",
+    description: "Returns all open Chrome tabs with tab IDs, titles, URLs, active status, and window dimensions.",
     params: "None",
+    returns: "TabInfo[]",
     example: "{}"
+  },
+  {
+    name: "open_tab",
+    category: "system",
+    badge: "NAVIGATION",
+    description: "Opens a new browser tab and navigates directly to the specified target URL.",
+    params: "url (string, required)",
+    returns: "OpenedTabInfo",
+    example: '{"url": "https://linktree.work.gd"}'
+  },
+  {
+    name: "navigate",
+    category: "system",
+    badge: "NAVIGATION",
+    description: "Navigates an existing browser tab to any target URL with automatic page load synchronization.",
+    params: "url (string, required), tabId (number, optional)",
+    returns: "NavigationStatus",
+    example: '{"url": "https://github.com"}'
+  },
+  {
+    name: "get_tab_info",
+    category: "system",
+    badge: "METADATA",
+    description: "Extracts metadata of the active or target tab including dimensions, favicon, load status, and audio state.",
+    params: "tabId (number, optional)",
+    returns: "TabMetadata",
+    example: "{}"
+  },
+  {
+    name: "set_viewport_size",
+    category: "system",
+    badge: "RESPONSIVE",
+    description: "Resizes the Chrome window to test responsive design breakpoints (mobile 375px, tablet 768px, desktop 1440px).",
+    params: "width (number), height (number)",
+    returns: "ViewportSize",
+    example: '{"width": 1200, "height": 800}'
+  },
+  {
+    name: "execute_script",
+    category: "system",
+    badge: "EVAL",
+    description: "Evaluates runtime JavaScript expressions directly in the main execution world with access to window globals and state stores.",
+    params: "script (string, required)",
+    returns: "ExecutionResult",
+    example: '{"script": "window.location.href"}'
+  },
+  {
+    name: "record_user_flow",
+    category: "system",
+    badge: "PLAYWRIGHT",
+    description: "Records user clicks, inputs, and navigation gestures in Chrome and synthesizes production-ready Playwright test scripts.",
+    params: "action ('start'|'stop'|'status')",
+    returns: "PlaywrightScriptResult",
+    example: '{"action": "status"}'
   }
 ];
 
-export default function Landing() {
-  const [showModal, setShowModal] = useState(false);
-  const [toastMessage, setToastMessage] = useState<string | null>(null);
+export default function LandingPage() {
   const [activeCategory, setActiveCategory] = useState<string>("all");
   const [searchQuery, setSearchQuery] = useState<string>("");
-  const [activeDemo, setActiveDemo] = useState<"dom" | "batch" | "security" | "network">("dom");
+  const [showModal, setShowModal] = useState<boolean>(false);
   const [copiedKey, setCopiedKey] = useState<string | null>(null);
+  const [cockpitTab, setCockpitTab] = useState<"terminal" | "network" | "scope">("terminal");
+  const [featuresOpen, setFeaturesOpen] = useState<boolean>(false);
+  const cockpitRef = useRef<HTMLDivElement | null>(null);
 
-  const showToast = (message: string) => {
-    setToastMessage(message);
-    setTimeout(() => {
-      setToastMessage((curr) => (curr === message ? null : curr));
-    }, 3200);
-  };
-
-  const copyToClipboard = (text: string, key: string, label: string) => {
+  const copyToClipboard = (text: string, key: string) => {
     navigator.clipboard.writeText(text);
     setCopiedKey(key);
-    showToast(`Copied ${label} to clipboard!`);
     setTimeout(() => {
-      setCopiedKey(null);
+      setCopiedKey((curr) => (curr === key ? null : curr));
     }, 2000);
+  };
+
+  // Dynamic 3D Cockpit Tilt based on mouse position
+  const handleCockpitMouseMove = (e: React.MouseEvent<HTMLDivElement>) => {
+    if (!cockpitRef.current) return;
+    const rect = cockpitRef.current.getBoundingClientRect();
+    const x = e.clientX - rect.left;
+    const y = e.clientY - rect.top;
+    const rotX = ((y / rect.height) - 0.5) * -10;
+    const rotY = ((x / rect.width) - 0.5) * 10;
+    cockpitRef.current.style.transform = `perspective(1000px) rotateX(${rotX}deg) rotateY(${rotY}deg) scale3d(1.01, 1.01, 1.01)`;
+  };
+
+  const handleCockpitMouseLeave = () => {
+    if (!cockpitRef.current) return;
+    cockpitRef.current.style.transform = `perspective(1000px) rotateX(0deg) rotateY(0deg) scale3d(1, 1, 1)`;
   };
 
   const filteredTools = useMemo(() => {
     return TOOLS_CATALOG.filter((tool) => {
-      const matchesCategory = activeCategory === "all" || tool.category === activeCategory;
+      const matchesCategory =
+        activeCategory === "all" || tool.category === activeCategory;
       const matchesSearch =
         tool.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
         tool.description.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -325,94 +440,171 @@ export default function Landing() {
     });
   }, [activeCategory, searchQuery]);
 
-  useEffect(() => {
-    const handleAnchorClick = (e: MouseEvent) => {
-      const target = e.currentTarget as HTMLAnchorElement;
-      const href = target.getAttribute("href");
-      if (href && href.startsWith("#") && href.length > 1) {
-        e.preventDefault();
-        try {
-          document.querySelector(href)?.scrollIntoView({
-            behavior: "smooth",
-          });
-        } catch (e) {}
-      }
-    };
-
-    const anchors = document.querySelectorAll('a[href^="#"]');
-    anchors.forEach((anchor) => {
-      anchor.addEventListener("click", handleAnchorClick as EventListener);
-    });
-
-    return () => {
-      anchors.forEach((anchor) => {
-        anchor.removeEventListener("click", handleAnchorClick as EventListener);
-      });
-    };
-  }, []);
-
   return (
-    <div className="min-h-screen bg-[#0d0b12] text-[#e6e0e9] selection:bg-[#cfbcff]/30 relative overflow-x-hidden">
-      {/* Background Lighting & Dot Grid */}
-      <div className="absolute top-0 left-1/2 -translate-x-1/2 w-full max-w-7xl h-[700px] luminous-spotlight pointer-events-none -z-10"></div>
-      <div className="absolute top-0 inset-x-0 h-[650px] hero-grid-pattern [mask-image:radial-gradient(ellipse_60%_50%_at_50%_0%,#000_70%,transparent_100%)] pointer-events-none -z-10"></div>
-      <div className="absolute top-[35%] right-[-12%] w-[550px] h-[550px] bg-[#e7c365]/8 blur-[160px] pointer-events-none -z-10"></div>
-      <div className="absolute top-[65%] left-[-12%] w-[600px] h-[600px] bg-[#22d3ee]/8 blur-[180px] pointer-events-none -z-10"></div>
+    <div className="bg-[#0b0912] text-[#e6e0e9] min-h-screen flex flex-col selection:bg-[#cfbcff]/30 relative overflow-x-hidden font-sans">
+      {/* 1. Ambient WebGL Quantum Plasma & Interactive Cursor Animation */}
+      <CyberBackground />
 
-      {/* Floating Glassmorphic Header Dock */}
+      {/* 2. Floating Glassmorphic Header */}
       <header className="fixed top-4 inset-x-0 z-50 px-4 sm:px-8 flex justify-center pointer-events-none">
-        <nav className="pointer-events-auto w-full max-w-6xl bg-[#121018]/85 backdrop-blur-2xl border border-white/12 rounded-full px-4 sm:px-6 py-2.5 shadow-[0_12px_40px_rgba(0,0,0,0.65),0_0_0_1px_rgba(255,255,255,0.06)] flex items-center justify-between transition-all">
-          {/* Brand Identity */}
+        <nav className="pointer-events-auto w-full max-w-5xl bg-[#120f1f]/85 backdrop-blur-2xl border border-white/10 rounded-full px-4 sm:px-6 py-2 shadow-[0_12px_45px_rgba(0,0,0,0.7)] flex items-center justify-between transition-all duration-300 hover:border-white/20">
+          {/* Official Brand Logo */}
           <Link href="/" className="flex items-center gap-2.5 group">
-            <img
-              className="h-8 w-8 object-contain transition-transform duration-300 group-hover:scale-105"
-              src="/android-chrome-512x512.png"
-              alt="Xtra DevPilot Logo"
-            />
+            <div className="relative h-8 w-8 rounded-lg overflow-hidden shadow-md shadow-[#22d3ee]/20 group-hover:scale-105 transition-transform flex items-center justify-center bg-black/40 border border-white/10">
+              <img
+                src="/xtradevpilot_logo.png"
+                alt="Xtra DevPilot Logo"
+                className="h-full w-full object-contain p-0.5"
+              />
+            </div>
             <div className="flex items-center gap-2">
-              <span className="font-headline-lg text-base sm:text-lg font-bold text-white tracking-tight group-hover:text-[#cfbcff] transition-colors">
+              <span className="text-base sm:text-lg font-bold text-white tracking-tight">
                 Xtra DevPilot
               </span>
-              <span className="text-[10px] uppercase font-label-mono px-2 py-0.5 bg-[#cfbcff]/15 text-[#cfbcff] rounded-full border border-[#cfbcff]/30 font-semibold">
+              <span className="text-[10px] uppercase font-label-mono px-2 py-0.5 bg-[#cfbcff]/15 text-[#cfbcff] rounded-full border border-[#cfbcff]/30 font-semibold tracking-wider">
                 v2.0
               </span>
             </div>
           </Link>
 
-          {/* Navigation Items (Desktop) */}
-          <div className="hidden md:flex items-center gap-1 text-xs font-medium text-[#cbc4d2]">
-            <a className="px-3.5 py-1.5 rounded-full hover:text-white hover:bg-white/8 transition-all" href="#features">
-              Features
-            </a>
-            <a className="px-3.5 py-1.5 rounded-full hover:text-white hover:bg-white/8 transition-all flex items-center gap-1.5" href="#tools">
-              <span>33 Tools</span>
-              <span className="w-1.5 h-1.5 rounded-full bg-[#cfbcff]"></span>
-            </a>
-            <a className="px-3.5 py-1.5 rounded-full hover:text-white hover:bg-white/8 transition-all" href="#architecture">
-              Architecture
-            </a>
-            <a className="px-3.5 py-1.5 rounded-full hover:text-white hover:bg-white/8 transition-all" href="#integrations">
+          {/* Minimalist Center Navigation with Features Dropdown */}
+          <div className="hidden md:flex items-center gap-2 text-xs font-medium text-[#cbc4d2]">
+            {/* Features Dropdown */}
+            <div
+              className="relative group/dropdown"
+              onMouseEnter={() => setFeaturesOpen(true)}
+              onMouseLeave={() => setFeaturesOpen(false)}
+            >
+              <button
+                onClick={() => setFeaturesOpen(!featuresOpen)}
+                className={`px-3.5 py-1.5 rounded-full hover:text-white transition-all flex items-center gap-1 cursor-pointer ${
+                  featuresOpen ? "bg-white/10 text-white" : "hover:bg-white/5"
+                }`}
+              >
+                <span>Features</span>
+                <span
+                  className={`material-symbols-outlined text-sm transition-transform duration-200 ${
+                    featuresOpen
+                      ? "rotate-180 text-[#cfbcff]"
+                      : "text-white/50 group-hover/dropdown:rotate-180 group-hover/dropdown:text-[#cfbcff]"
+                  }`}
+                >
+                  expand_more
+                </span>
+              </button>
+
+              {/* Dropdown Menu Card */}
+              <div
+                className={`absolute top-full left-1/2 -translate-x-1/2 pt-2 w-80 z-50 ${
+                  featuresOpen ? "block" : "hidden group-hover/dropdown:block"
+                }`}
+              >
+                <div className="glass-panel rounded-2xl p-2 shadow-[0_20px_50px_rgba(0,0,0,0.85)] border border-white/15 flex flex-col gap-1">
+                    <a
+                      href="#reverse-engineering"
+                      onClick={() => setFeaturesOpen(false)}
+                      className="flex items-start gap-3 p-2.5 rounded-xl hover:bg-white/5 transition-all group/item"
+                    >
+                      <div className="w-8 h-8 rounded-lg bg-emerald-500/15 border border-emerald-500/30 flex items-center justify-center text-emerald-300 shrink-0 group-hover/item:scale-105 transition-transform">
+                        <span className="material-symbols-outlined text-base">biotech</span>
+                      </div>
+                      <div>
+                        <div className="text-xs font-bold text-white flex items-center gap-1.5">
+                          Reverse Engineering
+                          <span className="text-[9px] font-label-mono px-1.5 py-0.2 rounded bg-emerald-500/20 text-emerald-300 font-semibold">6 Tools</span>
+                        </div>
+                        <div className="text-[11px] text-[#cbc4d2] leading-tight mt-0.5">
+                          Sourcemap decompiler, OpenAPI generator, AST recovery
+                        </div>
+                      </div>
+                    </a>
+
+                    <a
+                      href="#tools"
+                      onClick={() => setFeaturesOpen(false)}
+                      className="flex items-start gap-3 p-2.5 rounded-xl hover:bg-white/5 transition-all group/item"
+                    >
+                      <div className="w-8 h-8 rounded-lg bg-[#cfbcff]/15 border border-[#cfbcff]/30 flex items-center justify-center text-[#cfbcff] shrink-0 group-hover/item:scale-105 transition-transform">
+                        <span className="material-symbols-outlined text-base">handyman</span>
+                      </div>
+                      <div>
+                        <div className="text-xs font-bold text-white flex items-center gap-1.5">
+                          40 Browser Tools
+                          <span className="text-[9px] font-label-mono px-1.5 py-0.2 rounded bg-[#cfbcff]/20 text-[#cfbcff] font-semibold">Atomic</span>
+                        </div>
+                        <div className="text-[11px] text-[#cbc4d2] leading-tight mt-0.5">
+                          Granular DOM, Network HAR, CDP actions & state
+                        </div>
+                      </div>
+                    </a>
+
+                    <a
+                      href="#cli"
+                      onClick={() => setFeaturesOpen(false)}
+                      className="flex items-start gap-3 p-2.5 rounded-xl hover:bg-white/5 transition-all group/item"
+                    >
+                      <div className="w-8 h-8 rounded-lg bg-amber-500/15 border border-amber-500/30 flex items-center justify-center text-amber-300 shrink-0 group-hover/item:scale-105 transition-transform">
+                        <span className="material-symbols-outlined text-base">terminal</span>
+                      </div>
+                      <div>
+                        <div className="text-xs font-bold text-white">
+                          Universal CLI Suite
+                        </div>
+                        <div className="text-[11px] text-[#cbc4d2] leading-tight mt-0.5">
+                          Terminal automation commands for developers & agents
+                        </div>
+                      </div>
+                    </a>
+
+                    <a
+                      href="#architecture"
+                      onClick={() => setFeaturesOpen(false)}
+                      className="flex items-start gap-3 p-2.5 rounded-xl hover:bg-white/5 transition-all group/item"
+                    >
+                      <div className="w-8 h-8 rounded-lg bg-cyan-500/15 border border-cyan-500/30 flex items-center justify-center text-cyan-300 shrink-0 group-hover/item:scale-105 transition-transform">
+                        <span className="material-symbols-outlined text-base">security</span>
+                      </div>
+                      <div>
+                        <div className="text-xs font-bold text-white">
+                          Local Architecture
+                        </div>
+                        <div className="text-[11px] text-[#cbc4d2] leading-tight mt-0.5">
+                          100% on-device WebSocket bridge with zero cloud telemetry
+                        </div>
+                      </div>
+                    </a>
+                  </div>
+                </div>
+            </div>
+
+            <a
+              className="px-3.5 py-1.5 rounded-full hover:text-white hover:bg-white/5 transition-all"
+              href="#integrations"
+            >
               Integrations
             </a>
-            <Link className="px-3.5 py-1.5 rounded-full hover:text-[#cfbcff] hover:bg-[#cfbcff]/10 transition-all" href="/docs">
+
+            <Link
+              className="px-3.5 py-1.5 rounded-full hover:text-white hover:bg-white/5 transition-all"
+              href="/docs"
+            >
               Docs
             </Link>
           </div>
 
-          {/* Action CTAs */}
+          {/* Right Action Buttons */}
           <div className="flex items-center gap-2 sm:gap-3">
             <a
               href="/xtradevpilot-extension.zip"
               download="xtradevpilot-extension.zip"
-              onClick={() => showToast("Downloading XtraDevPilot Chrome Extension (.zip)...")}
-              className="hidden sm:inline-flex items-center gap-1.5 bg-white/6 hover:bg-white/12 border border-white/15 hover:border-[#cfbcff]/40 text-white text-xs font-label-mono px-3 py-1.5 rounded-full transition-all cursor-pointer"
+              className="hidden sm:inline-flex items-center gap-1.5 bg-white/5 hover:bg-white/10 border border-white/10 text-white text-xs font-label-mono px-3.5 py-1.5 rounded-full transition-all cursor-pointer"
             >
               <span className="material-symbols-outlined text-sm text-[#cfbcff]">download</span>
               Extension (.zip)
             </a>
             <button
               onClick={() => setShowModal(true)}
-              className="primary-gradient text-white font-bold text-xs sm:text-sm px-4 sm:px-5 py-1.5 sm:py-2 rounded-full shadow-[0_0_24px_rgba(103,80,164,0.6)] hover:shadow-[0_0_32px_rgba(207,188,255,0.6)] hover:scale-[1.03] active:scale-[0.98] transition-all cursor-pointer flex items-center gap-1.5"
+              className="bg-gradient-to-r from-[#6750a4] via-[#7d65b9] to-[#cfbcff] hover:brightness-110 text-white font-semibold text-xs sm:text-sm px-4 sm:px-5 py-2 rounded-full shadow-[0_0_25px_rgba(103,80,164,0.5)] flex items-center gap-1.5 transition-all transform active:scale-95 cursor-pointer"
             >
               <span className="material-symbols-outlined text-base">rocket_launch</span>
               Get Started
@@ -421,765 +613,928 @@ export default function Landing() {
         </nav>
       </header>
 
-      {/* Hero Section */}
+      {/* 3. Hero Section & Cockpit Interface */}
       <section className="relative pt-36 sm:pt-44 pb-20 px-4 sm:px-8 max-w-7xl mx-auto flex flex-col items-center text-center" id="features">
         {/* Release Announcement Pill */}
-        <div className="mb-6">
+        <div className="mb-6 transform hover:scale-105 transition-transform">
           <a
-            href="#tools"
-            className="group inline-flex items-center gap-2.5 px-4 py-1.5 glass-pill rounded-full text-xs font-label-mono text-[#cbc4d2] hover:text-white transition-all cursor-pointer"
+            href="#reverse-engineering"
+            className="inline-flex items-center gap-2 px-4 py-1.5 glass-pill rounded-full text-xs font-label-mono text-[#cbc4d2] border border-[#cfbcff]/20 shadow-[0_0_20px_rgba(207,188,255,0.15)] cursor-pointer"
           >
-            <span className="flex h-2 w-2 rounded-full bg-emerald-400 animate-ping"></span>
             <span className="text-[#cfbcff] font-semibold tracking-wide">
-              PRODUCTION RELEASE v2.0
+              RELEASE v2.0 • REVERSE ENGINEERING SUITE
             </span>
-            <span className="text-[#948e9c] select-none">•</span>
-            <span className="hidden sm:inline text-[#e6e0e9]">All 33 MCP Tools Live-Verified</span>
-            <span className="material-symbols-outlined text-sm text-[#cfbcff] group-hover:translate-x-0.5 transition-transform">
-              arrow_forward
-            </span>
+            <span className="material-symbols-outlined text-xs text-white/60">arrow_forward</span>
           </a>
         </div>
 
         {/* Hero Title */}
-        <h1 className="text-4xl sm:text-6xl lg:text-[72px] font-extrabold tracking-[-0.035em] text-white leading-[1.08] max-w-5xl mx-auto">
-          The Local-First AI Browser Bridge for{" "}
-          <span className="bg-gradient-to-r from-[#cfbcff] via-[#e9ddff] to-[#22d3ee] bg-clip-text text-fill-transparent drop-shadow-[0_0_35px_rgba(207,188,255,0.35)]">
-            Developers & AI Agents.
+        <h1 className="text-4xl sm:text-6xl lg:text-[76px] font-extrabold tracking-[-0.035em] text-white leading-[1.08] max-w-5xl mx-auto">
+          The Local-First AI Browser Bridge for <br className="hidden sm:inline" />
+          <span className="glow-gradient-text drop-shadow-[0_0_35px_rgba(103,80,164,0.4)]">
+            Developers &amp; AI Agents.
           </span>
         </h1>
 
-        {/* Hero Subtitle */}
+        {/* Subtitle */}
         <p className="mt-6 text-[#cbc4d2] text-base sm:text-lg md:text-xl max-w-3xl mx-auto leading-relaxed font-normal">
-          Empowering <span className="text-white font-semibold">Full-Stack Developers</span>, <span className="text-white font-semibold">Autonomous AI Agents</span>, <span className="text-white font-semibold">QA Automation Teams</span>, and <span className="text-white font-semibold">Data Engineers</span>. Connect Google Antigravity, Claude Desktop, and Cursor directly to live Chrome tabs to inspect DOM, automate forms, stream telemetry, and synthesize Playwright flows with zero cloud residency.
+          Empowering Full-Stack Developers, Autonomous AI Agents, Reverse Engineers, and QA Teams. Connect Google Antigravity, Claude Desktop, and Cursor directly to live Chrome tabs with zero cloud residency.
         </p>
 
-        {/* Multi-Persona / Multi-User Pills */}
-        <div className="mt-6 flex flex-wrap items-center justify-center gap-2 max-w-3xl">
-          <span className="text-xs font-label-mono text-[#948e9c] mr-1">Built for:</span>
-          <span className="px-3 py-1 rounded-full text-xs font-label-mono bg-white/6 text-[#cfbcff] border border-white/10 flex items-center gap-1.5 shadow-sm">
-            <span className="material-symbols-outlined text-sm">code</span>
-            Full-Stack Developers
-          </span>
-          <span className="px-3 py-1 rounded-full text-xs font-label-mono bg-white/6 text-[#e7c365] border border-white/10 flex items-center gap-1.5 shadow-sm">
-            <span className="material-symbols-outlined text-sm">smart_toy</span>
-            Autonomous AI Agents
-          </span>
-          <span className="px-3 py-1 rounded-full text-xs font-label-mono bg-white/6 text-[#22d3ee] border border-white/10 flex items-center gap-1.5 shadow-sm">
-            <span className="material-symbols-outlined text-sm">fact_check</span>
-            QA & Automation Teams
-          </span>
-          <span className="px-3 py-1 rounded-full text-xs font-label-mono bg-white/6 text-purple-300 border border-white/10 flex items-center gap-1.5 shadow-sm">
-            <span className="material-symbols-outlined text-sm">database</span>
-            Data Scrapers & Analysts
-          </span>
-        </div>
-
-        {/* Unified Action Command Dock */}
+        {/* Action Command Bar */}
         <div className="mt-8 flex flex-wrap items-center justify-center gap-3.5 max-w-2xl w-full">
-          {/* Primary CTA */}
-          <a
-            href="/xtradevpilot-extension.zip"
-            download="xtradevpilot-extension.zip"
-            onClick={() => showToast("Downloading Extension Bundle (xtradevpilot-extension.zip)...")}
-            className="primary-gradient text-white font-bold px-6 sm:px-8 py-3.5 rounded-full shadow-[0_0_30px_rgba(207,188,255,0.4)] hover:shadow-[0_0_40px_rgba(207,188,255,0.6)] hover:scale-[1.02] active:scale-[0.98] transition-all flex items-center gap-2 text-sm cursor-pointer"
+          <button
+            onClick={() => copyToClipboard("npx xtradevpilot-mcp", "hero-cmd")}
+            className="px-5 py-2.5 rounded-xl bg-white/5 border border-white/10 hover:border-white/20 text-white font-label-mono text-xs flex items-center gap-2 backdrop-blur-md shadow-inner transition-all hover:bg-white/10 cursor-pointer"
           >
-            <span className="material-symbols-outlined text-lg">download</span>
-            Download Extension (.zip)
+            <span className="text-[#cfbcff]">$</span>
+            <span>npx xtradevpilot-mcp</span>
+            <span className="material-symbols-outlined text-sm opacity-60">
+              {copiedKey === "hero-cmd" ? "check" : "content_copy"}
+            </span>
+          </button>
+
+          <a
+            href="#reverse-engineering"
+            className="px-5 py-2.5 rounded-xl bg-[#22d3ee]/10 border border-[#22d3ee]/30 text-[#22d3ee] hover:bg-[#22d3ee]/20 text-xs font-semibold flex items-center gap-1.5 transition-all cursor-pointer"
+          >
+            <span className="material-symbols-outlined text-sm">explore</span>
+            Explore 6 REA Tools
           </a>
 
-          {/* Copyable Terminal Input Box */}
-          <div className="flex items-center bg-[#141218]/95 border border-white/15 hover:border-[#cfbcff]/50 rounded-full px-4 py-2.5 transition-all group shadow-sm">
-            <span className="text-xs text-[#948e9c] font-label-mono mr-2 select-none">$</span>
-            <code className="text-xs font-label-mono text-[#cfbcff] pr-3 select-all">
-              npx xtradevpilot-mcp
-            </code>
-            <button
-              onClick={() => copyToClipboard("npx xtradevpilot-mcp", "hero-mcp", "npx command")}
-              title="Copy command"
-              className="p-1 hover:bg-white/10 rounded-full transition-colors text-[#cbc4d2] hover:text-white cursor-pointer"
-            >
-              <span className="material-symbols-outlined text-sm">
-                {copiedKey === "hero-mcp" ? "check" : "content_copy"}
-              </span>
-            </button>
-          </div>
-
-          {/* Docs Link */}
           <Link
             href="/docs"
-            className="glass-pill text-white font-semibold px-5 py-3 rounded-full hover:bg-white/10 transition-colors flex items-center gap-1.5 text-xs sm:text-sm"
+            className="px-5 py-2.5 rounded-xl bg-white/5 border border-white/10 text-white hover:bg-white/10 text-xs font-semibold flex items-center gap-1.5 transition-all"
           >
             Tool Reference
             <span className="material-symbols-outlined text-sm">arrow_forward</span>
           </Link>
         </div>
 
-        {/* Trust Badges Row */}
-        <div className="mt-10 flex flex-wrap items-center justify-center gap-6 sm:gap-10 text-xs font-label-mono text-[#948e9c] pt-4 border-t border-white/10 w-full max-w-3xl">
-          <div className="flex items-center gap-2 text-[#e6e0e9]">
-            <span className="material-symbols-outlined text-emerald-400 text-base">check_circle</span>
-            <span>33/33 Live-Verified Tools</span>
-          </div>
-          <div className="flex items-center gap-2 text-[#e6e0e9]">
-            <span className="material-symbols-outlined text-[#cfbcff] text-base">bolt</span>
-            <span>&lt; 12ms WebSocket Bridge</span>
-          </div>
-          <div className="flex items-center gap-2 text-[#e6e0e9]">
-            <span className="material-symbols-outlined text-[#22d3ee] text-base">shield</span>
-            <span>100% Local-First (Zero Cloud)</span>
-          </div>
-          <div className="flex items-center gap-2 text-[#e6e0e9]">
-            <span className="material-symbols-outlined text-[#e7c365] text-base">code</span>
-            <span>React 19 & Next.js Native</span>
-          </div>
-        </div>
-
-        {/* Hero Centerpiece Showcase: Interactive IDE & Browser Cockpit */}
-        <div className="mt-12 w-full max-w-6xl relative">
-          <div className="glass-card rounded-2xl border border-white/15 shadow-[0_25px_90px_rgba(103,80,164,0.35)] overflow-hidden backdrop-blur-2xl text-left">
-            {/* Cockpit Header Toolbar */}
-            <div className="bg-[#171420] px-4 sm:px-6 py-3 border-b border-white/10 flex flex-wrap items-center justify-between gap-3">
+        {/* 3D Interactive Cockpit Area */}
+        <div className="relative w-full max-w-5xl mt-14" id="cockpit-container">
+          {/* Main 3D Tilt Cockpit Card */}
+          <div
+            ref={cockpitRef}
+            onMouseMove={handleCockpitMouseMove}
+            onMouseLeave={handleCockpitMouseLeave}
+            className="glass-panel rounded-2xl overflow-hidden shadow-[0_25px_80px_rgba(0,0,0,0.85)] border border-white/15 transition-transform duration-200 text-left"
+            id="cockpit-tilt"
+          >
+            {/* Header Toolbar */}
+            <div className="px-4 py-3 bg-black/40 border-b border-white/10 flex items-center justify-between">
               <div className="flex items-center gap-2">
-                <div className="w-3 h-3 rounded-full bg-[#ff5f56]"></div>
-                <div className="w-3 h-3 rounded-full bg-[#ffbd2e]"></div>
-                <div className="w-3 h-3 rounded-full bg-[#27c93f]"></div>
-                <span className="text-xs font-label-mono text-[#948e9c] ml-3 hidden sm:inline">
-                  Xtra DevPilot Cockpit • WebSocket Bridge Active
+                <div className="flex gap-1.5">
+                  <span className="w-3 h-3 rounded-full bg-red-500/80 inline-block"></span>
+                  <span className="w-3 h-3 rounded-full bg-yellow-500/80 inline-block"></span>
+                  <span className="w-3 h-3 rounded-full bg-emerald-500/80 inline-block"></span>
+                </div>
+                <span className="ml-3 font-label-mono text-xs text-white/50 flex items-center gap-1.5">
+                  <span className="material-symbols-outlined text-xs text-emerald-400">lock</span>
+                  ws://127.0.0.1:42819 [chrome_tab_71]
                 </span>
               </div>
-
-              {/* Scenario Switcher Tabs */}
-              <div className="flex flex-wrap items-center gap-1.5">
-                {[
-                  { id: "dom", label: "DOM Inspection", icon: "search" },
-                  { id: "batch", label: "Batch Form", icon: "fact_check" },
-                  { id: "security", label: "Security Audit", icon: "security" },
-                  { id: "network", label: "Network & Vitals", icon: "waterfall_chart" },
-                ].map((s) => (
-                  <button
-                    key={s.id}
-                    onClick={() => setActiveDemo(s.id as any)}
-                    className={`px-3 py-1 rounded-full text-xs font-label-mono transition-all flex items-center gap-1.5 cursor-pointer ${
-                      activeDemo === s.id
-                        ? "bg-[#cfbcff] text-[#381e72] font-bold shadow-sm"
-                        : "bg-white/5 text-[#cbc4d2] hover:bg-white/10 hover:text-white"
-                    }`}
-                  >
-                    <span className="material-symbols-outlined text-sm">{s.icon}</span>
-                    <span>{s.label}</span>
-                  </button>
-                ))}
+              <div className="flex items-center gap-2 text-[11px] font-label-mono text-[#cfbcff]">
+                <span className="px-2.5 py-0.5 rounded-full bg-white/5 border border-white/10">
+                  Local Bridge Attached
+                </span>
               </div>
             </div>
 
-            {/* Cockpit Split Dual Panes */}
-            <div className="grid lg:grid-cols-12 divide-y lg:divide-y-0 lg:divide-x divide-white/10 bg-[#0f0d14]">
-              {/* Left Pane: AI IDE Agent Window */}
-              <div className="lg:col-span-6 p-5 sm:p-6 space-y-4 font-label-mono text-xs">
-                <div className="flex items-center justify-between pb-2 border-b border-white/5 text-[#948e9c]">
-                  <span className="flex items-center gap-2 text-white font-semibold">
-                    <span className="material-symbols-outlined text-[#cfbcff] text-base">terminal</span>
-                    IDE Agent Session (Antigravity / Claude)
-                  </span>
-                  <span className="text-emerald-400 flex items-center gap-1">
-                    <span className="w-2 h-2 rounded-full bg-emerald-400"></span>
-                    JSON-RPC Active
-                  </span>
-                </div>
+            {/* Navigation Tabs */}
+            <div className="bg-black/20 border-b border-white/5 px-4 flex gap-4 text-xs font-label-mono">
+              <button
+                onClick={() => setCockpitTab("terminal")}
+                className={`py-2.5 flex items-center gap-1.5 font-medium transition-colors cursor-pointer ${
+                  cockpitTab === "terminal"
+                    ? "text-[#cfbcff] border-b-2 border-[#cfbcff]"
+                    : "text-white/50 hover:text-white"
+                }`}
+              >
+                <span className="material-symbols-outlined text-sm">terminal</span>
+                Terminal Stream
+              </button>
+              <button
+                onClick={() => setCockpitTab("network")}
+                className={`py-2.5 flex items-center gap-1.5 font-medium transition-colors cursor-pointer ${
+                  cockpitTab === "network"
+                    ? "text-[#cfbcff] border-b-2 border-[#cfbcff]"
+                    : "text-white/50 hover:text-white"
+                }`}
+              >
+                <span className="material-symbols-outlined text-sm">network_check</span>
+                Network Inspect
+              </button>
+              <button
+                onClick={() => setCockpitTab("scope")}
+                className={`py-2.5 flex items-center gap-1.5 font-medium transition-colors cursor-pointer ${
+                  cockpitTab === "scope"
+                    ? "text-[#cfbcff] border-b-2 border-[#cfbcff]"
+                    : "text-white/50 hover:text-white"
+                }`}
+              >
+                <span className="material-symbols-outlined text-sm">integration_instructions</span>
+                Source Scope
+              </button>
+            </div>
 
-                {activeDemo === "dom" && (
-                  <div className="space-y-3">
-                    <div className="text-[#948e9c] text-[11px]">
-                      // Agent analyzing button structure on active tab
+            {/* Terminal Body */}
+            <div className="p-5 font-label-mono text-xs leading-relaxed space-y-2 overflow-x-auto bg-[#0a0812]/90 min-h-[220px]">
+              {cockpitTab === "terminal" && (
+                <>
+                  <div className="text-white/40">// Establishing local WebSocket link to Chrome Extension MV3 on port 42819...</div>
+                  <div className="text-emerald-400 font-semibold">[READY] Attached to Tab &quot;Checkout / Payment Gateway (Stripe v3)&quot; (tabId: 104)</div>
+                  <div className="text-white/70">
+                    <span className="text-[#cfbcff]">&gt; MCP stdio:</span> calling <code className="text-yellow-300 font-bold">rea_scope_app</code>(maxDepth: 3, frameworkDetect: true)
+                  </div>
+                  <div className="pl-4 border-l border-white/10 text-white/60 space-y-1">
+                    <div><span className="text-cyan-400">✓ Framework detected:</span> Next.js 15 (App Router) + Tailwind CSS + TRPC</div>
+                    <div><span className="text-cyan-400">✓ Source Maps:</span> 14 mapped bundles unpacked into memory</div>
+                    <div><span className="text-cyan-400">✓ Endpoints identified:</span> 12 internal APIs, 3 WebSocket push handlers</div>
+                  </div>
+                  <div className="text-white/70">
+                    <span className="text-[#cfbcff]">&gt; Agent Execution:</span> <span className="text-emerald-300">rea_generate_openapi</span> &rarr; <span className="text-white">Generated valid OpenAPI 3.1 YAML in 240ms</span>
+                  </div>
+                  <div className="p-3 bg-white/5 rounded-lg border border-white/10 text-[11px] text-white/80 flex items-center justify-between">
+                    <span>&quot;rea_bundle&quot;: &#123; &quot;scope&quot;: &quot;completed&quot;, &quot;endpoints&quot;: 12, &quot;types&quot;: &quot;./types/app.d.ts&quot;, &quot;coverage&quot;: &quot;98.4%&quot; &#125;</span>
+                    <span className="text-emerald-400 font-bold">200 OK</span>
+                  </div>
+                </>
+              )}
+
+              {cockpitTab === "network" && (
+                <>
+                  <div className="text-white/40">// Capturing live HTTP/XHR traffic &amp; WebSocket frames on active tab...</div>
+                  <div className="space-y-1.5 text-[11px]">
+                    <div className="flex justify-between items-center text-white/80">
+                      <span className="text-emerald-400 font-bold">POST /api/trpc/checkout.createSession</span>
+                      <span className="text-white/40">200 OK • 32ms</span>
                     </div>
-                    <div className="bg-[#141218] p-3.5 rounded-lg border border-white/10 space-y-1.5 text-[#cbc4d2]">
-                      <div className="text-[#cfbcff] font-bold">
-                        &gt; call_mcp_tool(&quot;xtradevpilot&quot;, &quot;get_clean_dom_snapshot&quot;, &#123; rootSelector: &quot;main&quot; &#125;)
-                      </div>
-                      <div className="text-emerald-400 text-[11px]">
-                        ✔ 200 OK — Token-optimized subtree returned
-                      </div>
+                    <div className="flex justify-between items-center text-white/80">
+                      <span className="text-[#22d3ee] font-bold">GET /_next/static/chunks/app/checkout-bundle.js.map</span>
+                      <span className="text-white/40">200 OK • 74ms (1.4MB)</span>
                     </div>
-                    <div className="bg-[#141218] p-3.5 rounded-lg border border-white/10 space-y-2">
-                      <div className="text-[11px] text-[#e7c365]">
-                        &gt; call_mcp_tool(&quot;xtradevpilot&quot;, &quot;highlight_element&quot;, &#123; selector: &quot;button.submit-btn&quot; &#125;)
-                      </div>
-                      <div className="text-xs text-[#cbc4d2] pl-2 border-l-2 border-[#cfbcff]/50">
-                        Visual overlay applied: pulsing neon border injected at element bounding rect [x: 480, y: 312, w: 142, h: 44]
-                      </div>
-                    </div>
-                    <div className="flex justify-between items-center text-[11px] text-[#948e9c] pt-1">
-                      <span className="text-emerald-400 font-semibold">Token Savings: 94.2%</span>
-                      <span>Latency: 7.8ms</span>
+                    <div className="flex justify-between items-center text-white/80">
+                      <span className="text-purple-300 font-bold">WS wss://stream.live/v1/telemetry</span>
+                      <span className="text-white/40">101 Switching Protocols</span>
                     </div>
                   </div>
-                )}
-
-                {activeDemo === "batch" && (
-                  <div className="space-y-3">
-                    <div className="text-[#948e9c] text-[11px]">
-                      // Agent submitting registration form with React synthetic dispatch
-                    </div>
-                    <div className="bg-[#141218] p-3.5 rounded-lg border border-white/10 space-y-1.5 text-[#cbc4d2]">
-                      <div className="text-[#cfbcff] font-bold">
-                        &gt; call_mcp_tool(&quot;xtradevpilot&quot;, &quot;batch_fill_form&quot;)
-                      </div>
-                      <div className="text-[#948e9c] text-[11px]">
-                        Payload: 4 actions [firstName, lastName, email, role]
-                      </div>
-                    </div>
-                    <div className="bg-[#141218] p-3.5 rounded-lg border border-white/10 space-y-1.5 text-[11px]">
-                      <div className="flex justify-between">
-                        <span className="text-[#cbc4d2]">1. #firstName: &quot;Om&quot;</span>
-                        <span className="text-emerald-400">React State Triggered</span>
-                      </div>
-                      <div className="flex justify-between">
-                        <span className="text-[#cbc4d2]">2. #lastName: &quot;Salunke&quot;</span>
-                        <span className="text-emerald-400">React State Triggered</span>
-                      </div>
-                      <div className="flex justify-between">
-                        <span className="text-[#cbc4d2]">3. #email: &quot;salunkeom474@...&quot;</span>
-                        <span className="text-emerald-400">Validated</span>
-                      </div>
-                    </div>
-                    <div className="flex justify-between items-center text-[11px] text-emerald-400 pt-1">
-                      <span>✔ Succeeded: 4/4 fields in single roundtrip</span>
-                      <span>Time: 148ms</span>
-                    </div>
+                  <div className="mt-3 p-3 bg-white/5 rounded-lg border border-white/10 text-[11px] text-cyan-300">
+                    HarStream: 24 active entries correlated to action &quot;button#submit-order&quot;
                   </div>
-                )}
+                </>
+              )}
 
-                {activeDemo === "security" && (
-                  <div className="space-y-3">
-                    <div className="text-[#948e9c] text-[11px]">
-                      // Agent executing security scan on localStorage & cookies
-                    </div>
-                    <div className="bg-[#141218] p-3.5 rounded-lg border border-white/10 space-y-1.5 text-[#cbc4d2]">
-                      <div className="text-[#cfbcff] font-bold">
-                        &gt; call_mcp_tool(&quot;xtradevpilot&quot;, &quot;run_security_audit&quot;)
-                      </div>
-                      <div className="text-[#ffb4ab] text-[11px] font-semibold">
-                        ⚠ 1 High Severity Security Exposure Detected
-                      </div>
-                    </div>
-                    <div className="bg-[#93000a]/20 p-3.5 rounded-lg border border-[#ffb4ab]/30 space-y-1 text-[11px]">
-                      <div className="text-[#ffb4ab] font-bold">Issue: Plain-text JWT Token in LocalStorage</div>
-                      <div className="text-[#cbc4d2]">Key: <code className="text-[#e7c365]">supabase.auth.token</code></div>
-                      <div className="text-[#948e9c]">
-                        Fix: Migrate to HttpOnly, SameSite=Strict cookies to eliminate XSS token theft vectors.
-                      </div>
-                    </div>
-                    <div className="flex justify-between items-center text-[11px] text-[#948e9c] pt-1">
-                      <span className="text-emerald-400">Forms: Insecure Action 0</span>
-                      <span>HTTPS: Verified</span>
-                    </div>
+              {cockpitTab === "scope" && (
+                <>
+                  <div className="text-white/40">// Sourcemap Project Reconstruction Tree (in-memory AST)...</div>
+                  <div className="text-[#cbc4d2] space-y-1 text-[11px]">
+                    <div>📁 src/</div>
+                    <div className="pl-4">├── 📁 components/CheckoutModal.tsx (23.4 KB)</div>
+                    <div className="pl-4">├── 📁 hooks/usePaymentIntent.ts (11.2 KB)</div>
+                    <div className="pl-4">├── 📁 server/routers/checkout.ts (18.9 KB)</div>
+                    <div className="pl-4">└── 📄 schema.prisma (4.1 KB)</div>
                   </div>
-                )}
+                  <div className="mt-2 text-emerald-400 text-[11px]">
+                    ✔ Reconstructed 43 pristine TypeScript files with 100% path resolution
+                  </div>
+                </>
+              )}
+            </div>
+          </div>
+        </div>
+      </section>
 
-                {activeDemo === "network" && (
-                  <div className="space-y-3">
-                    <div className="text-[#948e9c] text-[11px]">
-                      // Agent intercepting live network waterfall & Core Web Vitals
-                    </div>
-                    <div className="bg-[#141218] p-3.5 rounded-lg border border-white/10 space-y-1.5 text-[#cbc4d2]">
-                      <div className="text-[#cfbcff] font-bold">
-                        &gt; call_mcp_tool(&quot;xtradevpilot&quot;, &quot;get_web_vitals&quot;)
-                      </div>
-                      <div className="text-emerald-400 text-[11px]">
-                        LCP: 0.82s (Good) • CLS: 0.008 • FCP: 0.44s
-                      </div>
-                    </div>
-                    <div className="bg-[#141218] p-3.5 rounded-lg border border-white/10 space-y-1.5 text-[11px]">
-                      <div className="flex justify-between">
-                        <span className="text-[#cbc4d2]">POST /api/v1/auth</span>
-                        <span className="text-emerald-400">200 OK (38ms)</span>
-                      </div>
-                      <div className="flex justify-between">
-                        <span className="text-[#cbc4d2]">GET /assets/studio.bundle.js</span>
-                        <span className="text-emerald-400">200 OK (84ms)</span>
-                      </div>
-                    </div>
-                    <div className="flex justify-between items-center text-[11px] text-[#948e9c] pt-1">
-                      <span>Total Requests Monitored: 42</span>
-                      <span className="text-emerald-400">0 Network Errors</span>
-                    </div>
-                  </div>
-                )}
+      {/* 4. Reverse Engineering Suite (01-06) */}
+      <section className="py-24 px-4 sm:px-8 max-w-7xl mx-auto" id="reverse-engineering">
+        <div className="text-center max-w-3xl mx-auto mb-16">
+          <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-emerald-500/10 border border-emerald-500/25 text-emerald-300 text-xs font-label-mono mb-3">
+            <span className="material-symbols-outlined text-xs">biotech</span>
+            AUTONOMOUS INSPECTION SUITE
+          </div>
+          <h2 className="text-3xl sm:text-5xl font-extrabold text-white tracking-tight">
+            6 Autonomous Reverse Engineering Tools
+          </h2>
+          <p className="mt-4 text-[#cbc4d2] text-sm sm:text-base">
+            Give your AI agents direct surgical capabilities over any frontend application. Extract architectures, capture live network payloads, reconstruct TypeScript models, and auto-generate OpenAPI specs.
+          </p>
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+          {/* 01: rea_scope_app */}
+          <div className="cyber-border-card rounded-2xl p-6 flex flex-col justify-between group">
+            <div>
+              <div className="flex items-center justify-between mb-4">
+                <span className="font-label-mono text-xs px-2.5 py-1 rounded-md bg-emerald-500/15 border border-emerald-500/30 text-emerald-300 font-semibold">
+                  01 / SCOPE
+                </span>
+                <span className="material-symbols-outlined text-emerald-400 group-hover:rotate-12 transition-transform">
+                  layers
+                </span>
               </div>
+              <h3 className="text-lg font-bold text-white mb-2 font-mono">rea_scope_app</h3>
+              <p className="text-xs text-[#cbc4d2] leading-relaxed mb-4">
+                Holistic surface inspection of the active tab. Maps scripts, stylesheets, global namespaces, frameworks (React, Vue, Svelte, Angular), API roots, and state managers.
+              </p>
+            </div>
+            <div>
+              <div className="bg-black/40 rounded-lg p-2.5 border border-white/5 font-label-mono text-[11px] text-white/70 mb-3 flex items-center justify-between">
+                <code>scope_app(&#123; depth: 2 &#125;)</code>
+                <button
+                  className="text-white/40 hover:text-white cursor-pointer"
+                  onClick={() => copyToClipboard('scope_app({ depth: 2 })', 'copy-01')}
+                >
+                  <span className="material-symbols-outlined text-sm">
+                    {copiedKey === "copy-01" ? "check" : "content_copy"}
+                  </span>
+                </button>
+              </div>
+              <div className="flex items-center gap-2 text-[10px] font-label-mono text-emerald-400">
+                <span>DOM Tree &rarr; State Graph &rarr; Agent Context</span>
+              </div>
+            </div>
+          </div>
 
-              {/* Right Pane: Live Chrome Tab Mockup */}
-              <div className="lg:col-span-6 p-5 sm:p-6 space-y-4 bg-[#110e17]">
-                {/* Browser Tab Header & URL bar */}
-                <div className="flex items-center gap-2 pb-2 border-b border-white/10">
-                  <span className="material-symbols-outlined text-xs text-emerald-400">lock</span>
-                  <div className="bg-[#1a1724] px-3 py-1 rounded-full text-[11px] font-label-mono text-[#cbc4d2] flex-1 truncate flex items-center justify-between border border-white/5">
-                    <span>https://www.app.creatosaurus.io/studio</span>
-                    <span className="text-[10px] text-emerald-400 font-bold uppercase">Tab 414720296</span>
-                  </div>
-                  <span className="material-symbols-outlined text-xs text-[#948e9c]">refresh</span>
-                </div>
+          {/* 02: rea_sourcemap_reconstruct */}
+          <div className="cyber-border-card rounded-2xl p-6 flex flex-col justify-between group">
+            <div>
+              <div className="flex items-center justify-between mb-4">
+                <span className="font-label-mono text-xs px-2.5 py-1 rounded-md bg-[#cfbcff]/15 border border-[#cfbcff]/30 text-[#cfbcff] font-semibold">
+                  02 / SOURCEMAP
+                </span>
+                <span className="material-symbols-outlined text-[#cfbcff] group-hover:rotate-12 transition-transform">
+                  code_blocks
+                </span>
+              </div>
+              <h3 className="text-lg font-bold text-white mb-2 font-mono">rea_sourcemap_reconstruct</h3>
+              <p className="text-xs text-[#cbc4d2] leading-relaxed mb-4">
+                Discovers inline or linked <code className="text-[#cfbcff]">.map</code> files across bundles. Automatically reconstructs the original unminified TypeScript/JavaScript source tree locally.
+              </p>
+            </div>
+            <div>
+              <div className="bg-black/40 rounded-lg p-2.5 border border-white/5 font-label-mono text-[11px] text-white/70 mb-3 flex items-center justify-between">
+                <code>reconstruct(&#123; outputDir: &quot;./src&quot; &#125;)</code>
+                <button
+                  className="text-white/40 hover:text-white cursor-pointer"
+                  onClick={() => copyToClipboard('reconstruct({ outputDir: "./src" })', 'copy-02')}
+                >
+                  <span className="material-symbols-outlined text-sm">
+                    {copiedKey === "copy-02" ? "check" : "content_copy"}
+                  </span>
+                </button>
+              </div>
+              <div className="flex items-center gap-2 text-[10px] font-label-mono text-[#cfbcff]">
+                <span>Chunk Bundle &rarr; Source Tree Extraction</span>
+              </div>
+            </div>
+          </div>
 
-                {/* Webpage Visual Canvas Mockup */}
-                <div className="p-4 bg-[#141218] rounded-xl border border-white/10 space-y-4 relative overflow-hidden">
-                  <div className="flex items-center justify-between">
-                    <div className="h-4 w-28 bg-white/10 rounded"></div>
-                    <div className="flex gap-2">
-                      <div className="h-4 w-12 bg-white/10 rounded"></div>
-                      <div className="h-4 w-16 bg-white/10 rounded"></div>
-                    </div>
-                  </div>
+          {/* 03: rea_reconstruct_types */}
+          <div className="cyber-border-card rounded-2xl p-6 flex flex-col justify-between group">
+            <div>
+              <div className="flex items-center justify-between mb-4">
+                <span className="font-label-mono text-xs px-2.5 py-1 rounded-md bg-amber-500/15 border border-amber-500/30 text-amber-300 font-semibold">
+                  03 / TYPES
+                </span>
+                <span className="material-symbols-outlined text-amber-400 group-hover:rotate-12 transition-transform">
+                  schema
+                </span>
+              </div>
+              <h3 className="text-lg font-bold text-white mb-2 font-mono">rea_reconstruct_types</h3>
+              <p className="text-xs text-[#cbc4d2] leading-relaxed mb-4">
+                Analyzes runtime objects, Redux/Zustand stores, network payloads, and GraphQL queries to infer exact TypeScript interfaces and Zod validation schemas.
+              </p>
+            </div>
+            <div>
+              <div className="bg-black/40 rounded-lg p-2.5 border border-white/5 font-label-mono text-[11px] text-white/70 mb-3 flex items-center justify-between">
+                <code>infer_types(&#123; format: &quot;zod&quot; &#125;)</code>
+                <button
+                  className="text-white/40 hover:text-white cursor-pointer"
+                  onClick={() => copyToClipboard('infer_types({ format: "zod" })', 'copy-03')}
+                >
+                  <span className="material-symbols-outlined text-sm">
+                    {copiedKey === "copy-03" ? "check" : "content_copy"}
+                  </span>
+                </button>
+              </div>
+              <div className="flex items-center gap-2 text-[10px] font-label-mono text-amber-400">
+                <span>Runtime Object &rarr; Strongly Typed Interface</span>
+              </div>
+            </div>
+          </div>
 
-                  <div className="p-4 bg-white/5 rounded-lg border border-white/5 space-y-3">
-                    <div className="text-sm font-bold text-white">Creator Studio Workspace</div>
-                    <div className="text-xs text-[#948e9c] leading-relaxed">
-                      Real-time interactive canvas controlled by Xtra DevPilot browser bridge.
-                    </div>
+          {/* 04: rea_action_to_api */}
+          <div className="cyber-border-card rounded-2xl p-6 flex flex-col justify-between group">
+            <div>
+              <div className="flex items-center justify-between mb-4">
+                <span className="font-label-mono text-xs px-2.5 py-1 rounded-md bg-cyan-500/15 border border-cyan-500/30 text-cyan-300 font-semibold">
+                  04 / FLOW
+                </span>
+                <span className="material-symbols-outlined text-cyan-400 group-hover:rotate-12 transition-transform">
+                  hub
+                </span>
+              </div>
+              <h3 className="text-lg font-bold text-white mb-2 font-mono">rea_action_to_api</h3>
+              <p className="text-xs text-[#cbc4d2] leading-relaxed mb-4">
+                Correlates user UI interactions (button clicks, form inputs, route changes) with outgoing XHR/Fetch network calls to map business logic directly to endpoints.
+              </p>
+            </div>
+            <div>
+              <div className="bg-black/40 rounded-lg p-2.5 border border-white/5 font-label-mono text-[11px] text-white/70 mb-3 flex items-center justify-between">
+                <code>trace_action(&#123; selector: &quot;#btn-pay&quot; &#125;)</code>
+                <button
+                  className="text-white/40 hover:text-white cursor-pointer"
+                  onClick={() => copyToClipboard('trace_action({ selector: "#btn-pay" })', 'copy-04')}
+                >
+                  <span className="material-symbols-outlined text-sm">
+                    {copiedKey === "copy-04" ? "check" : "content_copy"}
+                  </span>
+                </button>
+              </div>
+              <div className="flex items-center gap-2 text-[10px] font-label-mono text-cyan-400">
+                <span>DOM Event &rarr; Trace &rarr; REST / RPC Route</span>
+              </div>
+            </div>
+          </div>
 
-                    {/* Target Button with Live Highlight Overlay */}
-                    <div className="relative inline-block mt-2">
-                      <div className="absolute -inset-1 rounded border-2 border-[#cfbcff] bg-[#cfbcff]/15 animate-pulse pointer-events-none"></div>
-                      <button className="relative bg-[#6750a4] text-white px-4 py-2 rounded text-xs font-bold font-label-mono shadow">
-                        Publish Project
-                      </button>
-                      <div className="absolute -top-7 left-0 bg-[#cfbcff] text-[#381e72] font-label-mono text-[10px] font-bold px-2 py-0.5 rounded shadow">
-                        &lt;button.submit-btn&gt; 142×44
-                      </div>
-                    </div>
-                  </div>
+          {/* 05: rea_generate_openapi */}
+          <div className="cyber-border-card rounded-2xl p-6 flex flex-col justify-between group">
+            <div>
+              <div className="flex items-center justify-between mb-4">
+                <span className="font-label-mono text-xs px-2.5 py-1 rounded-md bg-purple-500/15 border border-purple-500/30 text-purple-300 font-semibold">
+                  05 / OPENAPI
+                </span>
+                <span className="material-symbols-outlined text-purple-400 group-hover:rotate-12 transition-transform">
+                  description
+                </span>
+              </div>
+              <h3 className="text-lg font-bold text-white mb-2 font-mono">rea_generate_openapi</h3>
+              <p className="text-xs text-[#cbc4d2] leading-relaxed mb-4">
+                Synthesizes recorded network traffic, headers, query params, request bodies, and response schemas into a spec-compliant OpenAPI 3.1 YAML or JSON documentation.
+              </p>
+            </div>
+            <div>
+              <div className="bg-black/40 rounded-lg p-2.5 border border-white/5 font-label-mono text-[11px] text-white/70 mb-3 flex items-center justify-between">
+                <code>generate_spec(&#123; version: &quot;3.1.0&quot; &#125;)</code>
+                <button
+                  className="text-white/40 hover:text-white cursor-pointer"
+                  onClick={() => copyToClipboard('generate_spec({ version: "3.1.0" })', 'copy-05')}
+                >
+                  <span className="material-symbols-outlined text-sm">
+                    {copiedKey === "copy-05" ? "check" : "content_copy"}
+                  </span>
+                </button>
+              </div>
+              <div className="flex items-center gap-2 text-[10px] font-label-mono text-purple-400">
+                <span>Traffic Capture &rarr; Valid OpenAPI Spec</span>
+              </div>
+            </div>
+          </div>
 
-                  <div className="flex items-center justify-between text-[11px] font-label-mono pt-2 text-[#948e9c]">
-                    <span className="flex items-center gap-1.5">
-                      <span className="w-2 h-2 rounded-full bg-emerald-400"></span>
-                      Extension Injected: MAIN & ISOLATED World
-                    </span>
-                    <span className="text-[#cfbcff]">ws://127.0.0.1:42819</span>
-                  </div>
-                </div>
+          {/* 06: rea_bundle */}
+          <div className="cyber-border-card rounded-2xl p-6 flex flex-col justify-between group">
+            <div>
+              <div className="flex items-center justify-between mb-4">
+                <span className="font-label-mono text-xs px-2.5 py-1 rounded-md bg-gradient-to-r from-emerald-500/20 to-purple-500/20 border border-emerald-400/30 text-white font-semibold">
+                  06 / SUITE
+                </span>
+                <span className="material-symbols-outlined text-emerald-400 group-hover:rotate-12 transition-transform">
+                  folder_zip
+                </span>
+              </div>
+              <h3 className="text-lg font-bold text-white mb-2 font-mono">rea_bundle</h3>
+              <p className="text-xs text-[#cbc4d2] leading-relaxed mb-4">
+                Runs the complete reverse-engineering pipeline in parallel. Bundles architecture reports, unminified source code, types, and API specs into a single developer ZIP.
+              </p>
+            </div>
+            <div>
+              <div className="bg-black/40 rounded-lg p-2.5 border border-white/5 font-label-mono text-[11px] text-white/70 mb-3 flex items-center justify-between">
+                <code>bundle_all(&#123; archive: true &#125;)</code>
+                <button
+                  className="text-white/40 hover:text-white cursor-pointer"
+                  onClick={() => copyToClipboard('bundle_all({ archive: true })', 'copy-06')}
+                >
+                  <span className="material-symbols-outlined text-sm">
+                    {copiedKey === "copy-06" ? "check" : "content_copy"}
+                  </span>
+                </button>
+              </div>
+              <div className="flex items-center gap-2 text-[10px] font-label-mono text-emerald-300">
+                <span>All Tools Executed &rarr; Standalone Artifact</span>
               </div>
             </div>
           </div>
         </div>
       </section>
 
-      {/* Master 33-Tool Interactive Showcase */}
-      <section className="py-24 px-6 md:px-12 bg-[#0f0d13]/80 border-t border-b border-white/5" id="tools">
-        <div className="max-w-7xl mx-auto space-y-10">
-          <div className="flex flex-col md:flex-row md:items-end justify-between gap-6">
-            <div>
-              <div className="inline-flex items-center gap-2 text-xs font-label-mono text-[#cfbcff] uppercase tracking-wider mb-2">
-                <span className="material-symbols-outlined text-base">terminal</span>
-                Complete Tool Reference
-              </div>
-              <h2 className="text-3xl sm:text-4xl font-extrabold tracking-tight text-white">
-                All 33 Production-Ready MCP Tools
-              </h2>
-              <p className="text-[#cbc4d2] text-base max-w-2xl mt-2">
-                Audited and live-verified against real Chrome browser sessions. Every tool is deterministic, token-efficient, and optimized for LLM reasoning.
-              </p>
+      {/* 5. DevPilot CLI Universal Suite */}
+      <section className="py-20 px-4 sm:px-8 max-w-7xl mx-auto border-t border-white/10" id="cli">
+        <div className="flex flex-col md:flex-row md:items-end justify-between mb-12 gap-6">
+          <div>
+            <div className="font-label-mono text-xs text-[#cfbcff] uppercase tracking-wider mb-2">
+              COMMAND LINE SUITE
             </div>
+            <h2 className="text-3xl sm:text-4xl font-extrabold text-white">
+              Autonomous Shell Automation
+            </h2>
+            <p className="text-xs sm:text-sm text-[#cbc4d2] mt-2 max-w-xl">
+              Execute browser commands, reconstruct project trees, and run testing flows directly from your terminal or AI shell subagent.
+            </p>
+          </div>
+          <button
+            onClick={() => copyToClipboard("npm install -g xtradevpilot", "cli-install")}
+            className="px-4 py-2 bg-white/5 hover:bg-white/10 text-white rounded-xl font-label-mono text-xs border border-white/10 flex items-center gap-2 cursor-pointer transition-colors"
+          >
+            <span className="text-[#cfbcff]">$ npm i -g xtradevpilot</span>
+            <span className="material-symbols-outlined text-sm">
+              {copiedKey === "cli-install" ? "check" : "content_copy"}
+            </span>
+          </button>
+        </div>
 
-            {/* Search Input */}
-            <div className="relative w-full md:w-80">
-              <span className="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-[#948e9c] text-lg">
+        <div className="grid lg:grid-cols-3 gap-6">
+          <div className="glass-panel p-6 rounded-2xl border border-white/10 space-y-3">
+            <div className="text-sm font-bold text-[#cfbcff] font-label-mono">
+              devpilot reconstruct
+            </div>
+            <p className="text-xs text-[#cbc4d2]">
+              Extracts complete original project from sourcemaps into clean <code className="text-[#cfbcff]">src/</code> folders.
+            </p>
+            <pre className="bg-black/60 p-3 rounded-xl font-label-mono text-[11px] text-[#cbc4d2] overflow-x-auto border border-white/5">
+              $ devpilot reconstruct ./sources -o ./reconstructed
+            </pre>
+          </div>
+
+          <div className="glass-panel p-6 rounded-2xl border border-white/10 space-y-3">
+            <div className="text-sm font-bold text-[#e7c365] font-label-mono">
+              devpilot trace-action
+            </div>
+            <p className="text-xs text-[#cbc4d2]">
+              Clicks or submits UI elements and captures all correlated outbound HTTP/XHR mutations.
+            </p>
+            <pre className="bg-black/60 p-3 rounded-xl font-label-mono text-[11px] text-[#cbc4d2] overflow-x-auto border border-white/5">
+              $ devpilot trace-action &quot;#submit-btn&quot; --action click --wait 2000
+            </pre>
+          </div>
+
+          <div className="glass-panel p-6 rounded-2xl border border-white/10 space-y-3">
+            <div className="text-sm font-bold text-emerald-400 font-label-mono">
+              devpilot export-rea
+            </div>
+            <p className="text-xs text-[#cbc4d2]">
+              Packages DOM, HAR traffic, storage, and discovered APIs into canonical REA Schema 2.0.0.
+            </p>
+            <pre className="bg-black/60 p-3 rounded-xl font-label-mono text-[11px] text-[#cbc4d2] overflow-x-auto border border-white/5">
+              $ devpilot export-rea -o ./evidence.json
+            </pre>
+          </div>
+        </div>
+      </section>
+
+      {/* 6. Interactive 40 MCP Tools Section */}
+      <section className="py-20 px-4 sm:px-8 max-w-7xl mx-auto border-t border-white/10" id="tools">
+        <div className="flex flex-col md:flex-row md:items-end justify-between mb-10 gap-6">
+          <div>
+            <div className="font-label-mono text-xs text-[#cfbcff] uppercase tracking-wider mb-2">
+              TOOL MATRIX
+            </div>
+            <h2 className="text-3xl sm:text-4xl font-extrabold text-white">
+              40 Granular Browser Bridge Tools
+            </h2>
+            <p className="text-xs sm:text-sm text-[#cbc4d2] mt-2 max-w-xl">
+              Every capability is exposed as an atomic MCP Tool. Agentic LLMs invoke commands via JSON-RPC over local WebSocket with deterministic typings.
+            </p>
+          </div>
+
+          {/* Search Input Filter */}
+          <div className="w-full md:w-72">
+            <div className="relative">
+              <span className="material-symbols-outlined absolute left-3 top-2.5 text-white/40 text-lg">
                 search
               </span>
               <input
                 type="text"
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                placeholder="Filter tools (e.g. click, dom, jwt)..."
-                className="w-full bg-[#141218] border border-white/15 rounded py-2 pl-10 pr-4 text-xs font-label-mono text-white placeholder:text-[#948e9c] focus:outline-none focus:border-[#cfbcff] transition-colors"
+                placeholder="Search 40 MCP tools..."
+                className="w-full bg-black/40 border border-white/10 rounded-xl pl-9 pr-4 py-2 text-xs font-label-mono text-white placeholder-white/40 focus:outline-none focus:border-[#cfbcff] transition-colors"
               />
             </div>
           </div>
-
-          {/* Category Filter Pills */}
-          <div className="flex flex-wrap gap-2 pt-2">
-            {[
-              { id: "all", label: `All Tools (${TOOLS_CATALOG.length})` },
-              { id: "tabs", label: "Tabs & Window (5)" },
-              { id: "inspection", label: "DOM & Inspection (5)" },
-              { id: "automation", label: "Automation & Forms (7)" },
-              { id: "devqa", label: "Dev & QA Engine (5)" },
-              { id: "scraping", label: "Scraping & Data (2)" },
-              { id: "observability", label: "Observability & Mocks (9)" },
-            ].map((cat) => (
-              <button
-                key={cat.id}
-                onClick={() => setActiveCategory(cat.id)}
-                className={`px-3.5 py-1.5 rounded text-xs font-label-mono transition-all cursor-pointer ${
-                  activeCategory === cat.id
-                    ? "bg-[#cfbcff] text-[#381e72] font-bold shadow-sm"
-                    : "bg-white/5 text-[#cbc4d2] hover:bg-white/10 hover:text-white border border-white/5"
-                }`}
-              >
-                {cat.label}
-              </button>
-            ))}
-          </div>
-
-          {/* Tools Grid */}
-          <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-5">
-            {filteredTools.map((tool) => (
-              <div
-                key={tool.name}
-                className="glass-card p-5 rounded-lg flex flex-col justify-between group hover:border-[#cfbcff]/40 transition-all duration-300"
-              >
-                <div className="space-y-3">
-                  <div className="flex items-center justify-between">
-                    <code className="text-sm font-bold text-white font-label-mono group-hover:text-[#cfbcff] transition-colors">
-                      {tool.name}
-                    </code>
-                    <span className="text-[10px] font-label-mono uppercase px-2 py-0.5 rounded bg-white/10 text-[#cfbcff] border border-white/10">
-                      {tool.badge}
-                    </span>
-                  </div>
-                  <p className="text-xs text-[#cbc4d2] leading-relaxed">
-                    {tool.description}
-                  </p>
-                </div>
-
-                <div className="mt-4 pt-3 border-t border-white/10 space-y-2">
-                  <div className="flex items-start gap-1.5 text-[11px] font-label-mono text-[#948e9c]">
-                    <span className="text-[#e7c365]">params:</span>
-                    <span className="text-[#cbc4d2] truncate">{tool.params}</span>
-                  </div>
-                  <div className="flex items-center justify-between bg-[#0f0d13] px-2.5 py-1.5 rounded text-[11px] font-label-mono border border-white/5">
-                    <span className="text-[#948e9c] truncate max-w-[200px]">{tool.example}</span>
-                    <button
-                      onClick={() => copyToClipboard(tool.name, tool.name, tool.name)}
-                      className="text-[#cfbcff] hover:text-white text-[10px] uppercase font-bold cursor-pointer"
-                    >
-                      {copiedKey === tool.name ? "Copied" : "Copy"}
-                    </button>
-                  </div>
-                </div>
-              </div>
-            ))}
-          </div>
         </div>
-      </section>
 
-      {/* Core Architectural Pillars */}
-      <section className="py-24 px-6 md:px-12 relative overflow-hidden" id="architecture">
-        <div className="max-w-7xl mx-auto space-y-16">
-          <div className="text-center max-w-3xl mx-auto space-y-4">
-            <div className="inline-flex items-center gap-2 text-xs font-label-mono text-[#cfbcff] uppercase tracking-wider">
-              <span className="material-symbols-outlined text-base">hub</span>
-              Local-First Bridge Architecture
-            </div>
-            <h2 className="text-3xl sm:text-4xl font-extrabold tracking-tight text-white">
-              Zero-Cloud Residency. Millisecond Latency.
-            </h2>
-            <p className="text-[#cbc4d2] text-base leading-relaxed">
-              Unlike cloud-hosted browser automation platforms, Xtra DevPilot establishes a direct, isolated WebSocket connection right on your machine.
-            </p>
-          </div>
-
-          <div className="grid md:grid-cols-3 gap-8">
-            <div className="glass-card p-8 rounded-xl space-y-4 border border-white/10">
-              <div className="w-12 h-12 rounded bg-[#cfbcff]/15 flex items-center justify-center text-[#cfbcff] border border-[#cfbcff]/20">
-                <span className="material-symbols-outlined text-2xl">shield_lock</span>
-              </div>
-              <h3 className="text-lg font-bold text-white font-headline-lg">
-                100% Private & Local
-              </h3>
-              <p className="text-xs sm:text-sm text-[#cbc4d2] leading-relaxed">
-                All JSON-RPC messages stay inside <code className="text-[#cfbcff]">127.0.0.1:42819</code>. Your proprietary source code, auth cookies, internal staging dashboards, and user sessions never touch external clouds.
-              </p>
-            </div>
-
-            <div className="glass-card p-8 rounded-xl space-y-4 border border-white/10">
-              <div className="w-12 h-12 rounded bg-[#e7c365]/15 flex items-center justify-center text-[#e7c365] border border-[#e7c365]/20">
-                <span className="material-symbols-outlined text-2xl">speed</span>
-              </div>
-              <h3 className="text-lg font-bold text-white font-headline-lg">
-                Sub-15ms Roundtrips
-              </h3>
-              <p className="text-xs sm:text-sm text-[#cbc4d2] leading-relaxed">
-                Direct WebSocket pipe between the Chrome Manifest V3 service worker and the local Node.js stdio MCP server ensures instantaneous command execution without proxy lag.
-              </p>
-            </div>
-
-            <div className="glass-card p-8 rounded-xl space-y-4 border border-white/10">
-              <div className="w-12 h-12 rounded bg-[#22d3ee]/15 flex items-center justify-center text-[#22d3ee] border border-[#22d3ee]/20">
-                <span className="material-symbols-outlined text-2xl">smart_toy</span>
-              </div>
-              <h3 className="text-lg font-bold text-white font-headline-lg">
-                React & Modern SPA Native
-              </h3>
-              <p className="text-xs sm:text-sm text-[#cbc4d2] leading-relaxed">
-                Automated form typing and clicks invoke native property setters (<code className="text-[#cfbcff]">_valueTracker</code>) ensuring React 18/19, Next.js, and Vue state synchronizes cleanly without flakes.
-              </p>
-            </div>
-          </div>
-        </div>
-      </section>
-
-      {/* Multi-IDE Integration Bento Grid */}
-      <section className="py-24 px-6 md:px-12 bg-[#0f0d13]/90 border-t border-white/5" id="integrations">
-        <div className="max-w-7xl mx-auto space-y-12">
-          <div className="text-center max-w-2xl mx-auto space-y-3">
-            <h2 className="text-3xl font-extrabold text-white">
-              Connect to Any AI Coding Assistant
-            </h2>
-            <p className="text-[#cbc4d2] text-sm sm:text-base">
-              Configurable in seconds across all major MCP-compatible developer environments.
-            </p>
-          </div>
-
-          <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-6">
-            {/* Google Antigravity */}
-            <div className="glass-card p-6 rounded-lg space-y-3 border border-white/10 flex flex-col justify-between">
-              <div>
-                <div className="flex items-center gap-2.5 mb-2">
-                  <span className="material-symbols-outlined text-[#cfbcff] text-xl">view_in_ar</span>
-                  <h4 className="font-bold text-white text-sm">Google Antigravity</h4>
-                </div>
-                <p className="text-xs text-[#cbc4d2]">
-                  Add directly into your active workspace root under <code className="text-[#cfbcff]">.gemini/config/mcp_config.json</code>.
-                </p>
-              </div>
-              <button
-                onClick={() =>
-                  copyToClipboard(
-                    JSON.stringify(
-                      {
-                        mcpServers: {
-                          xtradevpilot: {
-                            command: "npx",
-                            args: ["-y", "xtradevpilot-mcp"]
-                          }
-                        }
-                      },
-                      null,
-                      2
-                    ),
-                    "antigravity-cfg",
-                    "Antigravity config"
-                  )
-                }
-                className="w-full text-center py-2 bg-white/5 hover:bg-white/10 text-xs font-label-mono text-[#cfbcff] rounded border border-white/10 transition-colors cursor-pointer"
-              >
-                {copiedKey === "antigravity-cfg" ? "✔ Copied" : "Copy Config"}
-              </button>
-            </div>
-
-            {/* Claude Desktop */}
-            <div className="glass-card p-6 rounded-lg space-y-3 border border-white/10 flex flex-col justify-between">
-              <div>
-                <div className="flex items-center gap-2.5 mb-2">
-                  <span className="material-symbols-outlined text-[#e7c365] text-xl">chat</span>
-                  <h4 className="font-bold text-white text-sm">Claude Desktop</h4>
-                </div>
-                <p className="text-xs text-[#cbc4d2]">
-                  Place inside <code className="text-[#cfbcff]">claude_desktop_config.json</code> to give Claude browser vision.
-                </p>
-              </div>
-              <button
-                onClick={() =>
-                  copyToClipboard(
-                    JSON.stringify(
-                      {
-                        mcpServers: {
-                          "xtra-devpilot": {
-                            command: "npx",
-                            args: ["-y", "xtradevpilot-mcp"]
-                          }
-                        }
-                      },
-                      null,
-                      2
-                    ),
-                    "claude-cfg",
-                    "Claude config"
-                  )
-                }
-                className="w-full text-center py-2 bg-white/5 hover:bg-white/10 text-xs font-label-mono text-[#e7c365] rounded border border-white/10 transition-colors cursor-pointer"
-              >
-                {copiedKey === "claude-cfg" ? "✔ Copied" : "Copy Config"}
-              </button>
-            </div>
-
-            {/* Cursor IDE */}
-            <div className="glass-card p-6 rounded-lg space-y-3 border border-white/10 flex flex-col justify-between">
-              <div>
-                <div className="flex items-center gap-2.5 mb-2">
-                  <span className="material-symbols-outlined text-[#22d3ee] text-xl">code</span>
-                  <h4 className="font-bold text-white text-sm">Cursor IDE</h4>
-                </div>
-                <p className="text-xs text-[#cbc4d2]">
-                  Navigate to <code className="text-[#cfbcff]">Settings &gt; Features &gt; MCP</code> and add command <code className="text-[#cfbcff]">npx -y xtradevpilot-mcp</code>.
-                </p>
-              </div>
-              <button
-                onClick={() => copyToClipboard("npx -y xtradevpilot-mcp", "cursor-cfg", "Cursor command")}
-                className="w-full text-center py-2 bg-white/5 hover:bg-white/10 text-xs font-label-mono text-[#22d3ee] rounded border border-white/10 transition-colors cursor-pointer"
-              >
-                {copiedKey === "cursor-cfg" ? "✔ Copied" : "Copy Command"}
-              </button>
-            </div>
-
-            {/* TypeScript SDK */}
-            <div className="glass-card p-6 rounded-lg space-y-3 border border-white/10 flex flex-col justify-between">
-              <div>
-                <div className="flex items-center gap-2.5 mb-2">
-                  <span className="material-symbols-outlined text-purple-400 text-xl">dataset</span>
-                  <h4 className="font-bold text-white text-sm">TypeScript SDK</h4>
-                </div>
-                <p className="text-xs text-[#cbc4d2]">
-                  Automate pipelines programmatically using <code className="text-[#cfbcff]">@xtradevpilot/sdk</code> with typed client bindings.
-                </p>
-              </div>
-              <button
-                onClick={() => copyToClipboard("npm install @xtradevpilot/sdk", "sdk-cfg", "SDK install")}
-                className="w-full text-center py-2 bg-white/5 hover:bg-white/10 text-xs font-label-mono text-purple-400 rounded border border-white/10 transition-colors cursor-pointer"
-              >
-                {copiedKey === "sdk-cfg" ? "✔ Copied" : "Copy Install"}
-              </button>
-            </div>
-          </div>
-        </div>
-      </section>
-
-      {/* Footer */}
-      <footer className="w-full py-12 px-6 md:px-12 border-t border-white/10 bg-[#0d0b12]">
-        <div className="max-w-7xl mx-auto flex flex-col md:flex-row justify-between items-center gap-8">
-          <div className="flex flex-col items-center md:items-start gap-2">
-            <div className="flex items-center gap-3">
-              <img
-                className="h-6 w-6 rounded-sm object-contain"
-                src="/android-chrome-512x512.png"
-                alt="Xtra DevPilot"
-              />
-              <span className="font-headline-lg text-lg font-bold text-white">
-                Xtra DevPilot
-              </span>
-            </div>
-            <p className="text-xs text-[#948e9c] font-label-mono">
-              © 2026 Xtra DevPilot. High-performance browser bridge for AI developers.
-            </p>
-          </div>
-
-          <div className="flex flex-wrap items-center justify-center gap-6 text-xs font-label-mono text-[#cbc4d2]">
-            <Link href="/docs" className="hover:text-[#cfbcff] transition-colors">
-              Documentation
-            </Link>
-            <a
-              href="/xtradevpilot-extension.zip"
-              download="xtradevpilot-extension.zip"
-              className="hover:text-[#cfbcff] transition-colors"
+        {/* Filter Pills */}
+        <div className="flex flex-wrap items-center gap-2 mb-8 font-label-mono text-xs">
+          {[
+            { id: "all", label: `All (${TOOLS_CATALOG.length})` },
+            { id: "rea", label: "Reverse Eng (7)" },
+            { id: "dom", label: "DOM & Elements (10)" },
+            { id: "network", label: "Network & State (9)" },
+            { id: "interaction", label: "Agent Action (7)" },
+            { id: "system", label: "System & Tabs (7)" },
+          ].map((cat) => (
+            <button
+              key={cat.id}
+              onClick={() => setActiveCategory(cat.id)}
+              className={`px-3 py-1.5 rounded-lg border font-medium transition-all cursor-pointer ${
+                activeCategory === cat.id
+                  ? "bg-[#cfbcff]/20 text-[#cfbcff] border-[#cfbcff]/40 shadow-sm"
+                  : "bg-white/5 text-[#cbc4d2] hover:text-white border-white/10"
+              }`}
             >
-              Download (.zip)
-            </a>
+              {cat.label}
+            </button>
+          ))}
+        </div>
+
+        {/* Tools Grid */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+          {filteredTools.map((tool) => (
+            <div
+              key={tool.name}
+              className="glass-panel rounded-xl p-4 border border-white/10 hover:border-[#cfbcff]/50 transition-all flex flex-col justify-between group"
+            >
+              <div>
+                <div className="flex items-center justify-between mb-2">
+                  <span className="text-[10px] font-label-mono px-2 py-0.5 rounded bg-white/5 text-[#cfbcff] border border-white/10">
+                    {tool.badge}
+                  </span>
+                  <button
+                    onClick={() => copyToClipboard(tool.name, tool.name)}
+                    className="text-white/40 hover:text-white cursor-pointer"
+                    title="Copy tool name"
+                  >
+                    <span className="material-symbols-outlined text-sm">
+                      {copiedKey === tool.name ? "check" : "content_copy"}
+                    </span>
+                  </button>
+                </div>
+                <div className="text-xs font-mono font-bold text-white mb-1 group-hover:text-[#cfbcff] transition-colors">
+                  {tool.name}
+                </div>
+                <p className="text-[11px] text-[#cbc4d2] leading-tight">
+                  {tool.description}
+                </p>
+              </div>
+              <div className="mt-3 pt-2 border-t border-white/5 text-[10px] font-label-mono text-white/50 truncate">
+                returns: {tool.returns}
+              </div>
+            </div>
+          ))}
+        </div>
+      </section>
+
+      {/* 7. Architecture & Data Flow */}
+      <section className="py-24 px-4 sm:px-8 max-w-7xl mx-auto border-t border-white/10" id="architecture">
+        <div className="text-center max-w-3xl mx-auto mb-16">
+          <div className="font-label-mono text-xs text-[#22d3ee] uppercase tracking-wider mb-2">
+            ZERO CLOUD RESIDENCY
+          </div>
+          <h2 className="text-3xl sm:text-5xl font-extrabold text-white">
+            Local-First Architecture
+          </h2>
+          <p className="mt-3 text-sm sm:text-base text-[#cbc4d2]">
+            Data stays strictly between your local browser and your IDE. No remote telemetry, no proxy servers.
+          </p>
+        </div>
+
+        {/* Architecture Pipeline */}
+        <div className="glass-panel rounded-2xl p-6 sm:p-10 border border-white/10 relative overflow-hidden">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6 relative z-10">
+            {/* Node 1: Chrome Extension */}
+            <div className="bg-black/40 border border-white/10 rounded-xl p-5 flex flex-col justify-between">
+              <div>
+                <div className="flex items-center justify-between mb-3">
+                  <span className="text-xs font-label-mono text-yellow-300 bg-yellow-500/10 px-2 py-0.5 rounded border border-yellow-500/20">
+                    MV3 MANIFEST
+                  </span>
+                  <span className="material-symbols-outlined text-yellow-300">tab</span>
+                </div>
+                <h4 className="text-white font-bold text-base mb-1">Local Chrome Tab</h4>
+                <p className="text-xs text-[#cbc4d2] leading-relaxed">
+                  Standard Chrome Extension running inside developer browser. Direct DOM &amp; CDP access without sandboxing bottlenecks.
+                </p>
+              </div>
+              <div className="mt-4 pt-3 border-t border-white/5 text-[11px] font-label-mono text-yellow-400">
+                Port: chrome.debugger
+              </div>
+            </div>
+
+            {/* Node 2: DevPilot Core Server */}
+            <div className="bg-[#181329]/90 border border-[#cfbcff]/30 rounded-xl p-5 flex flex-col justify-between shadow-[0_0_30px_rgba(103,80,164,0.2)]">
+              <div>
+                <div className="flex items-center justify-between mb-3">
+                  <span className="text-xs font-label-mono text-[#cfbcff] bg-[#cfbcff]/15 px-2 py-0.5 rounded border border-[#cfbcff]/30">
+                    WEBSOCKET SERVER
+                  </span>
+                  <span className="material-symbols-outlined text-[#cfbcff]">memory</span>
+                </div>
+                <h4 className="text-white font-bold text-base mb-1">Xtra DevPilot Core</h4>
+                <p className="text-xs text-[#cbc4d2] leading-relaxed">
+                  High-performance local bridge. Serializes Chrome events into standard MCP protocol messages.
+                </p>
+              </div>
+              <div className="mt-4 pt-3 border-t border-white/5 text-[11px] font-label-mono text-emerald-400 flex items-center justify-between">
+                <span>ws://127.0.0.1:42819</span>
+              </div>
+            </div>
+
+            {/* Node 3: AI Agents / IDE */}
+            <div className="bg-black/40 border border-white/10 rounded-xl p-5 flex flex-col justify-between">
+              <div>
+                <div className="flex items-center justify-between mb-3">
+                  <span className="text-xs font-label-mono text-cyan-300 bg-cyan-500/10 px-2 py-0.5 rounded border border-cyan-500/20">
+                    MCP CLIENT
+                  </span>
+                  <span className="material-symbols-outlined text-cyan-300">smart_toy</span>
+                </div>
+                <h4 className="text-white font-bold text-base mb-1">Claude / Cursor / Antigravity</h4>
+                <p className="text-xs text-[#cbc4d2] leading-relaxed">
+                  Local MCP Client receives tool calls via stdio JSON-RPC. Direct execution with zero prompt latency.
+                </p>
+              </div>
+              <div className="mt-4 pt-3 border-t border-white/5 text-[11px] font-label-mono text-cyan-400">
+                stdio: mcp-jsonrpc-2.0
+              </div>
+            </div>
+          </div>
+
+          {/* Packet Flow Indicator */}
+          <div className="mt-8 pt-6 border-t border-white/10 flex items-center justify-between text-xs font-label-mono text-white/60">
+            <div className="flex items-center gap-2">
+              <span className="w-2 h-2 rounded-full bg-emerald-400"></span>
+              <span>Secure Localhost Only</span>
+            </div>
+            <div className="hidden sm:block text-[#cbc4d2]">100% On-Device &bull; No Data Leaves Your Machine</div>
+            <div className="text-emerald-400">&lt; 15ms Latency</div>
+          </div>
+        </div>
+      </section>
+
+      {/* 8. Integration Matrix & One-Click Configs */}
+      <section className="py-20 px-4 sm:px-8 max-w-7xl mx-auto border-t border-white/10" id="integrations">
+        <div className="text-center max-w-3xl mx-auto mb-14">
+          <div className="font-label-mono text-xs text-[#cfbcff] uppercase tracking-wider mb-2">
+            INTEGRATION MATRIX
+          </div>
+          <h2 className="text-3xl sm:text-4xl font-extrabold text-white">
+            Plug into Your Favorite AI Environment
+          </h2>
+          <p className="mt-3 text-xs sm:text-sm text-[#cbc4d2]">
+            Add one block to your configuration file to enable complete browser automation and reverse-engineering.
+          </p>
+        </div>
+
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+          {/* Claude Desktop */}
+          <div className="glass-panel rounded-2xl p-6 border border-white/10 flex flex-col justify-between">
+            <div>
+              <div className="flex items-center justify-between mb-4">
+                <div className="font-bold text-white text-base flex items-center gap-2">
+                  <span className="material-symbols-outlined text-purple-400 text-xl">psychology</span>
+                  Claude Desktop
+                </div>
+                <span className="text-[10px] font-label-mono px-2 py-0.5 rounded bg-purple-500/10 text-purple-300">
+                  claude_desktop_config.json
+                </span>
+              </div>
+              <pre className="bg-black/60 rounded-xl p-3 text-[11px] font-label-mono text-[#cbc4d2] overflow-x-auto border border-white/5">
+{`{
+  "mcpServers": {
+    "xtra-devpilot": {
+      "command": "npx",
+      "args": ["-y", "xtradevpilot-mcp"]
+    }
+  }
+}`}
+              </pre>
+            </div>
+            <button
+              onClick={() =>
+                copyToClipboard(
+                  JSON.stringify(
+                    {
+                      mcpServers: {
+                        "xtra-devpilot": {
+                          command: "npx",
+                          args: ["-y", "xtradevpilot-mcp"]
+                        }
+                      }
+                    },
+                    null,
+                    2
+                  ),
+                  "cfg-claude"
+                )
+              }
+              className="mt-4 w-full py-2 rounded-xl bg-white/5 hover:bg-white/10 border border-white/10 text-xs font-label-mono text-white flex items-center justify-center gap-1.5 transition-all cursor-pointer"
+            >
+              <span className="material-symbols-outlined text-sm">
+                {copiedKey === "cfg-claude" ? "check" : "content_copy"}
+              </span>
+              {copiedKey === "cfg-claude" ? "Copied Config!" : "Copy Config"}
+            </button>
+          </div>
+
+          {/* Cursor IDE */}
+          <div className="glass-panel rounded-2xl p-6 border border-white/10 flex flex-col justify-between">
+            <div>
+              <div className="flex items-center justify-between mb-4">
+                <div className="font-bold text-white text-base flex items-center gap-2">
+                  <span className="material-symbols-outlined text-cyan-400 text-xl">code</span>
+                  Cursor IDE
+                </div>
+                <span className="text-[10px] font-label-mono px-2 py-0.5 rounded bg-cyan-500/10 text-cyan-300">
+                  Settings &gt; Features &gt; MCP
+                </span>
+              </div>
+              <pre className="bg-black/60 rounded-xl p-3 text-[11px] font-label-mono text-[#cbc4d2] overflow-x-auto border border-white/5">
+{`{
+  "mcpServers": {
+    "devpilot": {
+      "type": "stdio",
+      "command": "npx -y xtradevpilot-mcp"
+    }
+  }
+}`}
+              </pre>
+            </div>
+            <button
+              onClick={() =>
+                copyToClipboard("npx -y xtradevpilot-mcp", "cfg-cursor")
+              }
+              className="mt-4 w-full py-2 rounded-xl bg-white/5 hover:bg-white/10 border border-white/10 text-xs font-label-mono text-white flex items-center justify-center gap-1.5 transition-all cursor-pointer"
+            >
+              <span className="material-symbols-outlined text-sm">
+                {copiedKey === "cfg-cursor" ? "check" : "content_copy"}
+              </span>
+              {copiedKey === "cfg-cursor" ? "Copied Command!" : "Copy Command"}
+            </button>
+          </div>
+
+          {/* Google Antigravity */}
+          <div className="glass-panel rounded-2xl p-6 border border-white/10 flex flex-col justify-between">
+            <div>
+              <div className="flex items-center justify-between mb-4">
+                <div className="font-bold text-white text-base flex items-center gap-2">
+                  <span className="material-symbols-outlined text-emerald-400 text-xl">satellite_alt</span>
+                  Google Antigravity
+                </div>
+                <span className="text-[10px] font-label-mono px-2 py-0.5 rounded bg-emerald-500/10 text-emerald-300">
+                  .gemini/config/mcp_config.json
+                </span>
+              </div>
+              <pre className="bg-black/60 rounded-xl p-3 text-[11px] font-label-mono text-[#cbc4d2] overflow-x-auto border border-white/5">
+{`{
+  "mcpServers": {
+    "xtradevpilot": {
+      "command": "npx",
+      "args": ["-y", "xtradevpilot-mcp"]
+    }
+  }
+}`}
+              </pre>
+            </div>
+            <button
+              onClick={() =>
+                copyToClipboard(
+                  JSON.stringify(
+                    {
+                      mcpServers: {
+                        xtradevpilot: {
+                          command: "npx",
+                          args: ["-y", "xtradevpilot-mcp"]
+                        }
+                      }
+                    },
+                    null,
+                    2
+                  ),
+                  "cfg-antigravity"
+                )
+              }
+              className="mt-4 w-full py-2 rounded-xl bg-white/5 hover:bg-white/10 border border-white/10 text-xs font-label-mono text-white flex items-center justify-center gap-1.5 transition-all cursor-pointer"
+            >
+              <span className="material-symbols-outlined text-sm">
+                {copiedKey === "cfg-antigravity" ? "check" : "content_copy"}
+              </span>
+              {copiedKey === "cfg-antigravity" ? "Copied Config!" : "Copy Config"}
+            </button>
+          </div>
+        </div>
+      </section>
+
+      {/* 9. Minimal Footer */}
+      <footer className="mt-auto border-t border-white/10 bg-[#09080e]/95 backdrop-blur-2xl py-12 px-4 sm:px-8">
+        <div className="max-w-7xl mx-auto flex flex-col md:flex-row items-center justify-between gap-6">
+          <div className="flex items-center gap-3">
+            <div className="relative h-8 w-8 rounded-lg overflow-hidden shadow-md shadow-[#22d3ee]/20 flex items-center justify-center bg-black/40 border border-white/10">
+              <img
+                src="/xtradevpilot_logo.png"
+                alt="Xtra DevPilot Logo"
+                className="h-full w-full object-contain p-0.5"
+              />
+            </div>
+            <span className="text-white font-bold tracking-tight">Xtra DevPilot</span>
+            <span className="text-xs text-white/40">&copy; 2026 Xtra Engine Inc.</span>
+          </div>
+
+          <div className="flex items-center gap-6 text-xs font-label-mono text-white/70">
+            <span className="text-emerald-400">Bridge Port :42819</span>
             <a
+              className="hover:text-white transition-colors"
               href="https://github.com/om0852/XtraDevPilot"
               target="_blank"
               rel="noopener noreferrer"
-              className="hover:text-[#cfbcff] transition-colors flex items-center gap-1"
             >
               GitHub
-              <span className="material-symbols-outlined text-xs">open_in_new</span>
             </a>
-            <button
-              onClick={() => showToast("Privacy: All execution is local; no external telemetry.")}
-              className="hover:text-[#cfbcff] transition-colors cursor-pointer"
-            >
-              Privacy
-            </button>
-            <span className="inline-flex items-center gap-1.5 text-emerald-400">
-              <span className="w-2 h-2 rounded-full bg-emerald-400"></span>
-              Bridge Port :42819
-            </span>
+            <Link className="hover:text-white transition-colors" href="/docs">
+              Documentation
+            </Link>
           </div>
         </div>
       </footer>
 
-      {/* Installation Modal */}
+      {/* 10. Quickstart Installation Modal */}
       {showModal && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/75 backdrop-blur-md">
-          <div className="relative w-full max-w-2xl bg-[#141218] border border-white/15 rounded-xl shadow-2xl overflow-hidden glass-card">
-            <div className="h-1 w-full bg-gradient-to-r from-[#cfbcff] via-[#e7c365] to-[#22d3ee]"></div>
-
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/80 backdrop-blur-md">
+          <div className="relative w-full max-w-2xl bg-[#14121c] border border-white/15 rounded-2xl shadow-2xl overflow-hidden glass-panel">
+            <div className="h-1 w-full bg-gradient-to-r from-[#cfbcff] via-[#22d3ee] to-[#10b981]"></div>
             <div className="p-6 md:p-8 space-y-6">
               <div className="flex justify-between items-start">
                 <div>
-                  <h3 className="text-xl md:text-2xl font-bold text-white flex items-center gap-2">
-                    Install Xtra DevPilot
-                    <span className="text-xs font-label-mono px-2 py-0.5 rounded bg-emerald-400/10 text-emerald-400 border border-emerald-400/20">
-                      v2.0.0
-                    </span>
+                  <h3 className="text-xl md:text-2xl font-bold text-white">
+                    Setup Xtra DevPilot
                   </h3>
-                  <p className="text-xs sm:text-sm text-[#cbc4d2] mt-1 font-body-md">
-                    Follow these 3 quick steps to bridge Chrome to your AI editor.
+                  <p className="text-xs sm:text-sm text-[#cbc4d2] mt-1 font-sans">
+                    3 steps to bridge live Chrome directly into your AI editor.
                   </p>
                 </div>
                 <button
                   onClick={() => setShowModal(false)}
-                  className="text-[#948e9c] hover:text-white transition-colors cursor-pointer p-1"
+                  className="text-white/40 hover:text-white transition-colors p-1 cursor-pointer"
                 >
                   <span className="material-symbols-outlined text-2xl">close</span>
                 </button>
               </div>
 
-              {/* Step 1: Download Extension */}
-              <div className="p-4 bg-white/5 rounded-lg border border-white/10 space-y-3">
+              {/* Step 1 */}
+              <div className="p-4 bg-white/5 rounded-xl border border-white/10 space-y-2">
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-3">
                     <span className="w-6 h-6 rounded-full bg-[#cfbcff]/20 text-[#cfbcff] flex items-center justify-center font-bold text-xs font-label-mono">
                       1
                     </span>
-                    <h4 className="font-bold text-white text-sm">Download Extension Bundle</h4>
+                    <h4 className="font-bold text-white text-sm">Download Chrome Extension</h4>
                   </div>
                   <a
                     href="/xtradevpilot-extension.zip"
                     download="xtradevpilot-extension.zip"
-                    onClick={() => showToast("Downloading xtradevpilot-extension.zip...")}
-                    className="primary-gradient text-white text-xs font-bold px-3.5 py-1.5 rounded flex items-center gap-1.5 shadow hover:scale-105 transition-all cursor-pointer"
+                    className="bg-[#6750a4] hover:bg-[#7d65b9] text-white text-xs font-bold px-3.5 py-1.5 rounded-lg flex items-center gap-1.5 shadow transition-all cursor-pointer"
                   >
                     <span className="material-symbols-outlined text-sm">download</span>
                     Download .ZIP
                   </a>
                 </div>
                 <p className="text-xs text-[#cbc4d2] pl-9">
-                  Extract the downloaded ZIP file to a convenient local folder (e.g. <code className="text-[#cfbcff]">Downloads/xtradevpilot/</code>).
+                  Extract the downloaded ZIP file to a local folder.
                 </p>
               </div>
 
-              {/* Step 2: Load in Chrome */}
-              <div className="p-4 bg-white/5 rounded-lg border border-white/10 space-y-2">
+              {/* Step 2 */}
+              <div className="p-4 bg-white/5 rounded-xl border border-white/10 space-y-2">
                 <div className="flex items-center gap-3">
-                  <span className="w-6 h-6 rounded-full bg-[#e7c365]/20 text-[#e7c365] flex items-center justify-center font-bold text-xs font-label-mono">
+                  <span className="w-6 h-6 rounded-full bg-yellow-500/20 text-yellow-300 flex items-center justify-center font-bold text-xs font-label-mono">
                     2
                   </span>
                   <h4 className="font-bold text-white text-sm">Load Unpacked in Chrome</h4>
                 </div>
                 <ol className="list-decimal pl-13 space-y-1 text-xs text-[#cbc4d2]">
-                  <li>Open Google Chrome and navigate to <code className="bg-white/10 px-1.5 py-0.5 rounded text-[#e7c365]">chrome://extensions/</code>.</li>
-                  <li>Enable the <span className="text-white font-semibold">Developer mode</span> toggle in the top-right corner.</li>
-                  <li>Click <span className="text-white font-semibold">Load unpacked</span> and select the extracted folder.</li>
+                  <li>Navigate to <code className="bg-white/10 px-1.5 py-0.5 rounded text-yellow-300">chrome://extensions/</code> in Chrome.</li>
+                  <li>Enable <span className="text-white font-semibold">Developer mode</span> in the top-right corner.</li>
+                  <li>Click <span className="text-white font-semibold">Load unpacked</span> and select the extracted extension folder.</li>
                 </ol>
               </div>
 
-              {/* Step 3: Run MCP Server */}
-              <div className="p-4 bg-white/5 rounded-lg border border-white/10 space-y-3">
+              {/* Step 3 */}
+              <div className="p-4 bg-white/5 rounded-xl border border-white/10 space-y-2">
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-3">
-                    <span className="w-6 h-6 rounded-full bg-[#22d3ee]/20 text-[#22d3ee] flex items-center justify-center font-bold text-xs font-label-mono">
+                    <span className="w-6 h-6 rounded-full bg-cyan-500/20 text-cyan-300 flex items-center justify-center font-bold text-xs font-label-mono">
                       3
                     </span>
-                    <h4 className="font-bold text-white text-sm">Start Local MCP Bridge</h4>
+                    <h4 className="font-bold text-white text-sm">Start Local Bridge Server</h4>
                   </div>
                   <button
-                    onClick={() => copyToClipboard("npx xtradevpilot-mcp", "modal-npx", "npx command")}
-                    className="text-xs font-label-mono text-[#22d3ee] hover:underline cursor-pointer"
+                    onClick={() => copyToClipboard("npx xtradevpilot-mcp", "modal-cmd")}
+                    className="text-xs font-label-mono text-cyan-300 hover:underline cursor-pointer"
                   >
-                    {copiedKey === "modal-npx" ? "✔ Copied" : "Copy Command"}
+                    {copiedKey === "modal-cmd" ? "Copied" : "Copy Command"}
                   </button>
                 </div>
                 <div className="pl-9">
-                  <div className="bg-[#0f0d13] p-2.5 rounded border border-white/10 font-label-mono text-xs text-[#cfbcff] select-all">
+                  <div className="bg-black/60 p-2.5 rounded-lg border border-white/10 font-label-mono text-xs text-[#cfbcff] select-all">
                     npx xtradevpilot-mcp
                   </div>
                 </div>
@@ -1191,11 +1546,11 @@ export default function Landing() {
                   onClick={() => setShowModal(false)}
                   className="text-xs text-[#cfbcff] hover:underline flex items-center gap-1 font-label-mono"
                 >
-                  View full IDE setup guides &rarr;
+                  View full documentation &rarr;
                 </Link>
                 <button
                   onClick={() => setShowModal(false)}
-                  className="px-5 py-2 bg-white/10 hover:bg-white/15 text-white text-xs font-label-mono rounded transition-colors cursor-pointer"
+                  className="px-5 py-2 bg-white/10 hover:bg-white/15 text-white text-xs font-label-mono rounded-lg transition-colors cursor-pointer"
                 >
                   Done
                 </button>
@@ -1204,16 +1559,6 @@ export default function Landing() {
           </div>
         </div>
       )}
-
-      {/* Floating Toast Notification */}
-      <div
-        className={`fixed bottom-6 right-6 z-[120] flex items-center gap-3 px-4 py-3 bg-[#141218]/95 border border-[#cfbcff]/40 text-white rounded-lg shadow-2xl backdrop-blur-xl transition-all duration-300 ${
-          toastMessage ? "opacity-100 translate-y-0 scale-100" : "opacity-0 translate-y-4 scale-95 pointer-events-none"
-        }`}
-      >
-        <span className="material-symbols-outlined text-[#cfbcff] text-xl">info</span>
-        <span className="font-label-mono text-xs">{toastMessage}</span>
-      </div>
     </div>
   );
 }

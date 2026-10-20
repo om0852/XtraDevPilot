@@ -106,6 +106,21 @@ function setNativeValue(element, value) {
     } else {
       element.value = value;
     }
+  } else if (element instanceof HTMLSelectElement) {
+    let matched = false;
+    for (let i = 0; i < element.options.length; i++) {
+      const opt = element.options[i];
+      if (opt.value === value || opt.text.trim().toLowerCase() === String(value).trim().toLowerCase()) {
+        element.selectedIndex = i;
+        element.value = opt.value;
+        opt.selected = true;
+        matched = true;
+        break;
+      }
+    }
+    if (!matched) {
+      element.value = value;
+    }
   } else {
     element.textContent = value;
   }
@@ -134,6 +149,186 @@ async function waitForElement(selector, timeoutMs = 3000, state = 'visible', roo
     };
     check();
   });
+}
+
+// --- MCP Visual Badge & Accessibility Tree Helpers ---
+
+function ensureMcpBadge() {
+  if (document.getElementById('xtradevpilot-mcp-badge')) return;
+  const badge = document.createElement('div');
+  badge.id = 'xtradevpilot-mcp-badge';
+  badge.style.cssText = `
+    position: fixed;
+    top: 12px;
+    right: 12px;
+    z-index: 2147483647;
+    background: linear-gradient(135deg, #1e1e2e, #2d2b55);
+    color: #00ffcc;
+    font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    font-size: 11px;
+    font-weight: 600;
+    padding: 6px 14px;
+    border-radius: 20px;
+    box-shadow: 0 4px 15px rgba(0, 0, 0, 0.3), 0 0 10px rgba(0, 255, 204, 0.4);
+    border: 1px solid rgba(0, 255, 204, 0.5);
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    pointer-events: none;
+    user-select: none;
+    transition: all 0.3s ease;
+  `;
+  badge.innerHTML = `
+    <span style="width: 8px; height: 8px; background: #00ffcc; border-radius: 50%; display: inline-block; box-shadow: 0 0 8px #00ffcc; animation: devpilot-pulse 1.5s infinite;"></span>
+    <span>⚡ Controlled by XtraDevPilot MCP</span>
+  `;
+  
+  if (!document.getElementById('xtradevpilot-badge-style')) {
+    const style = document.createElement('style');
+    style.id = 'xtradevpilot-badge-style';
+    style.textContent = `
+      @keyframes devpilot-pulse {
+        0% { transform: scale(0.95); opacity: 0.8; }
+        50% { transform: scale(1.25); opacity: 1; }
+        100% { transform: scale(0.95); opacity: 0.8; }
+      }
+      .xtradevpilot-interaction-ring {
+        outline: 3px solid #ff007f !important;
+        outline-offset: 2px !important;
+        box-shadow: 0 0 15px rgba(255, 0, 127, 0.8) !important;
+        transition: outline 0.2s ease, box-shadow 0.2s ease !important;
+      }
+    `;
+    document.head.appendChild(style);
+  }
+  document.body.appendChild(badge);
+}
+
+function flashInteractionHighlight(element) {
+  if (!element || !element.classList) return;
+  ensureMcpBadge();
+  element.classList.add('xtradevpilot-interaction-ring');
+  setTimeout(() => {
+    try { element.classList.remove('xtradevpilot-interaction-ring'); } catch(e){}
+  }, 1200);
+}
+
+function buildAccessibilityTree(element = document.body, depth = 0) {
+  if (!element || depth > 5) return null;
+  const tag = element.tagName ? element.tagName.toLowerCase() : '';
+  if (['script', 'style', 'svg', 'noscript', 'iframe'].includes(tag)) return null;
+
+  const role = element.getAttribute('role') || tag;
+  const label = element.getAttribute('aria-label') || element.getAttribute('placeholder') || element.title || (element.innerText ? element.innerText.slice(0, 30).trim() : '');
+  const id = element.id ? `#${element.id}` : '';
+  const isInteractive = ['button', 'input', 'select', 'textarea', 'a'].includes(tag) || element.hasAttribute('onclick') || element.hasAttribute('role');
+
+  let children = [];
+  if (element.children) {
+    for (const child of Array.from(element.children)) {
+      const childTree = buildAccessibilityTree(child, depth + 1);
+      if (childTree) children.push(childTree);
+    }
+  }
+
+  if (!isInteractive && children.length === 0 && !label) return null;
+
+  return {
+    node: `${tag}${id}`,
+    role,
+    label: label || undefined,
+    value: element.value || undefined,
+    children: children.length > 0 ? children : undefined
+  };
+}
+
+// --- Mouse Controller Helper ---
+function simulateMouseAction(options = {}) {
+  ensureMcpBadge();
+  const { action = 'click', x, y, selector, button = 'left', deltaX = 0, deltaY = 0 } = options;
+  let targetEl = selector ? findElement(selector) : null;
+  let clientX = x;
+  let clientY = y;
+
+  if (!targetEl && (x !== undefined && y !== undefined)) {
+    targetEl = document.elementFromPoint(x, y) || document.body;
+  } else if (targetEl && (x === undefined || y === undefined)) {
+    const rect = targetEl.getBoundingClientRect();
+    clientX = rect.left + rect.width / 2;
+    clientY = rect.top + rect.height / 2;
+  }
+
+  if (!targetEl) targetEl = document.body;
+
+  flashInteractionHighlight(targetEl);
+
+  const buttonMap = { left: 0, middle: 1, right: 2 };
+  const buttonCode = buttonMap[button] !== undefined ? buttonMap[button] : 0;
+  const eventInit = {
+    clientX: clientX || 100,
+    clientY: clientY || 100,
+    screenX: clientX || 100,
+    screenY: clientY || 100,
+    button: buttonCode,
+    buttons: buttonCode === 0 ? 1 : (buttonCode === 2 ? 2 : 4),
+    bubbles: true,
+    cancelable: true,
+    composed: true,
+    view: window
+  };
+
+  if (action === 'move') {
+    targetEl.dispatchEvent(new MouseEvent('mousemove', eventInit));
+    targetEl.dispatchEvent(new PointerEvent('pointermove', eventInit));
+    return { status: 'moved', x: clientX, y: clientY, target: targetEl.tagName };
+  }
+
+  if (action === 'click') {
+    targetEl.dispatchEvent(new MouseEvent('mousedown', eventInit));
+    targetEl.dispatchEvent(new MouseEvent('mouseup', eventInit));
+    targetEl.dispatchEvent(new MouseEvent('click', eventInit));
+    if (button === 'right') {
+      targetEl.dispatchEvent(new MouseEvent('contextmenu', eventInit));
+    }
+    return { status: 'clicked', button, x: clientX, y: clientY, target: targetEl.tagName };
+  }
+
+  if (action === 'dblclick') {
+    targetEl.dispatchEvent(new MouseEvent('mousedown', eventInit));
+    targetEl.dispatchEvent(new MouseEvent('mouseup', eventInit));
+    targetEl.dispatchEvent(new MouseEvent('click', eventInit));
+    targetEl.dispatchEvent(new MouseEvent('mousedown', eventInit));
+    targetEl.dispatchEvent(new MouseEvent('mouseup', eventInit));
+    targetEl.dispatchEvent(new MouseEvent('click', eventInit));
+    targetEl.dispatchEvent(new MouseEvent('dblclick', eventInit));
+    return { status: 'double_clicked', x: clientX, y: clientY, target: targetEl.tagName };
+  }
+
+  if (action === 'drag') {
+    const { endX = clientX + 100, endY = clientY + 100, steps = 10 } = options;
+    targetEl.dispatchEvent(new MouseEvent('mousedown', eventInit));
+    
+    for (let i = 1; i <= steps; i++) {
+      const curX = clientX + (endX - clientX) * (i / steps);
+      const curY = clientY + (endY - clientY) * (i / steps);
+      const stepInit = { ...eventInit, clientX: curX, clientY: curY, screenX: curX, screenY: curY };
+      targetEl.dispatchEvent(new MouseEvent('mousemove', stepInit));
+    }
+    
+    const dropTarget = document.elementFromPoint(endX, endY) || targetEl;
+    const finalInit = { ...eventInit, clientX: endX, clientY: endY, screenX: endX, screenY: endY };
+    dropTarget.dispatchEvent(new MouseEvent('mouseup', finalInit));
+    return { status: 'dragged', start: { x: clientX, y: clientY }, end: { x: endX, y: endY } };
+  }
+
+  if (action === 'scroll') {
+    targetEl.dispatchEvent(new WheelEvent('wheel', {
+      clientX, clientY, deltaX, deltaY, bubbles: true, cancelable: true, view: window
+    }));
+    return { status: 'scrolled', deltaX, deltaY };
+  }
+
+  return { status: 'executed', action };
 }
 
 // Respond to IDE Bridge requests
@@ -185,6 +380,202 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     } catch (e) {
       sendResponse({ error: e.message });
     }
+    return true;
+  }
+
+  if (request.action === 'DOWNLOAD_PAGE_HTML') {
+    try {
+      let html = '';
+      let selectorUsed = null;
+      if (request.selector) {
+        const el = findElement(request.selector);
+        if (!el) {
+          sendResponse({ error: `Element with selector '${request.selector}' not found.` });
+          return true;
+        }
+        selectorUsed = request.selector;
+        if (request.clean) {
+          const clone = el.cloneNode(true);
+          const removeTags = ['script', 'style', 'svg', 'iframe', 'noscript', 'path'];
+          removeTags.forEach(tag => {
+            clone.querySelectorAll(tag).forEach(item => item.remove());
+          });
+          html = clone.outerHTML;
+        } else {
+          html = el.outerHTML;
+        }
+      } else {
+        const doctype = document.doctype ? new XMLSerializer().serializeToString(document.doctype) + '\n' : '<!DOCTYPE html>\n';
+        if (request.clean) {
+          const clone = document.documentElement.cloneNode(true);
+          const removeTags = ['script', 'style', 'svg', 'iframe', 'noscript', 'path'];
+          removeTags.forEach(tag => {
+            clone.querySelectorAll(tag).forEach(item => item.remove());
+          });
+          html = doctype + clone.outerHTML;
+        } else {
+          html = doctype + document.documentElement.outerHTML;
+        }
+      }
+
+      sendResponse({
+        result: {
+          html,
+          title: document.title || 'Page',
+          url: window.location.href,
+          selector: selectorUsed,
+          length: html.length
+        }
+      });
+    } catch (e) {
+      sendResponse({ error: `Download page HTML error: ${e.message}` });
+    }
+    return true;
+  }
+
+  if (request.action === 'COLLECT_SOURCE_URLS') {
+    try {
+      const scopeRoot = request.selector ? (findElement(request.selector) || document) : document;
+      const baseUrl = window.location.href;
+
+      // 1. Collect script URLs and inline scripts
+      const scriptUrls = new Set();
+      const inlineScripts = [];
+      scopeRoot.querySelectorAll('script').forEach((s, idx) => {
+        if (s.src) {
+          try { scriptUrls.add(new URL(s.src, baseUrl).href); } catch (e) {}
+        } else if (s.textContent && s.textContent.trim().length > 0) {
+          inlineScripts.push({
+            name: `inline-script-${idx + 1}.js`,
+            content: s.textContent
+          });
+        }
+      });
+
+      // 2. Collect stylesheets and inline styles
+      const styleUrls = new Set();
+      const inlineStyles = [];
+      scopeRoot.querySelectorAll('link[rel="stylesheet"], link[rel="preload"][as="style"]').forEach(l => {
+        if (l.href) {
+          try { styleUrls.add(new URL(l.href, baseUrl).href); } catch (e) {}
+        }
+      });
+      scopeRoot.querySelectorAll('style').forEach((s, idx) => {
+        if (s.textContent && s.textContent.trim().length > 0) {
+          inlineStyles.push({
+            name: `inline-style-${idx + 1}.css`,
+            content: s.textContent
+          });
+        }
+      });
+
+      // 3. Collect images and inline SVGs
+      const imageUrls = new Set();
+      const inlineSvgs = [];
+      scopeRoot.querySelectorAll('img').forEach(img => {
+        const src = img.currentSrc || img.src || img.getAttribute('src');
+        if (src && !src.startsWith('data:')) {
+          try { imageUrls.add(new URL(src, baseUrl).href); } catch (e) {}
+        }
+      });
+      scopeRoot.querySelectorAll('link[rel*="icon"]').forEach(l => {
+        if (l.href && !l.href.startsWith('data:')) {
+          try { imageUrls.add(new URL(l.href, baseUrl).href); } catch (e) {}
+        }
+      });
+      scopeRoot.querySelectorAll('svg').forEach((svg, idx) => {
+        if (svg.outerHTML && svg.outerHTML.length < 50000) {
+          inlineSvgs.push({
+            name: `inline-icon-${idx + 1}.svg`,
+            content: svg.outerHTML
+          });
+        }
+      });
+
+      // 4. Collect font URLs
+      const fontUrls = new Set();
+      scopeRoot.querySelectorAll('link[rel="preload"][as="font"]').forEach(l => {
+        if (l.href) {
+          try { fontUrls.add(new URL(l.href, baseUrl).href); } catch (e) {}
+        }
+      });
+
+      // 5. Query Resource Timing API for loaded assets (when not restricted to selector)
+      if (!request.selector && window.performance && window.performance.getEntriesByType) {
+        const resources = window.performance.getEntriesByType('resource');
+        for (const res of resources) {
+          const name = res.name;
+          if (!name || name.startsWith('data:') || name.startsWith('blob:')) continue;
+          try {
+            const urlObj = new URL(name, baseUrl);
+            const pathname = urlObj.pathname.toLowerCase();
+            const initiator = res.initiatorType;
+            if (initiator === 'script' || pathname.endsWith('.js') || pathname.endsWith('.mjs')) {
+              scriptUrls.add(urlObj.href);
+            } else if (initiator === 'css' || initiator === 'link' || pathname.endsWith('.css')) {
+              styleUrls.add(urlObj.href);
+            } else if (initiator === 'img' || /\.(png|jpe?g|gif|webp|ico|svg|avif)$/i.test(pathname)) {
+              imageUrls.add(urlObj.href);
+            } else if (initiator === 'font' || /\.(woff2?|ttf|otf|eot)$/i.test(pathname)) {
+              fontUrls.add(urlObj.href);
+            }
+          } catch (e) {}
+        }
+      }
+
+      sendResponse({
+        result: {
+          baseUrl,
+          scripts: Array.from(scriptUrls),
+          inlineScripts,
+          styles: Array.from(styleUrls),
+          inlineStyles,
+          images: Array.from(imageUrls),
+          inlineSvgs,
+          fonts: Array.from(fontUrls)
+        }
+      });
+    } catch (e) {
+      sendResponse({ error: `Collect source URLs error: ${e.message}` });
+    }
+    return true;
+  }
+
+  if (request.action === 'GET_AX_TREE') {
+    try {
+      ensureMcpBadge();
+      const axTree = buildAccessibilityTree(document.body);
+      sendResponse({ result: axTree });
+    } catch (e) {
+      sendResponse({ error: e.message });
+    }
+    return true;
+  }
+
+  if (request.action === 'BATCH_EXECUTE') {
+    (async () => {
+      try {
+        ensureMcpBadge();
+        const actions = request.actions || [];
+        const results = [];
+        for (const item of actions) {
+          const sel = item.selector ? findElement(item.selector) : null;
+          if (sel) {
+            flashInteractionHighlight(sel);
+            if (item.action === 'CLICK_ELEMENT') {
+              sel.click();
+              results.push(`Clicked ${item.selector}`);
+            } else if (item.action === 'TYPE_TEXT') {
+              setNativeValue(sel, item.text || '');
+              results.push(`Typed into ${item.selector}`);
+            }
+          }
+        }
+        sendResponse({ result: results });
+      } catch (e) {
+        sendResponse({ error: e.message });
+      }
+    })();
     return true;
   }
 
@@ -323,6 +714,7 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
           el = await waitForElement(request.selector, timeoutMs, 'visible');
         }
         if (el) {
+          flashInteractionHighlight(el);
           el.scrollIntoView({ behavior: 'smooth', block: 'center' });
           el.click();
           sendResponse({ result: `Element ${request.selector} clicked successfully.` });
@@ -340,21 +732,92 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     (async () => {
       try {
         const timeoutMs = request.timeoutMs !== undefined ? request.timeoutMs : 3000;
-        let el = findElement(request.selector);
-        if (!el && timeoutMs > 0) {
-          el = await waitForElement(request.selector, timeoutMs, 'visible');
+        let selector = request.selector;
+        let el = null;
+        if (selector) {
+          el = findElement(selector);
+          if (!el && timeoutMs > 0) {
+            el = await waitForElement(selector, timeoutMs, 'visible');
+          }
+        }
+        if (!el) {
+          if (selector) {
+            sendResponse({ error: `Element not found: ${selector}` });
+            return;
+          }
+          el = document.activeElement || document.body;
         }
         if (el) {
-          el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+          flashInteractionHighlight(el);
+          if (typeof el.scrollIntoView === 'function') {
+            el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+          }
           setNativeValue(el, request.text);
-          sendResponse({ result: `Typed text into ${request.selector}` });
+          sendResponse({ result: `Typed text into ${selector || (el.tagName ? el.tagName.toLowerCase() : 'activeElement')}` });
         } else {
-          sendResponse({ error: `Element not found: ${request.selector}` });
+          sendResponse({ error: `Element not found: ${selector}` });
         }
       } catch (e) {
         sendResponse({ error: e.message });
       }
     })();
+    return true;
+  }
+
+  if (request.action === 'PRESS_KEY') {
+    try {
+      let selector = request.selector;
+      let el = selector ? findElement(selector) : (document.activeElement || document.body);
+      if (el) {
+        flashInteractionHighlight(el);
+        const key = request.key || 'Enter';
+        const keyCodeMap = {
+          'Enter': 13, 'Tab': 9, 'Escape': 27, 'Backspace': 8, 'Delete': 46,
+          'ArrowUp': 38, 'ArrowDown': 40, 'ArrowLeft': 37, 'ArrowRight': 39, 'Space': 32
+        };
+        const keyCode = keyCodeMap[key] || 13;
+
+        const eventInit = {
+          key: key,
+          code: key,
+          keyCode: keyCode,
+          which: keyCode,
+          bubbles: true,
+          cancelable: true,
+          composed: true,
+          shiftKey: !!request.shiftKey,
+          ctrlKey: !!request.ctrlKey,
+          altKey: !!request.altKey
+        };
+
+        el.dispatchEvent(new KeyboardEvent('keydown', eventInit));
+        el.dispatchEvent(new KeyboardEvent('keypress', eventInit));
+        el.dispatchEvent(new KeyboardEvent('keyup', eventInit));
+
+        if (key === 'Enter' && el.tagName === 'INPUT') {
+          el.blur();
+          if (el.form) {
+            el.form.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
+          }
+        }
+
+        sendResponse({ result: `Key '${key}' pressed successfully.` });
+      } else {
+        sendResponse({ error: `Element not found: ${selector}` });
+      }
+    } catch (e) {
+      sendResponse({ error: e.message });
+    }
+    return true;
+  }
+
+  if (request.action === 'MOUSE_ACTION') {
+    try {
+      const res = simulateMouseAction(request);
+      sendResponse({ result: res });
+    } catch (e) {
+      sendResponse({ error: `Mouse action error: ${e.message}` });
+    }
     return true;
   }
 
@@ -528,41 +991,99 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
           return;
         }
 
+        trigger.focus();
         trigger.click();
-        await new Promise(r => setTimeout(r, 400));
+        await new Promise(r => setTimeout(r, 300));
 
-        // If searchQuery is provided, type into combobox search input
-        if (request.searchQuery) {
-          const searchInput = document.querySelector('input[type="search"], input[role="searchbox"], input[placeholder*="Search" i], [aria-haspopup="listbox"] input');
-          if (searchInput) {
-            setNativeValue(searchInput, request.searchQuery);
+        // Type into search input (prioritize trigger itself if input, then local search)
+        const queryToType = request.searchQuery || (trigger.tagName === 'INPUT' ? request.optionText : null);
+        if (queryToType) {
+          if (trigger.tagName === 'INPUT' || trigger.tagName === 'TEXTAREA') {
+            setNativeValue(trigger, queryToType);
             await new Promise(r => setTimeout(r, 300));
+          } else {
+            const localSearch = trigger.querySelector('input') || 
+              trigger.parentElement?.querySelector('input[type="text"], input[type="search"], input[role="combobox"]');
+            if (localSearch) {
+              setNativeValue(localSearch, queryToType);
+              await new Promise(r => setTimeout(r, 300));
+            }
           }
         }
 
         // Search for matching option in popup list
         const targetText = String(request.optionText).trim().toLowerCase();
+        const triggerId = trigger.id || '';
         const candidateSelectors = [
+          triggerId ? `div[id*="${triggerId}"][role="option"]` : null,
+          'div[id*="react-select"][role="option"]',
           '[role="option"]',
           '[role="listbox"] li',
           'ul li[data-value]',
           '.dropdown-menu li',
           '.select-option',
-          '[data-ph-at-id*="option"]',
-          'div[id*="react-select"][role="option"]'
-        ];
+          '[data-ph-at-id*="option"]'
+        ].filter(Boolean);
 
         let foundOption = null;
+        const allItems = [];
         for (const sel of candidateSelectors) {
           const items = document.querySelectorAll(sel);
-          for (const item of items) {
+          for (const item of items) allItems.push(item);
+        }
+
+        // Only search visible elements (uses modern checkVisibility to support position:fixed portals)
+        const isVisible = (el) => {
+          if (typeof el.checkVisibility === 'function') {
+            return el.checkVisibility();
+          }
+          const rect = el.getBoundingClientRect();
+          return rect.width > 0 && rect.height > 0 && getComputedStyle(el).display !== 'none';
+        };
+        const visibleItems = allItems.filter(isVisible);
+        const searchList = visibleItems.length > 0 ? visibleItems : allItems;
+
+        // 1. Exact match first
+        for (const item of searchList) {
+          const text = (item.textContent || '').trim().toLowerCase();
+          if (text === targetText) {
+            foundOption = item;
+            break;
+          }
+        }
+
+        // 2. Exact word match (e.g. "Yes", "No", "India")
+        if (!foundOption) {
+          const wordRegex = new RegExp(`\\b${targetText.replace(/[.*+?^${}()|[\\]\\]/g, '\\$&')}\\b`, 'i');
+          for (const item of searchList) {
             const text = (item.textContent || '').trim().toLowerCase();
-            if (text === targetText || text.includes(targetText)) {
+            if (wordRegex.test(text)) {
               foundOption = item;
               break;
             }
           }
-          if (foundOption) break;
+        }
+
+        // 3. Fallback to startsWith only if targetText is at least 3 chars
+        if (!foundOption && targetText.length >= 3) {
+          for (const item of searchList) {
+            const text = (item.textContent || '').trim().toLowerCase();
+            if (text.startsWith(targetText)) {
+              foundOption = item;
+              break;
+            }
+          }
+        }
+
+        // 4. Fallback to substring
+        if (!foundOption) {
+          for (const item of searchList) {
+            const text = (item.textContent || '').trim().toLowerCase();
+            if (text.includes(targetText)) {
+              foundOption = item;
+              break;
+            }
+          }
         }
 
         if (foundOption) {
@@ -1211,6 +1732,38 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     return true;
   }
 
+  if (request.action === 'GET_CANVAS_SNAPSHOT') {
+    try {
+      const canvas = document.querySelector('canvas[data-testid="gpu-canvas"]') || document.querySelector('canvas');
+      if (canvas) {
+        const dataUrl = canvas.toDataURL('image/png');
+        sendResponse({ result: dataUrl });
+      } else {
+        const c = document.createElement('canvas');
+        c.width = Math.max(window.innerWidth || 1200, 800);
+        c.height = Math.max(window.innerHeight || 800, 600);
+        const ctx = c.getContext('2d');
+        if (ctx) {
+          ctx.fillStyle = '#141218';
+          ctx.fillRect(0, 0, c.width, c.height);
+          ctx.fillStyle = '#cfbcff';
+          ctx.font = 'bold 22px system-ui, sans-serif';
+          ctx.fillText(document.title || 'Browser Viewport', 32, 50);
+          ctx.fillStyle = '#cbc4d2';
+          ctx.font = '14px monospace';
+          ctx.fillText(`URL: ${window.location.href}`, 32, 85);
+          ctx.fillStyle = '#948e9c';
+          ctx.fillText(`Dimensions: ${c.width}x${c.height} • Captured: ${new Date().toISOString()}`, 32, 115);
+        }
+        const dataUrl = c.toDataURL('image/png');
+        sendResponse({ result: dataUrl });
+      }
+    } catch (e) {
+      sendResponse({ error: `Canvas snapshot error: ${e.message}` });
+    }
+    return true;
+  }
+
   if (request.action === 'MANAGE_STORAGE') {
     try {
       const storageType = request.storageType === 'session' ? window.sessionStorage : window.localStorage;
@@ -1224,6 +1777,13 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
       } else if (op === 'remove') {
         storageType.removeItem(request.key);
         sendResponse({ result: `Storage item '${request.key}' removed.` });
+      } else if (op === 'get_all') {
+        const all = {};
+        for (let i = 0; i < storageType.length; i++) {
+          const k = storageType.key(i);
+          all[k] = storageType.getItem(k);
+        }
+        sendResponse({ result: all });
       } else if (op === 'clear') {
         storageType.clear();
         sendResponse({ result: `Storage cleared.` });

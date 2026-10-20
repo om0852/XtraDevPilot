@@ -2,10 +2,11 @@
 
 import { useEffect, useRef, useState, useMemo } from "react";
 import Link from "next/link";
+import CyberBackground from "../components/CyberBackground";
 
 interface DocTool {
   name: string;
-  category: "tabs" | "inspection" | "automation" | "devqa" | "scraping" | "observability";
+  category: "tabs" | "inspection" | "automation" | "devqa" | "scraping" | "observability" | "reconstruction";
   description: string;
   schema: string;
   sampleCall: string;
@@ -287,11 +288,69 @@ const ALL_DOC_TOOLS: DocTool[] = [
     schema: "{}",
     sampleCall: '{\n  "name": "clear_network_mocks",\n  "arguments": {}\n}',
     response: '{\n  "success": true,\n  "clearedCount": 1\n}'
+  },
+
+  // 7. Reverse Engineering & Codebase Reconstruction
+  {
+    name: "download_page_html",
+    category: "reconstruction",
+    description: "Downloads complete page DOM or scopes down to a specific component/feature (e.g. form, modal) with optional tag sanitization.",
+    schema: '{\n  "selector": "string (optional)",\n  "clean": "boolean (optional, default: true)",\n  "outputPath": "string (optional)",\n  "tabId": "number (optional)"\n}',
+    sampleCall: '{\n  "name": "download_page_html",\n  "arguments": {\n    "selector": "form.create-link-modal",\n    "clean": true,\n    "outputPath": "./create-link-modal.html"\n  }\n}',
+    response: '{\n  "success": true,\n  "filePath": "./create-link-modal.html",\n  "bytes": 23842,\n  "scoped": true\n}'
+  },
+  {
+    name: "export_har",
+    category: "reconstruction",
+    description: "Captures full network activity into standard HAR 1.2 format with request/response payloads, timing waterfalls, and MIME types.",
+    schema: '{\n  "outputPath": "string (optional)",\n  "clearAfterExport": "boolean (optional)",\n  "tabId": "number (optional)"\n}',
+    sampleCall: '{\n  "name": "export_har",\n  "arguments": {\n    "outputPath": "./network-traffic.har"\n  }\n}',
+    response: '{\n  "success": true,\n  "filePath": "./network-traffic.har",\n  "entriesCount": 42\n}'
+  },
+  {
+    name: "download_sources",
+    category: "reconstruction",
+    description: "Discovers and downloads all in-scope client-side scripts, stylesheets, sourcemaps, images, and fonts with a structured manifest.",
+    schema: '{\n  "outputDir": "string (optional)",\n  "types": "array of \'scripts\'|\'styles\'|\'sourcemaps\'|\'images\'",\n  "selector": "string (optional)",\n  "tabId": "number (optional)"\n}',
+    sampleCall: '{\n  "name": "download_sources",\n  "arguments": {\n    "outputDir": "./sources",\n    "types": ["scripts", "styles", "sourcemaps"]\n  }\n}',
+    response: '{\n  "success": true,\n  "outputDir": "./sources",\n  "manifest": {\n    "scripts": 18,\n    "styles": 4,\n    "sourcemaps": 3\n  }\n}'
+  },
+  {
+    name: "reconstruct_source_tree",
+    category: "reconstruction",
+    description: "Reconstructs the original frontend project source code (TypeScript, React, Vue, Svelte, CSS) directly from downloaded sourcemap files.",
+    schema: '{\n  "inputDir": "string (optional, default: ./downloads/sources)",\n  "outputDir": "string (optional, default: ./reconstructed)"\n}',
+    sampleCall: '{\n  "name": "reconstruct_source_tree",\n  "arguments": {\n    "inputDir": "./sources",\n    "outputDir": "./reconstructed"\n  }\n}',
+    response: '{\n  "success": true,\n  "totalFiles": 43,\n  "detectedFramework": "React 19 + TypeScript",\n  "outputDir": "./reconstructed"\n}'
+  },
+  {
+    name: "trace_action_network",
+    category: "reconstruction",
+    description: "Correlates UI actions (clicks, form submits) with the exact outgoing HTTP/XHR/fetch requests, payloads, and response status codes.",
+    schema: '{\n  "selector": "string (required)",\n  "action": "\'click\'|\'submit\' (default: \'click\')",\n  "waitDurationMs": "number (default: 2000)",\n  "tabId": "number (optional)"\n}',
+    sampleCall: '{\n  "name": "trace_action_network",\n  "arguments": {\n    "selector": "button#save-link",\n    "action": "click",\n    "waitDurationMs": 2000\n  }\n}',
+    response: '{\n  "success": true,\n  "requests": [\n    {\n      "method": "POST",\n      "url": "https://linktree.work.gd/api/links",\n      "status": 201,\n      "payload": { "title": "Portfolio", "url": "https://..." }\n    }\n  ]\n}'
+  },
+  {
+    name: "extract_api_endpoints",
+    category: "reconstruction",
+    description: "Scans client bundles and HAR logs to discover backend API routes, query params, and automatically generates an OpenAPI 3.0 specification.",
+    schema: '{\n  "inputPath": "string (optional)",\n  "outputPath": "string (optional, default: ./openapi.json)"\n}',
+    sampleCall: '{\n  "name": "extract_api_endpoints",\n  "arguments": {\n    "inputPath": "./sources",\n    "outputPath": "./openapi.json"\n  }\n}',
+    response: '{\n  "success": true,\n  "endpointsDiscovered": 21,\n  "openApiFile": "./openapi.json"\n}'
+  },
+  {
+    name: "export_rea_evidence",
+    category: "reconstruction",
+    description: "Exports live authenticated browser state (DOM, HAR, cookies, storage, endpoints) into the standard REA (Reverse Engineer Anything) Evidence format.",
+    schema: '{\n  "outputPath": "string (optional)",\n  "includeStorage": "boolean (optional, default: true)",\n  "tabId": "number (optional)"\n}',
+    sampleCall: '{\n  "name": "export_rea_evidence",\n  "arguments": {\n    "outputPath": "./evidence.json"\n  }\n}',
+    response: '{\n  "success": true,\n  "schemaVersion": "2.0.0",\n  "evidencePath": "./evidence.json",\n  "bytes": 974128\n}'
   }
 ];
 
 export default function DocsPage() {
-  const [activeSection, setActiveSection] = useState<"installation" | "configuration" | "tools" | "architecture" | "troubleshooting" | "settings">("installation");
+  const [activeSection, setActiveSection] = useState<"installation" | "configuration" | "reconstruction" | "cli" | "tools" | "architecture" | "troubleshooting" | "settings">("installation");
   const [toolCategory, setToolCategory] = useState<string>("all");
   const [searchQuery, setSearchQuery] = useState("");
   const [toastMessage, setToastMessage] = useState<string | null>(null);
@@ -322,59 +381,74 @@ export default function DocsPage() {
   }, [toolCategory, searchQuery]);
 
   return (
-    <div className="selection:bg-[#cfbcff]/30 min-h-screen flex flex-col bg-[#0d0b12] text-[#e6e0e9]">
+    <div className="selection:bg-[#cfbcff]/30 min-h-screen flex flex-col bg-[#0b0912] text-[#e6e0e9] relative overflow-x-hidden">
+      {/* Dynamic WebGL Shader & Cursor Atmosphere */}
+      <CyberBackground />
+
       {/* Top Navbar */}
-      <header className="fixed top-0 left-0 w-full z-50 flex justify-between items-center px-6 md:px-12 h-16 bg-[#141218]/85 backdrop-blur-[32px] border-b border-white/10 shadow-[0_4px_25px_rgba(0,0,0,0.4)]">
+      <header className="fixed top-0 left-0 w-full z-50 flex justify-between items-center px-6 md:px-12 h-16 glass-panel border-b border-white/10 shadow-[0_12px_45px_rgba(0,0,0,0.7)]">
         <Link href="/" className="flex items-center gap-3 group">
-          <img
-            alt="Xtra DevPilot Logo"
-            className="h-8 w-8 object-contain transition-transform duration-300 group-hover:scale-105"
-            src="/android-chrome-512x512.png"
-          />
-          <div className="flex flex-col">
-            <span className="font-headline-lg text-lg font-bold text-white tracking-tight flex items-center gap-2">
+          <div className="relative h-8 w-8 rounded-lg overflow-hidden shadow-md shadow-[#22d3ee]/20 group-hover:scale-105 transition-transform flex items-center justify-center bg-black/40 border border-white/10">
+            <img
+              src="/xtradevpilot_logo.png"
+              alt="Xtra DevPilot Logo"
+              className="h-full w-full object-contain p-0.5"
+            />
+          </div>
+          <div className="flex items-center gap-2">
+            <span className="text-base sm:text-lg font-bold text-white tracking-tight">
               Xtra DevPilot
-              <span className="text-[10px] uppercase font-label-mono px-1.5 py-0.5 bg-[#cfbcff]/15 text-[#cfbcff] rounded border border-[#cfbcff]/30">
-                Docs
-              </span>
+            </span>
+            <span className="text-[10px] uppercase font-label-mono px-2 py-0.5 bg-[#cfbcff]/15 text-[#cfbcff] rounded-full border border-[#cfbcff]/30 font-semibold tracking-wider">
+              Docs
             </span>
           </div>
         </Link>
 
-        <div className="flex items-center gap-4">
+        <div className="flex items-center gap-3">
+          <Link
+            href="/"
+            className="hidden sm:inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-label-mono text-[#cbc4d2] hover:text-white hover:bg-white/5 transition-all"
+          >
+            <span className="material-symbols-outlined text-sm">home</span>
+            Overview
+          </Link>
+
           <a
             href="/xtradevpilot-extension.zip"
             download="xtradevpilot-extension.zip"
             onClick={() => showToast("Downloading XtraDevPilot Chrome Extension ZIP...")}
-            className="hidden sm:inline-flex items-center gap-2 bg-[#cfbcff] hover:bg-[#e0d2ff] text-[#381e72] font-bold text-xs font-label-mono px-3.5 py-1.5 rounded transition-all cursor-pointer"
+            className="inline-flex items-center gap-1.5 bg-gradient-to-r from-[#6750a4] via-[#7d65b9] to-[#cfbcff] hover:brightness-110 text-white font-semibold text-xs px-4 py-2 rounded-full shadow-[0_0_20px_rgba(103,80,164,0.4)] transition-all cursor-pointer transform active:scale-95"
           >
             <span className="material-symbols-outlined text-sm">download</span>
-            Download Extension (.zip)
+            Download Extension
           </a>
 
           <a
-            className="flex items-center gap-1.5 text-xs font-label-mono text-[#cbc4d2] hover:text-white transition-colors"
+            className="flex items-center gap-1.5 text-xs font-label-mono text-[#cbc4d2] hover:text-white transition-colors px-3 py-1.5 rounded-full hover:bg-white/5"
             href="https://github.com/om0852/XtraDevPilot"
             target="_blank"
             rel="noopener noreferrer"
           >
-            <span className="material-symbols-outlined text-base">terminal</span>
+            <span className="material-symbols-outlined text-sm">terminal</span>
             GitHub
           </a>
         </div>
       </header>
 
       {/* Sidebar Navigation */}
-      <aside className="fixed left-0 top-16 bottom-0 w-[270px] z-40 flex flex-col bg-[#141218]/90 backdrop-blur-[32px] border-r border-white/10">
+      <aside className="fixed left-0 top-16 bottom-0 w-[270px] z-40 flex flex-col glass-panel border-r border-white/10">
         <div className="p-5 space-y-4">
-          <div className="text-[11px] font-label-mono text-[#948e9c] uppercase tracking-wider">
+          <div className="text-[11px] font-label-mono text-[#cfbcff]/70 uppercase tracking-wider">
             Documentation Menu
           </div>
-          <nav className="space-y-1">
+          <nav className="space-y-1.5">
             {[
               { id: "installation", label: "Installation Guide", icon: "download" },
               { id: "configuration", label: "IDE Configurations", icon: "settings" },
-              { id: "tools", label: "33 Tools Reference", icon: "terminal" },
+              { id: "reconstruction", label: "Reverse Engineering", icon: "biotech" },
+              { id: "cli", label: "DevPilot CLI Suite", icon: "terminal" },
+              { id: "tools", label: "40 Tools Reference", icon: "list_alt" },
               { id: "architecture", label: "Protocol & Security", icon: "security" },
               { id: "troubleshooting", label: "Troubleshooting", icon: "build" },
               { id: "settings", label: "Extension Settings", icon: "tune" },
@@ -382,13 +456,13 @@ export default function DocsPage() {
               <button
                 key={item.id}
                 onClick={() => setActiveSection(item.id as any)}
-                className={`w-full flex items-center gap-3 px-3.5 py-2.5 rounded font-label-mono text-xs transition-all text-left cursor-pointer ${
+                className={`w-full flex items-center gap-3 px-3.5 py-2.5 rounded-xl font-label-mono text-xs transition-all text-left cursor-pointer ${
                   activeSection === item.id
-                    ? "text-[#381e72] bg-[#cfbcff] font-bold shadow-sm"
-                    : "text-[#cbc4d2] hover:bg-white/5 hover:text-white"
+                    ? "text-[#cfbcff] bg-[#cfbcff]/15 border border-[#cfbcff]/30 font-bold shadow-[0_0_15px_rgba(207,188,255,0.15)]"
+                    : "text-[#cbc4d2] hover:bg-white/5 hover:text-white border border-transparent"
                 }`}
               >
-                <span className="material-symbols-outlined text-lg">{item.icon}</span>
+                <span className="material-symbols-outlined text-base">{item.icon}</span>
                 {item.label}
               </button>
             ))}
@@ -396,18 +470,18 @@ export default function DocsPage() {
         </div>
 
         <div className="mt-auto p-5 border-t border-white/10 space-y-3">
-          <div className="bg-[#0f0d13] p-3 rounded border border-white/5 text-[11px] font-label-mono space-y-1">
-            <div className="text-[#948e9c]">Bridge Port:</div>
-            <div className="text-emerald-400 font-bold flex items-center gap-1.5">
-              <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
+          <div className="bg-black/40 p-3 rounded-xl border border-white/10 text-[11px] font-label-mono space-y-1">
+            <div className="text-white/50 text-[10px]">Local Chrome Bridge:</div>
+            <div className="text-emerald-300 font-medium">
               ws://127.0.0.1:42819
             </div>
+            <div className="text-[10px] text-white/40">Chrome MV3 WebSocket</div>
           </div>
         </div>
       </aside>
 
       {/* Main Content Area */}
-      <main className="ml-[270px] mt-16 p-8 md:p-12 min-h-[calc(100vh-64px)] flex flex-col relative flex-1 max-w-5xl">
+      <main className="ml-[270px] mt-16 p-8 md:p-12 min-h-[calc(100vh-64px)] flex flex-col relative flex-1 max-w-5xl z-10">
         {/* Section 1: Installation */}
         {activeSection === "installation" && (
           <div className="space-y-10">
@@ -424,7 +498,7 @@ export default function DocsPage() {
             </div>
 
             {/* Step 1 */}
-            <div className="glass-card p-6 rounded-xl border border-white/10 space-y-4">
+            <div className="glass-panel p-6 rounded-xl border border-white/10 space-y-4">
               <div className="flex items-center justify-between">
                 <h3 className="text-lg font-bold text-white flex items-center gap-2">
                   <span className="w-6 h-6 rounded-full bg-[#cfbcff]/20 text-[#cfbcff] text-xs flex items-center justify-center font-label-mono">
@@ -435,7 +509,7 @@ export default function DocsPage() {
                 <a
                   href="/xtradevpilot-extension.zip"
                   download="xtradevpilot-extension.zip"
-                  className="primary-gradient text-white text-xs font-bold px-4 py-2 rounded flex items-center gap-1.5 cursor-pointer shadow"
+                  className="bg-gradient-to-r from-[#6750a4] via-[#7d65b9] to-[#cfbcff] hover:brightness-110 text-white text-xs font-semibold px-4 py-2 rounded-full flex items-center gap-1.5 cursor-pointer shadow-[0_0_20px_rgba(103,80,164,0.4)] transition-all transform active:scale-95"
                 >
                   <span className="material-symbols-outlined text-sm">download</span>
                   Download ZIP
@@ -444,7 +518,7 @@ export default function DocsPage() {
               <p className="text-xs sm:text-sm text-[#cbc4d2]">
                 Choose either the 1-click ZIP download or clone the repository via Git:
               </p>
-              <div className="bg-[#0f0d13] p-3 rounded border border-white/10 font-label-mono text-xs text-[#cfbcff] flex justify-between items-center">
+              <div className="bg-black/50 p-3 rounded border border-white/10 font-label-mono text-xs text-[#cfbcff] flex justify-between items-center">
                 <code>git clone https://github.com/om0852/XtraDevPilot.git</code>
                 <button
                   onClick={() => copyCode("git clone https://github.com/om0852/XtraDevPilot.git", "git-clone", "git clone command")}
@@ -456,7 +530,7 @@ export default function DocsPage() {
             </div>
 
             {/* Step 2 */}
-            <div className="glass-card p-6 rounded-xl border border-white/10 space-y-4">
+            <div className="glass-panel p-6 rounded-xl border border-white/10 space-y-4">
               <h3 className="text-lg font-bold text-white flex items-center gap-2">
                 <span className="w-6 h-6 rounded-full bg-[#e7c365]/20 text-[#e7c365] text-xs flex items-center justify-center font-label-mono">
                   2
@@ -473,7 +547,7 @@ export default function DocsPage() {
             </div>
 
             {/* Step 3 */}
-            <div className="glass-card p-6 rounded-xl border border-white/10 space-y-4">
+            <div className="glass-panel p-6 rounded-xl border border-white/10 space-y-4">
               <div className="flex items-center justify-between">
                 <h3 className="text-lg font-bold text-white flex items-center gap-2">
                   <span className="w-6 h-6 rounded-full bg-[#22d3ee]/20 text-[#22d3ee] text-xs flex items-center justify-center font-label-mono">
@@ -491,7 +565,7 @@ export default function DocsPage() {
               <p className="text-xs sm:text-sm text-[#cbc4d2]">
                 The server runs locally on port <code className="text-[#cfbcff]">42819</code>. Run this command in any terminal:
               </p>
-              <div className="bg-[#0f0d13] p-3 rounded border border-white/10 font-label-mono text-xs text-[#cfbcff]">
+              <div className="bg-black/50 p-3 rounded border border-white/10 font-label-mono text-xs text-[#cfbcff]">
                 <code>npx xtradevpilot-mcp</code>
               </div>
               <p className="text-xs text-[#948e9c]">
@@ -517,7 +591,7 @@ export default function DocsPage() {
             </div>
 
             {/* Google Antigravity */}
-            <div className="glass-card p-6 rounded-xl border border-white/10 space-y-4">
+            <div className="glass-panel p-6 rounded-xl border border-white/10 space-y-4">
               <div className="flex items-center justify-between">
                 <h3 className="text-lg font-bold text-white flex items-center gap-2">
                   <span className="material-symbols-outlined text-[#cfbcff]">view_in_ar</span>
@@ -550,7 +624,7 @@ export default function DocsPage() {
               <p className="text-xs sm:text-sm text-[#cbc4d2]">
                 Configure in your workspace root under <code className="text-[#cfbcff]">.gemini/config/mcp_config.json</code>:
               </p>
-              <pre className="bg-[#0f0d13] p-4 rounded border border-white/10 font-label-mono text-xs text-[#cbc4d2] overflow-x-auto">
+              <pre className="bg-black/50 p-4 rounded border border-white/10 font-label-mono text-xs text-[#cbc4d2] overflow-x-auto">
 {`{
   "mcpServers": {
     "xtradevpilot": {
@@ -563,7 +637,7 @@ export default function DocsPage() {
             </div>
 
             {/* Claude Desktop */}
-            <div className="glass-card p-6 rounded-xl border border-white/10 space-y-4">
+            <div className="glass-panel p-6 rounded-xl border border-white/10 space-y-4">
               <div className="flex items-center justify-between">
                 <h3 className="text-lg font-bold text-white flex items-center gap-2">
                   <span className="material-symbols-outlined text-[#e7c365]">chat</span>
@@ -596,7 +670,7 @@ export default function DocsPage() {
               <p className="text-xs sm:text-sm text-[#cbc4d2]">
                 Add to your Claude Desktop config (<code className="text-[#cfbcff]">%appdata%\Claude\claude_desktop_config.json</code> on Windows, or <code className="text-[#cfbcff]">~/Library/Application Support/Claude/claude_desktop_config.json</code> on macOS):
               </p>
-              <pre className="bg-[#0f0d13] p-4 rounded border border-white/10 font-label-mono text-xs text-[#cbc4d2] overflow-x-auto">
+              <pre className="bg-black/50 p-4 rounded border border-white/10 font-label-mono text-xs text-[#cbc4d2] overflow-x-auto">
 {`{
   "mcpServers": {
     "xtra-devpilot": {
@@ -609,7 +683,7 @@ export default function DocsPage() {
             </div>
 
             {/* Cursor IDE */}
-            <div className="glass-card p-6 rounded-xl border border-white/10 space-y-4">
+            <div className="glass-panel p-6 rounded-xl border border-white/10 space-y-4">
               <h3 className="text-lg font-bold text-white flex items-center gap-2">
                 <span className="material-symbols-outlined text-[#22d3ee]">code</span>
                 Cursor IDE
@@ -625,7 +699,7 @@ export default function DocsPage() {
             </div>
 
             {/* TypeScript SDK */}
-            <div className="glass-card p-6 rounded-xl border border-white/10 space-y-4">
+            <div className="glass-panel p-6 rounded-xl border border-white/10 space-y-4">
               <h3 className="text-lg font-bold text-white flex items-center gap-2">
                 <span className="material-symbols-outlined text-purple-400">dataset</span>
                 TypeScript Automation SDK
@@ -633,7 +707,7 @@ export default function DocsPage() {
               <p className="text-xs sm:text-sm text-[#cbc4d2]">
                 For CI/CD test automation pipelines and Node.js backend scripts, use the native typed SDK:
               </p>
-              <pre className="bg-[#0f0d13] p-4 rounded border border-white/10 font-label-mono text-xs text-[#cbc4d2] overflow-x-auto">
+              <pre className="bg-black/50 p-4 rounded border border-white/10 font-label-mono text-xs text-[#cbc4d2] overflow-x-auto">
 {`import { DevPilotClient } from "@xtradevpilot/sdk";
 
 const client = new DevPilotClient({ wsUrl: "ws://127.0.0.1:42819" });
@@ -646,7 +720,175 @@ console.log(dom);`}
           </div>
         )}
 
-        {/* Section 3: 33 Tools Reference */}
+        {/* Section: Reverse Engineering */}
+        {activeSection === "reconstruction" && (
+          <div className="space-y-10">
+            <div>
+              <div className="text-xs font-label-mono text-emerald-300 uppercase tracking-wider mb-2">
+                Reverse Engineering Suite
+              </div>
+              <h1 className="text-3xl sm:text-4xl font-extrabold text-white">
+                Web Feature Cloning &amp; Codebase Reconstruction
+              </h1>
+              <p className="text-[#cbc4d2] text-base mt-2 max-w-2xl">
+                End-to-end suite to decompile frontend apps, recover TypeScript source trees, discover hidden API routes, and bridge evidence to REA.
+              </p>
+            </div>
+
+            {/* Methodology Overview */}
+            <div className="glass-panel p-6 rounded-xl border border-white/10 space-y-4">
+              <h3 className="text-lg font-bold text-white flex items-center gap-2">
+                <span className="material-symbols-outlined text-emerald-400">biotech</span>
+                The 5-Step Feature Reverse Engineering Flow
+              </h3>
+              <p className="text-xs sm:text-sm text-[#cbc4d2] leading-relaxed">
+                When you encounter a complex feature (e.g. an interactive modal, multi-step checkout, dashboard widget, or canvas tool) on any authenticated website, you can deconstruct and clone it systematically:
+              </p>
+              <div className="grid md:grid-cols-2 gap-4 text-xs font-label-mono">
+                <div className="bg-black/50 p-4 rounded border border-white/5 space-y-1.5">
+                  <div className="text-emerald-400 font-bold">1. Scoped HTML Extraction</div>
+                  <div className="text-[#948e9c]">Tool: <code className="text-white">download_page_html</code></div>
+                  <div className="text-[#cbc4d2]">Downloads clean outerHTML for just that component, stripping bloated inline SVGs, script tags, and noise.</div>
+                </div>
+                <div className="bg-black/50 p-4 rounded border border-white/5 space-y-1.5">
+                  <div className="text-[#cfbcff] font-bold">2. Client Bundle &amp; Sourcemap Harvesting</div>
+                  <div className="text-[#948e9c]">Tool: <code className="text-white">download_sources</code></div>
+                  <div className="text-[#cbc4d2]">Crawls DOM script/link tags, discovers matching .map sourcemaps, and archives all assets locally.</div>
+                </div>
+                <div className="bg-black/50 p-4 rounded border border-white/5 space-y-1.5">
+                  <div className="text-[#e7c365] font-bold">3. Sourcemap Codebase Recovery</div>
+                  <div className="text-[#948e9c]">Tool: <code className="text-white">reconstruct_source_tree</code></div>
+                  <div className="text-[#cbc4d2]">Parses sourcemap JSON, extracts sourcesContent, resolves file paths, and recreates the full pristine src/ directory.</div>
+                </div>
+                <div className="bg-black/50 p-4 rounded border border-white/5 space-y-1.5">
+                  <div className="text-[#22d3ee] font-bold">4. Action-to-API Causality Tracing</div>
+                  <div className="text-[#948e9c]">Tool: <code className="text-white">trace_action_network</code></div>
+                  <div className="text-[#cbc4d2]">Dispatches a click or submit, listening to the DevTools network stream to isolate the exact HTTP mutations triggered.</div>
+                </div>
+              </div>
+            </div>
+
+            {/* OpenAPI & REA Integration */}
+            <div className="grid md:grid-cols-2 gap-6">
+              <div className="glass-panel p-6 rounded-xl border border-white/10 space-y-3">
+                <h3 className="text-base font-bold text-white flex items-center gap-2">
+                  <span className="material-symbols-outlined text-purple-400">dataset</span>
+                  OpenAPI 3.0 Generation
+                </h3>
+                <p className="text-xs text-[#cbc4d2] leading-relaxed">
+                  Automatically turns minified JS routes and HAR traffic logs into typed OpenAPI 3.0 specs with query params, payloads, and response status codes.
+                </p>
+                <div className="bg-black/50 p-3 rounded font-label-mono text-xs text-[#cfbcff]">
+                  npx xtradevpilot extract-endpoints ./sources -o openapi.json
+                </div>
+              </div>
+
+              <div className="glass-panel p-6 rounded-xl border border-white/10 space-y-3">
+                <h3 className="text-base font-bold text-white flex items-center gap-2">
+                  <span className="material-symbols-outlined text-emerald-400">hub</span>
+                  REA Evidence Bridge
+                </h3>
+                <p className="text-xs text-[#cbc4d2] leading-relaxed">
+                  Packages live DOM, HAR network waterfalls, storage, and discovered endpoints into canonical REA Schema 2.0.0 bundles ready for Ghidra and IDA Pro.
+                </p>
+                <div className="bg-black/50 p-3 rounded font-label-mono text-xs text-emerald-400">
+                  npx xtradevpilot export-rea -o session-evidence.json
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Section: DevPilot CLI Suite */}
+        {activeSection === "cli" && (
+          <div className="space-y-10">
+            <div>
+              <div className="text-xs font-label-mono text-[#cfbcff] uppercase tracking-wider mb-2">
+                CLI Command Reference
+              </div>
+              <h1 className="text-3xl sm:text-4xl font-extrabold text-white">
+                DevPilot Universal CLI
+              </h1>
+              <p className="text-[#cbc4d2] text-base mt-2 max-w-2xl">
+                Run browser commands, extract source code, and automate testing directly from your terminal or AI shell subagent.
+              </p>
+            </div>
+
+            <div className="glass-panel p-6 rounded-xl border border-white/10 space-y-4">
+              <div className="flex items-center justify-between">
+                <h3 className="text-base font-bold text-white">Global Installation</h3>
+                <button
+                  onClick={() => copyCode("npm install -g xtradevpilot", "cli-g", "npm install")}
+                  className="text-xs text-[#cfbcff] font-label-mono hover:underline cursor-pointer"
+                >
+                  {copiedKey === "cli-g" ? "✔ Copied" : "Copy"}
+                </button>
+              </div>
+              <pre className="bg-black/50 p-3 rounded border border-white/10 font-label-mono text-xs text-[#cfbcff]">
+npm install -g xtradevpilot
+# or run via npx
+npx xtradevpilot --help
+              </pre>
+            </div>
+
+            {/* CLI Commands Grid */}
+            <div className="space-y-6">
+              <div className="glass-panel p-6 rounded-xl border border-white/10 space-y-3">
+                <div className="flex items-center justify-between">
+                  <code className="text-sm font-bold text-white font-label-mono text-[#cfbcff]">devpilot reconstruct &lt;inputDir&gt;</code>
+                  <span className="text-[10px] font-label-mono px-2 py-0.5 rounded bg-white/10 text-emerald-400">Code Recovery</span>
+                </div>
+                <p className="text-xs text-[#cbc4d2]">
+                  Unpacks all .map sourcemaps in inputDir, reconstructs the original project directory tree, and detects frameworks (React, Vue, Svelte).
+                </p>
+                <div className="bg-black/50 p-3 rounded font-label-mono text-xs text-[#cbc4d2]">
+                  devpilot reconstruct ./downloads/sources -o ./reconstructed
+                </div>
+              </div>
+
+              <div className="glass-panel p-6 rounded-xl border border-white/10 space-y-3">
+                <div className="flex items-center justify-between">
+                  <code className="text-sm font-bold text-white font-label-mono text-[#e7c365]">devpilot trace-action &lt;selector&gt;</code>
+                  <span className="text-[10px] font-label-mono px-2 py-0.5 rounded bg-white/10 text-[#e7c365]">API Correlator</span>
+                </div>
+                <p className="text-xs text-[#cbc4d2]">
+                  Simulates user interaction on the target DOM selector and captures correlated outgoing HTTP/fetch requests and responses.
+                </p>
+                <div className="bg-black/50 p-3 rounded font-label-mono text-xs text-[#cbc4d2]">
+                  devpilot trace-action &quot;#submit-btn&quot; --action click --wait 2000
+                </div>
+              </div>
+
+              <div className="glass-panel p-6 rounded-xl border border-white/10 space-y-3">
+                <div className="flex items-center justify-between">
+                  <code className="text-sm font-bold text-white font-label-mono text-emerald-400">devpilot export-rea</code>
+                  <span className="text-[10px] font-label-mono px-2 py-0.5 rounded bg-white/10 text-emerald-400">REA Bridge</span>
+                </div>
+                <p className="text-xs text-[#cbc4d2]">
+                  Exports canonical REA Evidence bundle (schema 2.0.0) containing DOM snapshots, HAR waterfalls, and discovered API routes.
+                </p>
+                <div className="bg-black/50 p-3 rounded font-label-mono text-xs text-[#cbc4d2]">
+                  devpilot export-rea -o ./session-evidence.json
+                </div>
+              </div>
+
+              <div className="glass-panel p-6 rounded-xl border border-white/10 space-y-3">
+                <div className="flex items-center justify-between">
+                  <code className="text-sm font-bold text-white font-label-mono text-[#22d3ee]">devpilot extract-endpoints &lt;inputPath&gt;</code>
+                  <span className="text-[10px] font-label-mono px-2 py-0.5 rounded bg-white/10 text-[#22d3ee]">OpenAPI</span>
+                </div>
+                <p className="text-xs text-[#cbc4d2]">
+                  Statically scans JavaScript bundles and HAR captures for REST API routes and outputs an OpenAPI 3.0 specification.
+                </p>
+                <div className="bg-black/50 p-3 rounded font-label-mono text-xs text-[#cbc4d2]">
+                  devpilot extract-endpoints ./sources -o ./openapi.json
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Section 3: 40 Tools Reference */}
         {activeSection === "tools" && (
           <div className="space-y-10">
             <div>
@@ -654,7 +896,7 @@ console.log(dom);`}
                 API Reference
               </div>
               <h1 className="text-3xl sm:text-4xl font-extrabold text-white">
-                All 33 Production MCP Tools
+                All 40 Production MCP Tools
               </h1>
               <p className="text-[#cbc4d2] text-base mt-2 max-w-2xl">
                 Every tool is verified live against Google Chrome with deterministic input schemas and typed JSON responses.
@@ -665,7 +907,8 @@ console.log(dom);`}
             <div className="flex flex-col sm:flex-row gap-4 justify-between items-center">
               <div className="flex flex-wrap gap-2">
                 {[
-                  { id: "all", label: "All (33)" },
+                  { id: "all", label: `All (${ALL_DOC_TOOLS.length})` },
+                  { id: "reconstruction", label: "Reverse Eng (7)" },
                   { id: "tabs", label: "Tabs (5)" },
                   { id: "inspection", label: "DOM (5)" },
                   { id: "automation", label: "Automation (7)" },
@@ -699,7 +942,7 @@ console.log(dom);`}
             {/* Tools Detailed List */}
             <div className="space-y-8">
               {filteredTools.map((tool) => (
-                <div key={tool.name} className="glass-card p-6 rounded-xl border border-white/10 space-y-4">
+                <div key={tool.name} className="glass-panel p-6 rounded-xl border border-white/10 space-y-4">
                   <div className="flex items-center justify-between border-b border-white/10 pb-3">
                     <div className="flex items-center gap-3">
                       <code className="text-base font-bold text-white font-label-mono">
@@ -726,7 +969,7 @@ console.log(dom);`}
                       <div className="text-[11px] font-label-mono text-[#e7c365] mb-1">
                         Input Arguments:
                       </div>
-                      <pre className="bg-[#0f0d13] p-3 rounded border border-white/5 font-label-mono text-[11px] text-[#cbc4d2] overflow-x-auto">
+                      <pre className="bg-black/50 p-3 rounded border border-white/5 font-label-mono text-[11px] text-[#cbc4d2] overflow-x-auto">
                         {tool.sampleCall}
                       </pre>
                     </div>
@@ -734,7 +977,7 @@ console.log(dom);`}
                       <div className="text-[11px] font-label-mono text-emerald-400 mb-1">
                         Expected Return Payload:
                       </div>
-                      <pre className="bg-[#0f0d13] p-3 rounded border border-white/5 font-label-mono text-[11px] text-[#cbc4d2] overflow-x-auto">
+                      <pre className="bg-black/50 p-3 rounded border border-white/5 font-label-mono text-[11px] text-[#cbc4d2] overflow-x-auto">
                         {tool.response}
                       </pre>
                     </div>
@@ -760,7 +1003,7 @@ console.log(dom);`}
               </p>
             </div>
 
-            <div className="glass-card p-6 rounded-xl border border-white/10 space-y-4">
+            <div className="glass-panel p-6 rounded-xl border border-white/10 space-y-4">
               <h3 className="text-lg font-bold text-white flex items-center gap-2">
                 <span className="material-symbols-outlined text-emerald-400">lock</span>
                 Zero-Cloud Residency
@@ -770,7 +1013,7 @@ console.log(dom);`}
               </p>
             </div>
 
-            <div className="glass-card p-6 rounded-xl border border-white/10 space-y-4">
+            <div className="glass-panel p-6 rounded-xl border border-white/10 space-y-4">
               <h3 className="text-lg font-bold text-white flex items-center gap-2">
                 <span className="material-symbols-outlined text-[#cfbcff]">network_node</span>
                 Communication Protocol
@@ -798,7 +1041,7 @@ console.log(dom);`}
             </div>
 
             <div className="space-y-6">
-              <div className="glass-card p-6 rounded-xl border border-white/10 space-y-3">
+              <div className="glass-panel p-6 rounded-xl border border-white/10 space-y-3">
                 <h3 className="text-sm sm:text-base font-bold text-white flex items-center gap-2">
                   <span className="material-symbols-outlined text-[#ffb4ab]">error</span>
                   Extension popup shows red &quot;Disconnected&quot; badge
@@ -808,7 +1051,7 @@ console.log(dom);`}
                 </p>
               </div>
 
-              <div className="glass-card p-6 rounded-xl border border-white/10 space-y-3">
+              <div className="glass-panel p-6 rounded-xl border border-white/10 space-y-3">
                 <h3 className="text-sm sm:text-base font-bold text-white flex items-center gap-2">
                   <span className="material-symbols-outlined text-[#e7c365]">warning</span>
                   Port 42819 is in use by another process
@@ -816,12 +1059,12 @@ console.log(dom);`}
                 <p className="text-xs sm:text-sm text-[#cbc4d2] leading-relaxed">
                   If another Node instance holds port 42819, terminate it using your OS process manager or run:
                 </p>
-                <div className="bg-[#0f0d13] p-2.5 rounded border border-white/5 font-label-mono text-xs text-[#cbc4d2]">
+                <div className="bg-black/50 p-2.5 rounded border border-white/5 font-label-mono text-xs text-[#cbc4d2]">
                   <code>Get-Process -Id (Get-NetTCPConnection -LocalPort 42819).OwningProcess | Stop-Process</code>
                 </div>
               </div>
 
-              <div className="glass-card p-6 rounded-xl border border-white/10 space-y-3">
+              <div className="glass-panel p-6 rounded-xl border border-white/10 space-y-3">
                 <h3 className="text-sm sm:text-base font-bold text-white flex items-center gap-2">
                   <span className="material-symbols-outlined text-[#22d3ee]">help</span>
                   Targeting complex Tailwind classes with colons and brackets
@@ -849,12 +1092,12 @@ console.log(dom);`}
               </p>
             </div>
 
-            <div className="glass-card p-6 rounded-xl border border-white/10 space-y-4">
+            <div className="glass-panel p-6 rounded-xl border border-white/10 space-y-4">
               <h3 className="text-base font-bold text-white">Custom Bridge Host</h3>
               <p className="text-xs sm:text-sm text-[#cbc4d2]">
                 If running your MCP client inside WSL, Docker, or a VM, update the target WebSocket URL:
               </p>
-              <div className="bg-[#0f0d13] p-3 rounded border border-white/5 font-label-mono text-xs text-[#cfbcff]">
+              <div className="bg-black/50 p-3 rounded border border-white/5 font-label-mono text-xs text-[#cfbcff]">
                 ws://127.0.0.1:42819
               </div>
             </div>

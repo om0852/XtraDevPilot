@@ -76,6 +76,24 @@ export interface ScreenshotOptions {
   path?: string;
 }
 
+export interface DownloadHtmlOptions {
+  outputPath?: string;
+  selector?: string;
+  clean?: boolean;
+}
+
+export interface ExportHarOptions {
+  outputPath?: string;
+  clearAfterExport?: boolean;
+}
+
+export interface DownloadSourcesOptions {
+  outputDir?: string;
+  types?: Array<'scripts' | 'styles' | 'sourcemaps' | 'images' | 'fonts'>;
+  selector?: string;
+  includeSourceMaps?: boolean;
+}
+
 export interface MockRouteOptions {
   urlPattern: string;
   responseBody: Record<string, any> | string;

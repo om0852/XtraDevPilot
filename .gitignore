@@ -27,6 +27,16 @@ test_features.js
 temp.html
 mcp-server/check_active_tab.js
 .devpilot-screenshot.png
+downloaded-page.html
+downloads_test/
+network-traffic.har
+test_artifacts/
+test_muse_e2e_suite.js
+test_muse_suite.js
+muse_playwright_test_suite.spec.js
+performance_security_audit_report.md
+test_details.md
+Rectangle.svg
 *.tmp
 
 # Logs & Debugging

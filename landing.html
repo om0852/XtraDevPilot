@@ -1,408 +1,1042 @@
 <!DOCTYPE html>
-
-<html class="dark" lang="en"><head>
+<html class="dark h-full antialiased scroll-smooth" lang="en">
+<head>
 <meta charset="utf-8"/>
-<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
-<title>Xtra DevPilot | Elite AI Frontend Engineering</title>
+<meta content="width=device-width, initial-scale=1" name="viewport"/>
+<title>Xtra DevPilot | The Local AI Browser Bridge for Developers &amp; AI Agents</title>
 <script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
 <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
 <link href="https://cdn.jsdelivr.net/npm/geist@1.3.0/dist/fonts/geist.css" rel="stylesheet"/>
 <link href="https://cdn.jsdelivr.net/npm/jetbrains-mono@1.0.6/css/jetbrains-mono.min.css" rel="stylesheet"/>
-<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
-<script id="tailwind-config">
-      tailwind.config = {
-        darkMode: "class",
-        theme: {
-          extend: {
-            "colors": {
-                    "surface-container-lowest": "#0f0d13",
-                    "on-tertiary-container": "#503d00",
-                    "tertiary-fixed": "#ffdf93",
-                    "surface": "#141218",
-                    "on-primary-fixed-variant": "#4f378a",
-                    "inverse-surface": "#e6e0e9",
-                    "surface-container-high": "#2b292f",
-                    "outline-variant": "#494551",
-                    "primary-fixed": "#e9ddff",
-                    "secondary-container": "#4d4465",
-                    "on-error-container": "#ffdad6",
-                    "on-tertiary": "#3e2e00",
-                    "secondary-fixed": "#e9ddff",
-                    "on-surface-variant": "#cbc4d2",
-                    "surface-container": "#211f24",
-                    "surface-container-highest": "#36343a",
-                    "on-primary": "#381e72",
-                    "inverse-primary": "#6750a4",
-                    "tertiary": "#e7c365",
-                    "on-tertiary-fixed": "#241a00",
-                    "secondary": "#cdc0e9",
-                    "on-secondary-container": "#bfb2da",
-                    "surface-dim": "#141218",
-                    "on-secondary-fixed-variant": "#4b4263",
-                    "tertiary-container": "#c9a74d",
-                    "on-secondary": "#342b4b",
-                    "primary": "#cfbcff",
-                    "error-container": "#93000a",
-                    "primary-fixed-dim": "#cfbcff",
-                    "on-tertiary-fixed-variant": "#594400",
-                    "on-primary-container": "#e0d2ff",
-                    "secondary-fixed-dim": "#cdc0e9",
-                    "on-primary-fixed": "#22005d",
-                    "surface-bright": "#3b383e",
-                    "background": "#141218",
-                    "on-background": "#e6e0e9",
-                    "inverse-on-surface": "#322f35",
-                    "on-error": "#690005",
-                    "tertiary-fixed-dim": "#e7c365",
-                    "surface-variant": "#36343a",
-                    "error": "#ffb4ab",
-                    "on-secondary-fixed": "#1f1635",
-                    "primary-container": "#6750a4",
-                    "surface-container-low": "#1d1b20",
-                    "outline": "#948e9c",
-                    "on-surface": "#e6e0e9",
-                    "surface-tint": "#cfbcff"
-            },
-            "borderRadius": {
-                    "DEFAULT": "0.125rem",
-                    "lg": "0.25rem",
-                    "xl": "0.5rem",
-                    "full": "0.75rem"
-            },
-            "spacing": {
-                    "margin-mobile": "16px",
-                    "gutter": "24px",
-                    "unit": "4px",
-                    "margin-desktop": "40px",
-                    "container-max-width": "1440px"
-            },
-            "fontFamily": {
-                    "body-md": ["Geist", "sans-serif"],
-                    "label-mono": ["JetBrains Mono", "monospace"],
-                    "headline-lg-mobile": ["Geist", "sans-serif"],
-                    "display-lg": ["Geist", "sans-serif"],
-                    "code-sm": ["JetBrains Mono", "monospace"],
-                    "headline-lg": ["Geist", "sans-serif"]
-            },
-            "fontSize": {
-                    "body-md": ["16px", {"lineHeight": "24px", "letterSpacing": "-0.01em", "fontWeight": "400"}],
-                    "label-mono": ["14px", {"lineHeight": "20px", "letterSpacing": "0.02em", "fontWeight": "500"}],
-                    "headline-lg-mobile": ["24px", {"lineHeight": "32px", "letterSpacing": "-0.02em", "fontWeight": "600"}],
-                    "display-lg": ["48px", {"lineHeight": "56px", "letterSpacing": "-0.04em", "fontWeight": "700"}],
-                    "code-sm": ["13px", {"lineHeight": "18px", "fontWeight": "400"}],
-                    "headline-lg": ["32px", {"lineHeight": "40px", "letterSpacing": "-0.02em", "fontWeight": "600"}]
-            }
-          },
-        },
-      }
-    </script>
-<style>
-        body {
-            background-color: #050505;
-            color: #e6e0e9;
-            overflow-x: hidden;
-        }
-        .glass-card {
-            background: rgba(255, 255, 255, 0.04);
-            backdrop-filter: blur(40px);
-            border: 1px solid rgba(255, 255, 255, 0.08);
-            border-top: 1px solid rgba(255, 255, 255, 0.2);
-            transition: all 0.3s ease;
-        }
-        .glass-card:hover {
-            border-color: rgba(207, 188, 255, 0.3);
-            box-shadow: 0 0 40px rgba(207, 188, 255, 0.1);
-        }
-        .primary-gradient {
-            background: linear-gradient(135deg, #6750a4 0%, #cfbcff 100%);
-        }
-        .text-gradient {
-            background: linear-gradient(135deg, #cfbcff 0%, #22d3ee 100%);
-            -webkit-background-clip: text;
-            -webkit-text-fill-color: transparent;
-        }
-        .bloom-glow:hover {
-            box-shadow: 0 0 30px rgba(103, 80, 164, 0.4);
-        }
-        .material-symbols-outlined {
-            font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
-        }
-        .mcp-node {
-            animation: pulse 4s infinite ease-in-out;
-        }
-        @keyframes pulse {
-            0%, 100% { opacity: 0.5; filter: blur(2px); }
-            50% { opacity: 1; filter: blur(0px); }
-        }
-    </style>
-</head>
-<body class="font-body-md text-body-md">
-<!-- TopNavBar -->
-<nav class="fixed top-0 w-full z-50 bg-white/4 backdrop-blur-[40px] border-b border-white/10 shadow-[0_0_20px_rgba(207,188,255,0.1)]">
-<div class="flex justify-between items-center px-margin-desktop py-4 max-w-container-max-width mx-auto">
-<div class="flex items-center gap-3">
-<img class="h-8 w-8 object-contain" src="https://lh3.googleusercontent.com/aida/AP1WRLtMoDi9co78tXZcftYK2wGSqmSRMGeqPRquNHRqwXGTva6TqE5DkyyBnhsmHsmgLWqysLowxJJeMGsWG_hsazxErieI1yDwsgWA8SAYj92yg6P85endQpqqA7LQ_EerchGbb0lhxrcxbiyCjaoAqImr8yQC1xEZJ6NQxYsyfof4ueL7mBq1vPv3kp5K-Vi5NwfQdTMEW27-70aJZddbA85hu87QHRC87SjaZkCFFlHNH3Bnp2fHulRk_Q"/>
-<span class="font-headline-lg text-headline-lg font-bold text-on-surface tracking-tight">Xtra DevPilot</span>
-</div>
-<div class="hidden md:flex items-center gap-8">
-<a class="text-on-surface-variant hover:text-on-surface transition-colors font-body-md text-body-md" href="#features">Features</a>
-<a class="text-on-surface-variant hover:text-on-surface transition-colors font-body-md text-body-md" href="#architecture">Architecture</a>
-<a class="text-on-surface-variant hover:text-on-surface transition-colors font-body-md text-body-md" href="#pricing">Pricing</a>
-</div>
-<button class="primary-gradient text-on-primary font-bold px-6 py-2 rounded-sm bloom-glow active:scale-95 transition-all text-body-md">
-                Install Extension
-            </button>
-</div>
-</nav>
-<!-- Hero Section -->
-<section class="relative pt-32 pb-20 px-margin-desktop overflow-hidden">
-
-<div class="max-w-container-max-width mx-auto grid lg:grid-cols-2 gap-16 items-center">
-<div class="space-y-8">
-<div class="inline-flex items-center gap-2 px-3 py-1 glass-card border-primary/20 rounded-full">
-<span class="w-2 h-2 rounded-full bg-primary animate-pulse"></span>
-<span class="font-label-mono text-label-mono text-primary uppercase tracking-widest">v2.4 Live Now</span>
-</div>
-<h1 class="font-display-lg text-display-lg leading-tight tracking-tighter">
-                    The AI Copilot for <span class="text-gradient">Elite Frontend Engineers.</span>
-</h1>
-<p class="text-on-surface-variant text-xl max-w-lg leading-relaxed">
-                    Ship features 10x faster with ghost automation, visual debugging, and local-first architecture. Built for the terminal-obsessed.
-                </p>
-<div class="flex flex-wrap gap-4">
-<button class="primary-gradient text-on-primary font-bold px-8 py-4 rounded-sm bloom-glow text-body-md">
-                        Install Extension
-                    </button>
-<button class="glass-card text-on-surface font-bold px-8 py-4 rounded-sm hover:bg-white/10 text-body-md flex items-center gap-2">
-                        View Docs
-                        <span class="material-symbols-outlined text-sm">arrow_forward</span>
-</button>
-</div>
-<div class="flex items-center gap-6 pt-4 grayscale opacity-50">
-<span class="font-label-mono text-xs uppercase tracking-widest">Trusted By Lead Engineers At</span>
-<div class="flex gap-4">
-<!-- Logos would go here, using placeholders -->
-</div>
-</div>
-</div>
-<!-- Code Editor Mock -->
-<div class="relative group">
-<div class="absolute -inset-4 bg-primary/20 blur-3xl opacity-0 group-hover:opacity-100 transition-opacity duration-1000"></div>
-<div class="glass-card rounded-lg overflow-hidden shadow-2xl relative border-white/20">
-<div class="bg-surface-container px-4 py-3 border-b border-white/10 flex items-center justify-between">
-<div class="flex gap-1.5">
-<div class="w-3 h-3 rounded-full bg-error/40"></div>
-<div class="w-3 h-3 rounded-full bg-tertiary/40"></div>
-<div class="w-3 h-3 rounded-full bg-primary/40"></div>
-</div>
-<div class="font-label-mono text-xs text-outline">ProductCard.tsx — Xtra DevPilot</div>
-<div class="w-12"></div>
-</div>
-<div class="p-6 font-code-sm text-code-sm space-y-2">
-<div class="flex gap-4">
-<span class="text-outline w-6 text-right select-none">24</span>
-<code class="text-secondary">export const <span class="text-primary">ProductCard</span> = ({ product }) =&gt; {</code>
-</div>
-<div class="flex gap-4 relative">
-<span class="text-outline w-6 text-right select-none">25</span>
-<code class="text-on-surface">  return (</code>
-</div>
-<div class="flex gap-4 bg-primary/10 -mx-6 px-6 py-1 border-l-2 border-primary">
-<span class="text-outline w-6 text-right select-none">26</span>
-<code class="text-on-surface">    &lt;div className="relative group overflow-hidden"&gt;</code>
-<div class="absolute right-4 top-1/2 -translate-y-1/2 flex items-center gap-2 glass-card px-2 py-0.5 rounded text-[10px] text-primary">
-<span class="material-symbols-outlined text-[12px]" style="font-variation-settings: 'FILL' 1;">auto_fix_high</span>
-                                AI Ghost: Suggested ghost-hover effect
-                            </div>
-</div>
-<div class="flex gap-4">
-<span class="text-outline w-6 text-right select-none">27</span>
-<code class="text-on-surface">      &lt;Image src={product.img} alt={product.name} /&gt;</code>
-</div>
-<div class="flex gap-4">
-<span class="text-outline w-6 text-right select-none">28</span>
-<code class="text-on-surface">      &lt;div className="p-4"&gt;</code>
-</div>
-<div class="flex gap-4 text-tertiary">
-<span class="text-outline w-6 text-right select-none">29</span>
-<code class="italic">// @devpilot visual-debug: check layout shift on mount</code>
-</div>
-<div class="flex gap-4">
-<span class="text-outline w-6 text-right select-none">30</span>
-<code class="text-on-surface">        &lt;h3&gt;{product.title}&lt;/h3&gt;</code>
-</div>
-</div>
-</div>
-</div>
-</div>
-</section>
-<!-- Features Grid -->
-<section class="py-32 px-margin-desktop bg-surface-container-lowest" id="features">
-<div class="max-w-container-max-width mx-auto">
-<div class="mb-20 space-y-4">
-<h2 class="font-headline-lg text-headline-lg">Engineered for <span class="text-primary">Precision</span></h2>
-<p class="text-on-surface-variant max-w-xl">A suite of tools that bridge the gap between your intent and the DOM.</p>
-</div>
-<div class="grid md:grid-cols-2 lg:grid-cols-4 gap-gutter">
-<!-- Ghost User Automation -->
-<div class="glass-card p-8 flex flex-col gap-6 group hover:-translate-y-2">
-<div class="w-12 h-12 rounded-sm bg-primary/10 flex items-center justify-center text-primary border border-primary/20">
-<span class="material-symbols-outlined text-3xl">record_voice_over</span>
-</div>
-<div>
-<h3 class="font-headline-lg text-xl mb-3">Ghost User Automation</h3>
-<p class="text-on-surface-variant text-sm leading-relaxed">Record and replay complex user flows with AI-generated test scripts that never flake.</p>
-</div>
-</div>
-<!-- Visual Eyes Debugging -->
-<div class="glass-card p-8 flex flex-col gap-6 group hover:-translate-y-2">
-<div class="w-12 h-12 rounded-sm bg-secondary/10 flex items-center justify-center text-secondary border border-secondary/20">
-<span class="material-symbols-outlined text-3xl">visibility</span>
-</div>
-<div>
-<h3 class="font-headline-lg text-xl mb-3">Visual Eyes Debugging</h3>
-<p class="text-on-surface-variant text-sm leading-relaxed">One-click screenshot debugging with pixel-perfect diffing and instant fix suggestions.</p>
-</div>
-</div>
-<!-- API Mocking -->
-<div class="glass-card p-8 flex flex-col gap-6 group hover:-translate-y-2">
-<div class="w-12 h-12 rounded-sm bg-tertiary/10 flex items-center justify-center text-tertiary border border-tertiary/20">
-<span class="material-symbols-outlined text-3xl">api</span>
-</div>
-<div>
-<h3 class="font-headline-lg text-xl mb-3">API Mocking</h3>
-<p class="text-on-surface-variant text-sm leading-relaxed">Instant, typesafe API mocks that evolve automatically with your backend schema changes.</p>
-</div>
-</div>
-<!-- LLM-Optimized DOM -->
-<div class="glass-card p-8 flex flex-col gap-6 group hover:-translate-y-2">
-<div class="w-12 h-12 rounded-sm bg-primary/10 flex items-center justify-center text-primary border border-primary/20">
-<span class="material-symbols-outlined text-3xl">hub</span>
-</div>
-<div>
-<h3 class="font-headline-lg text-xl mb-3">LLM-Optimized DOM</h3>
-<p class="text-on-surface-variant text-sm leading-relaxed">A specialized DOM representation designed for maximum context window efficiency.</p>
-</div>
-</div>
-</div>
-</div>
-</section>
-<!-- Architecture Section -->
-<section class="py-32 px-margin-desktop relative overflow-hidden" id="architecture">
-<div class="absolute inset-0 -z-10 opacity-20">
-
-</div>
-<div class="max-w-container-max-width mx-auto flex flex-col lg:flex-row gap-20 items-center">
-<div class="lg:w-1/2 space-y-8">
-<h2 class="font-display-lg text-display-lg tracking-tight">Local-First. <br/><span class="text-gradient">Private by Design.</span></h2>
-<p class="text-on-surface-variant text-lg leading-relaxed">
-                    Xtra DevPilot runs locally on your machine via the Model Context Protocol (MCP). Your code never leaves your device. We process intelligence where your source lives.
-                </p>
-<div class="space-y-4">
-<div class="flex items-start gap-4">
-<div class="mt-1 bg-primary/20 p-1 rounded">
-<span class="material-symbols-outlined text-primary text-sm">shield</span>
-</div>
-<div>
-<p class="font-bold">Zero-Cloud Residency</p>
-<p class="text-on-surface-variant text-sm">Sensitive logic and proprietary assets remain within your local firewall.</p>
-</div>
-</div>
-<div class="flex items-start gap-4">
-<div class="mt-1 bg-primary/20 p-1 rounded">
-<span class="material-symbols-outlined text-primary text-sm">speed</span>
-</div>
-<div>
-<p class="font-bold">Millisecond Latency</p>
-<p class="text-on-surface-variant text-sm">Local MCP server ensures your IDE and AI are perfectly synchronized.</p>
-</div>
-</div>
-</div>
-</div>
-<!-- MCP Diagram Mockup -->
-<div class="lg:w-1/2 w-full glass-card p-12 relative overflow-hidden rounded-xl border-white/10">
-<div class="flex flex-col items-center gap-12 relative z-10">
-<!-- Extension Node -->
-<div class="flex flex-col items-center gap-2 mcp-node">
-<div class="w-24 h-24 rounded-full glass-card flex items-center justify-center border-primary/40 bg-primary/5">
-<img class="w-12 h-12 object-contain" src="https://lh3.googleusercontent.com/aida/AP1WRLtMoDi9co78tXZcftYK2wGSqmSRMGeqPRquNHRqwXGTva6TqE5DkyyBnhsmHsmgLWqysLowxJJeMGsWG_hsazxErieI1yDwsgWA8SAYj92yg6P85endQpqqA7LQ_EerchGbb0lhxrcxbiyCjaoAqImr8yQC1xEZJ6NQxYsyfof4ueL7mBq1vPv3kp5K-Vi5NwfQdTMEW27-70aJZddbA85hu87QHRC87SjaZkCFFlHNH3Bnp2fHulRk_Q"/>
-</div>
-<span class="font-label-mono text-xs uppercase text-primary">IDE Extension</span>
-</div>
-<!-- Connection Lines (SVG) -->
-<div class="h-24 w-1 flex items-center justify-center">
-<div class="h-full w-px bg-gradient-to-b from-primary to-secondary relative">
-<div class="absolute top-0 w-2 h-2 rounded-full bg-primary -left-[3.5px] blur-[2px]"></div>
-<div class="absolute bottom-0 w-2 h-2 rounded-full bg-secondary -left-[3.5px] blur-[2px]"></div>
-</div>
-</div>
-<!-- MCP Server Node -->
-<div class="flex flex-col items-center gap-2 mcp-node" style="animation-delay: 1s;">
-<div class="w-24 h-24 rounded-sm glass-card flex items-center justify-center border-secondary/40 bg-secondary/5 rotate-45">
-<span class="material-symbols-outlined text-secondary text-4xl -rotate-45">terminal</span>
-</div>
-<span class="font-label-mono text-xs uppercase text-secondary">Local MCP Server</span>
-</div>
-</div>
-<!-- Background decorative mesh -->
-<div class="absolute inset-0 opacity-10 pointer-events-none" style="background-image: radial-gradient(circle at 2px 2px, white 1px, transparent 0); background-size: 24px 24px;"></div>
-</div>
-</div>
-</section>
-<!-- Call to Action -->
-<section class="py-24 px-margin-desktop text-center relative overflow-hidden">
-<div class="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[800px] h-[400px] bg-primary/10 blur-[120px] rounded-full -z-10"></div>
-<div class="max-w-3xl mx-auto space-y-10">
-<h2 class="font-headline-lg text-5xl font-bold tracking-tight">Ready to transcend?</h2>
-<p class="text-on-surface-variant text-xl">Join 20,000+ elite frontend engineers using Xtra DevPilot to build the future of the web.</p>
-<div class="flex flex-col sm:flex-row justify-center gap-4">
-<button class="primary-gradient text-on-primary font-bold px-12 py-5 rounded-sm bloom-glow text-lg">
-                    Install Extension
-                </button>
-<button class="glass-card text-on-surface font-bold px-12 py-5 rounded-sm hover:bg-white/10 text-lg">
-                    Book a Demo
-                </button>
-</div>
-<p class="font-label-mono text-xs text-outline uppercase tracking-widest">Available on VS Code, Cursor, and JetBrains</p>
-</div>
-</section>
-<!-- Footer -->
-<footer class="bg-surface-container-lowest dark:bg-surface-container-lowest w-full py-12 border-t border-white/5">
-<div class="flex flex-col md:flex-row justify-between items-center px-margin-desktop max-w-container-max-width mx-auto gap-gutter">
-<div class="flex flex-col items-center md:items-start gap-4">
-<div class="flex items-center gap-3">
-<img class="h-6 w-6" src="https://lh3.googleusercontent.com/aida/AP1WRLtMoDi9co78tXZcftYK2wGSqmSRMGeqPRquNHRqwXGTva6TqE5DkyyBnhsmHsmgLWqysLowxJJeMGsWG_hsazxErieI1yDwsgWA8SAYj92yg6P85endQpqqA7LQ_EerchGbb0lhxrcxbiyCjaoAqImr8yQC1xEZJ6NQxYsyfof4ueL7mBq1vPv3kp5K-Vi5NwfQdTMEW27-70aJZddbA85hu87QHRC87SjaZkCFFlHNH3Bnp2fHulRk_Q"/>
-<span class="font-headline-lg text-2xl font-bold text-on-surface">Xtra DevPilot</span>
-</div>
-<p class="font-label-mono text-label-mono text-outline">© 2024 Xtra DevPilot. Built for elite engineers.</p>
-</div>
-<div class="flex gap-8">
-<a class="font-label-mono text-label-mono text-outline hover:text-primary transition-colors" href="#">Documentation</a>
-<a class="font-label-mono text-label-mono text-outline hover:text-primary transition-colors" href="#">Privacy</a>
-<a class="font-label-mono text-label-mono text-outline hover:text-primary transition-colors" href="#">GitHub</a>
-<a class="font-label-mono text-label-mono text-outline hover:text-primary transition-colors" href="#">Discord</a>
-</div>
-</div>
-</footer>
 <script>
-        // Smooth scroll for anchors
-        document.querySelectorAll('a[href^="#"]').forEach(anchor => {
-            anchor.addEventListener('click', function (e) {
-                e.preventDefault();
-                document.querySelector(this.getAttribute('href')).scrollIntoView({
-                    behavior: 'smooth'
-                });
-            });
-        });
+tailwind.config = {
+  darkMode: "class",
+  theme: {
+    extend: {
+      colors: {
+        surface: "#0d0b14",
+        "surface-container": "#14121c",
+        "surface-container-high": "#1e1b29",
+        "primary-fixed": "#e9ddff",
+        "primary-glow": "#cfbcff",
+        "secondary-cyan": "#22d3ee",
+        "accent-emerald": "#10b981",
+        "accent-amber": "#f59e0b"
+      },
+      fontFamily: {
+        sans: ['Geist', 'sans-serif'],
+        mono: ['JetBrains Mono', 'monospace']
+      },
+      animation: {
+        'float-slow': 'float 8s ease-in-out infinite',
+        'float-fast': 'float 5s ease-in-out infinite 1.5s',
+        'beam': 'beam 2.8s linear infinite'
+      },
+      keyframes: {
+        float: {
+          '0%, 100%': { transform: 'translateY(0px)' },
+          '50%': { transform: 'translateY(-12px)' }
+        },
+        beam: {
+          '0%': { transform: 'translateX(-100%)' },
+          '100%': { transform: 'translateX(250%)' }
+        }
+      }
+    }
+  }
+}
+</script>
+<style>
+body { font-family: 'Geist', sans-serif; }
+.font-label-mono { font-family: 'JetBrains Mono', monospace; }
 
-        // Simple parallax effect for glass cards
-        window.addEventListener('mousemove', (e) => {
-            const moveX = (e.clientX - window.innerWidth / 2) / 100;
-            const moveY = (e.clientY - window.innerHeight / 2) / 100;
-            
-            document.querySelectorAll('.glass-card').forEach(card => {
-                card.style.transform = `translate(${moveX}px, ${moveY}px)`;
-            });
-        });
-    </script>
-</body></html>
+/* Custom Glass & Shimmers */
+.glass-panel {
+  background: rgba(18, 15, 27, 0.72);
+  backdrop-filter: blur(24px);
+  -webkit-backdrop-filter: blur(24px);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.glass-pill {
+  background: rgba(255, 255, 255, 0.04);
+  backdrop-filter: blur(16px);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.glow-gradient-text {
+  background: linear-gradient(135deg, #ffffff 10%, #cfbcff 55%, #22d3ee 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+
+.cyber-border-card {
+  position: relative;
+  background: radial-gradient(circle at var(--mouse-x, 50%) var(--mouse-y, 50%), rgba(207, 188, 255, 0.12) 0%, rgba(18, 16, 26, 0.95) 70%);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  transition: all 0.35s cubic-bezier(0.16, 1, 0.3, 1);
+}
+.cyber-border-card:hover {
+  border-color: rgba(207, 188, 255, 0.35);
+  box-shadow: 0 10px 40px -10px rgba(103, 80, 164, 0.35);
+  transform: translateY(-4px);
+}
+
+/* Custom Grid BG Overlay */
+.cyber-grid {
+  background-size: 40px 40px;
+  background-image: 
+    linear-gradient(to right, rgba(255, 255, 255, 0.03) 1px, transparent 1px),
+    linear-gradient(to bottom, rgba(255, 255, 255, 0.03) 1px, transparent 1px);
+}
+</style>
+</head>
+<body class="bg-[#0b0912] text-[#e6e0e9] min-h-full flex flex-col selection:bg-[#cfbcff]/30 relative overflow-x-hidden">
+
+<!-- 1. Ambient WebGL Shader & Cyber Atmosphere -->
+<div class="fixed inset-0 w-full h-full pointer-events-none -z-20 overflow-hidden" style="display:block;">
+  <canvas id="shader-canvas-ANIMATION_3" style="display:block;width:100%;height:100%"></canvas>
+</div>
+
+<!-- 2. Cyber-Grid Overlay -->
+<div class="fixed inset-0 cyber-grid pointer-events-none -z-10 opacity-60"></div>
+
+<!-- 3. Ambient Spotlight Glow -->
+<div class="fixed top-1/4 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[720px] h-[400px] bg-gradient-to-tr from-[#6750a4]/20 via-[#22d3ee]/15 to-transparent blur-[130px] pointer-events-none -z-10 rounded-full"></div>
+
+<!-- 4. Interactive Magnetic Cursor Glow Aura (Soft Wide Field) -->
+<div id="cursor-aura" class="pointer-events-none fixed top-0 left-0 w-[550px] h-[550px] rounded-full -z-10 opacity-75" style="background: radial-gradient(circle, rgba(168, 85, 247, 0.18) 0%, rgba(34, 211, 238, 0.08) 35%, transparent 70%); will-change: transform;"></div>
+
+<!-- 5. Trailing Lagged Cyber Ring -->
+<div id="cursor-ring" class="pointer-events-none fixed top-0 left-0 w-24 h-24 rounded-full -z-10 border border-[#cfbcff]/25 shadow-[0_0_20px_rgba(207,188,255,0.15)]" style="will-change: transform;"></div>
+
+<!-- Floating Navigation Bar -->
+<header class="fixed top-4 inset-x-0 z-50 px-4 sm:px-8 flex justify-center pointer-events-none">
+  <nav class="pointer-events-auto w-full max-w-5xl bg-[#120f1f]/85 backdrop-blur-2xl border border-white/10 rounded-full px-4 sm:px-6 py-2 shadow-[0_12px_45px_rgba(0,0,0,0.7)] flex items-center justify-between transition-all duration-300 hover:border-white/20">
+    <!-- Brand Logo -->
+    <a class="flex items-center gap-2.5 group" href="#">
+      <div class="relative h-8 w-8 rounded-lg overflow-hidden shadow-md shadow-[#22d3ee]/20 group-hover:scale-105 transition-transform flex items-center justify-center bg-black/40 border border-white/10">
+        <img src="xtradevpilot_logo.png" alt="Xtra DevPilot Logo" class="h-full w-full object-contain p-0.5" />
+      </div>
+      <div class="flex items-center gap-2">
+        <span class="text-base sm:text-lg font-bold text-white tracking-tight">Xtra DevPilot</span>
+        <span class="text-[10px] uppercase font-label-mono px-2 py-0.5 bg-[#cfbcff]/15 text-[#cfbcff] rounded-full border border-[#cfbcff]/30 font-semibold tracking-wider">v2.0</span>
+      </div>
+    </a>
+
+    <!-- Minimalist Center Navigation with Features Dropdown -->
+    <div class="hidden md:flex items-center gap-2 text-xs font-medium text-[#cbc4d2]">
+      <!-- Dropdown -->
+      <div class="relative group/dropdown">
+        <button class="px-3.5 py-1.5 rounded-full hover:text-white hover:bg-white/5 transition-all flex items-center gap-1 cursor-pointer">
+          <span>Features</span>
+          <span class="material-symbols-outlined text-sm transition-transform duration-200 group-hover/dropdown:rotate-180 text-white/50 group-hover/dropdown:text-[#cfbcff]">expand_more</span>
+        </button>
+
+        <div class="absolute top-full left-1/2 -translate-x-1/2 pt-2 w-80 z-50 hidden group-hover/dropdown:block">
+          <div class="glass-panel rounded-2xl p-2 shadow-[0_20px_50px_rgba(0,0,0,0.85)] border border-white/15 flex flex-col gap-1">
+            <a href="#reverse-engineering" class="flex items-start gap-3 p-2.5 rounded-xl hover:bg-white/5 transition-all group/item">
+              <div class="w-8 h-8 rounded-lg bg-emerald-500/15 border border-emerald-500/30 flex items-center justify-center text-emerald-300 shrink-0 group-hover/item:scale-105 transition-transform">
+                <span class="material-symbols-outlined text-base">biotech</span>
+              </div>
+              <div>
+                <div class="text-xs font-bold text-white flex items-center gap-1.5">
+                  Reverse Engineering
+                  <span class="text-[9px] font-label-mono px-1.5 py-0.2 rounded bg-emerald-500/20 text-emerald-300 font-semibold">6 Tools</span>
+                </div>
+                <div class="text-[11px] text-[#cbc4d2] leading-tight mt-0.5">Sourcemap decompiler, OpenAPI generator, AST recovery</div>
+              </div>
+            </a>
+
+            <a href="#tools" class="flex items-start gap-3 p-2.5 rounded-xl hover:bg-white/5 transition-all group/item">
+              <div class="w-8 h-8 rounded-lg bg-[#cfbcff]/15 border border-[#cfbcff]/30 flex items-center justify-center text-[#cfbcff] shrink-0 group-hover/item:scale-105 transition-transform">
+                <span class="material-symbols-outlined text-base">handyman</span>
+              </div>
+              <div>
+                <div class="text-xs font-bold text-white flex items-center gap-1.5">
+                  40 Browser Tools
+                  <span class="text-[9px] font-label-mono px-1.5 py-0.2 rounded bg-[#cfbcff]/20 text-[#cfbcff] font-semibold">Atomic</span>
+                </div>
+                <div class="text-[11px] text-[#cbc4d2] leading-tight mt-0.5">Granular DOM, Network HAR, CDP actions & state</div>
+              </div>
+            </a>
+
+            <a href="#cli" class="flex items-start gap-3 p-2.5 rounded-xl hover:bg-white/5 transition-all group/item">
+              <div class="w-8 h-8 rounded-lg bg-amber-500/15 border border-amber-500/30 flex items-center justify-center text-amber-300 shrink-0 group-hover/item:scale-105 transition-transform">
+                <span class="material-symbols-outlined text-base">terminal</span>
+              </div>
+              <div>
+                <div class="text-xs font-bold text-white">Universal CLI Suite</div>
+                <div class="text-[11px] text-[#cbc4d2] leading-tight mt-0.5">Terminal automation commands for developers & agents</div>
+              </div>
+            </a>
+
+            <a href="#architecture" class="flex items-start gap-3 p-2.5 rounded-xl hover:bg-white/5 transition-all group/item">
+              <div class="w-8 h-8 rounded-lg bg-cyan-500/15 border border-cyan-500/30 flex items-center justify-center text-cyan-300 shrink-0 group-hover/item:scale-105 transition-transform">
+                <span class="material-symbols-outlined text-base">security</span>
+              </div>
+              <div>
+                <div class="text-xs font-bold text-white">Local Architecture</div>
+                <div class="text-[11px] text-[#cbc4d2] leading-tight mt-0.5">100% on-device WebSocket bridge with zero cloud telemetry</div>
+              </div>
+            </a>
+          </div>
+        </div>
+      </div>
+
+      <a class="px-3.5 py-1.5 rounded-full hover:text-white hover:bg-white/5 transition-all" href="#integrations">Integrations</a>
+      <a class="px-3.5 py-1.5 rounded-full hover:text-white hover:bg-white/5 transition-all" href="docs.html">Docs</a>
+    </div>
+
+    <!-- Right CTAs -->
+    <div class="flex items-center gap-2 sm:gap-3">
+      <a class="hidden sm:inline-flex items-center gap-1.5 bg-white/5 hover:bg-white/10 border border-white/10 text-white text-xs font-label-mono px-3.5 py-1.5 rounded-full transition-all cursor-pointer" download="xtradevpilot-extension.zip" href="xtradevpilot-extension.zip">
+        <span class="material-symbols-outlined text-sm text-[#cfbcff]">download</span>
+        Extension (.zip)
+      </a>
+      <a class="bg-gradient-to-r from-[#6750a4] via-[#7d65b9] to-[#cfbcff] hover:brightness-110 text-white font-semibold text-xs sm:text-sm px-4 sm:px-5 py-2 rounded-full shadow-[0_0_25px_rgba(103,80,164,0.5)] flex items-center gap-1.5 transition-all transform active:scale-95" href="#quickstart">
+        <span class="material-symbols-outlined text-base">rocket_launch</span>Get Started
+      </a>
+    </div>
+  </nav>
+</header>
+
+<!-- 2. Hero Section & Cockpit Interface -->
+<section class="relative pt-36 sm:pt-44 pb-20 px-4 sm:px-8 max-w-7xl mx-auto flex flex-col items-center text-center">
+  <!-- Announcement Pill -->
+  <div class="mb-6 transform hover:scale-105 transition-transform">
+    <span class="inline-flex items-center gap-2 px-4 py-1.5 glass-pill rounded-full text-xs font-label-mono text-[#cbc4d2] border border-[#cfbcff]/20 shadow-[0_0_20px_rgba(207,188,255,0.15)]">
+      <span class="text-[#cfbcff] font-semibold tracking-wide">AUTONOMOUS REVERSE ENGINEERING SUITE</span>
+      <span class="material-symbols-outlined text-xs text-white/60">arrow_forward</span>
+    </span>
+  </div>
+
+  <!-- Hero Title -->
+  <h1 class="text-4xl sm:text-6xl lg:text-[76px] font-extrabold tracking-[-0.035em] text-white leading-[1.08] max-w-5xl mx-auto">
+    The Local-First AI Browser Bridge for <br class="hidden sm:inline"/>
+    <span class="glow-gradient-text drop-shadow-[0_0_35px_rgba(103,80,164,0.4)]">Developers &amp; AI Agents.</span>
+  </h1>
+
+  <!-- Subtitle -->
+  <p class="mt-6 text-[#cbc4d2] text-base sm:text-lg md:text-xl max-w-3xl mx-auto leading-relaxed">
+    Empowering Full-Stack Developers, Autonomous AI Agents, Reverse Engineers, and QA Teams. Connect Google Antigravity, Claude Desktop, and Cursor directly to live Chrome tabs with zero cloud residency.
+  </p>
+
+  <!-- CTA Buttons -->
+  <div class="mt-8 flex flex-wrap items-center justify-center gap-4">
+    <button class="px-5 py-2.5 rounded-xl bg-white/5 border border-white/10 hover:border-white/20 text-white font-label-mono text-xs flex items-center gap-2 backdrop-blur-md shadow-inner transition-all hover:bg-white/10" onclick="navigator.clipboard.writeText('npx @xtra/devpilot@latest'); this.innerHTML='<span class=\'material-symbols-outlined text-base\'>check</span> Copied command!'; setTimeout(() => this.innerHTML='<span class=\'text-[#cfbcff]\'>$</span><span>npx @xtra/devpilot@latest</span><span class=\'material-symbols-outlined text-sm opacity-60\'>content_copy</span>', 2000)">
+      <span class="text-[#cfbcff]">$</span>
+      <span>npx @xtra/devpilot@latest</span>
+      <span class="material-symbols-outlined text-sm opacity-60">content_copy</span>
+    </button>
+    <a class="px-5 py-2.5 rounded-xl bg-[#22d3ee]/10 border border-[#22d3ee]/30 text-[#22d3ee] hover:bg-[#22d3ee]/20 text-xs font-semibold flex items-center gap-1.5 transition-all" href="#reverse-engineering">
+      <span class="material-symbols-outlined text-sm">explore</span> Explore 6 REA Tools
+    </a>
+  </div>
+
+  <!-- Cockpit Area & 3D Interactive Container -->
+  <div class="relative w-full max-w-5xl mt-14" id="cockpit-container">
+    <!-- Main Cockpit Screen -->
+    <div class="glass-panel rounded-2xl overflow-hidden shadow-[0_25px_80px_rgba(0,0,0,0.85)] border border-white/15 transition-transform duration-200 text-left" id="cockpit-tilt">
+      <!-- Cockpit Bar -->
+      <div class="px-4 py-3 bg-black/40 border-b border-white/10 flex items-center justify-between">
+        <div class="flex items-center gap-2">
+          <div class="flex gap-1.5">
+            <span class="w-3 h-3 rounded-full bg-red-500/80 inline-block"></span>
+            <span class="w-3 h-3 rounded-full bg-yellow-500/80 inline-block"></span>
+            <span class="w-3 h-3 rounded-full bg-emerald-500/80 inline-block"></span>
+          </div>
+          <span class="ml-3 font-label-mono text-xs text-white/50 flex items-center gap-1">
+            <span class="material-symbols-outlined text-xs text-emerald-400">lock</span> ws://127.0.0.1:42819 [chrome_tab_71]
+          </span>
+        </div>
+        <div class="flex items-center gap-3">
+          <span class="hidden sm:inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-emerald-500/15 border border-emerald-500/30 text-emerald-300 text-[11px] font-label-mono font-medium">
+            JSON-RPC Standard
+          </span>
+          <span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-[#cfbcff]/15 border border-[#cfbcff]/30 text-[#cfbcff] text-[11px] font-label-mono">
+            REA Bridge Ready
+          </span>
+        </div>
+      </div>
+
+      <!-- Cockpit Nav Tabs -->
+      <div class="bg-black/20 border-b border-white/5 px-4 flex gap-4 text-xs font-label-mono" id="cockpit-tabs">
+        <button class="cockpit-tab-btn py-2.5 text-white border-b-2 border-[#cfbcff] font-medium flex items-center gap-1.5" onclick="switchCockpitTab('terminal', this)">
+          <span class="material-symbols-outlined text-sm text-[#cfbcff]">terminal</span> Terminal Stream
+        </button>
+        <button class="cockpit-tab-btn py-2.5 text-white/50 hover:text-white flex items-center gap-1.5 transition-colors" onclick="switchCockpitTab('network', this)">
+          <span class="material-symbols-outlined text-sm">network_check</span> Network Inspect
+        </button>
+        <button class="cockpit-tab-btn py-2.5 text-white/50 hover:text-white flex items-center gap-1.5 transition-colors" onclick="switchCockpitTab('scope', this)">
+          <span class="material-symbols-outlined text-sm">integration_instructions</span> Source Scope
+        </button>
+      </div>
+
+      <!-- Cockpit Code & Terminal Body -->
+      <div class="p-5 font-label-mono text-xs leading-relaxed space-y-2 overflow-x-auto bg-[#0a0812]/90" id="cockpit-body">
+        <div class="text-white/40">// Establishing local WebSocket link to Chrome Extension MV3 on port 42819...</div>
+        <div class="text-emerald-400 font-semibold">[ATTACHED] Connected to Tab "Checkout / Payment Gateway (Stripe v3)" (tabId: 104)</div>
+        <div class="text-white/70">
+          <span class="text-[#cfbcff]">&gt; MCP stdio:</span> calling <code class="text-yellow-300 font-bold">rea_scope_app</code>(maxDepth: 3, frameworkDetect: true)
+        </div>
+        <div class="pl-4 border-l border-white/10 text-white/60 space-y-1">
+          <div><span class="text-cyan-400">✓ Framework detected:</span> Next.js 14.2 (App Router) + Tailwind CSS + TRPC</div>
+          <div><span class="text-cyan-400">✓ Source Maps:</span> 14 mapped bundles unpacked into memory</div>
+          <div><span class="text-cyan-400">✓ Endpoints identified:</span> 12 internal APIs, 3 WebSocket push handlers</div>
+        </div>
+        <div class="text-white/70">
+          <span class="text-[#cfbcff]">&gt; Agent Execution:</span> <span class="text-emerald-300">rea_generate_openapi</span> → <span class="text-white">Generated valid OpenAPI 3.1 YAML in 240ms</span>
+        </div>
+        <div class="p-3 bg-white/5 rounded-lg border border-white/10 text-[11px] text-white/80 flex items-center justify-between">
+          <span>"rea_bundle": { "scope": "completed", "endpoints": 12, "types": "./types/app.d.ts", "coverage": "98.4%" }</span>
+          <span class="text-emerald-400 font-bold">200 OK</span>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- 3. Reverse Engineering Suite (01-06) -->
+<section class="py-24 px-4 sm:px-8 max-w-7xl mx-auto" id="reverse-engineering">
+  <div class="text-center max-w-3xl mx-auto mb-16">
+    <div class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-emerald-500/10 border border-emerald-500/25 text-emerald-300 text-xs font-label-mono mb-3">
+      <span class="material-symbols-outlined text-xs">biotech</span>
+      AUTONOMOUS INSPECTION SUITE
+    </div>
+    <h2 class="text-3xl sm:text-5xl font-extrabold text-white tracking-tight">
+      6 Autonomous Reverse Engineering Tools
+    </h2>
+    <p class="mt-4 text-[#cbc4d2] text-sm sm:text-base">
+      Give your AI agents direct surgical capabilities over any frontend application. Extract architectures, capture network payloads, reconstruct TypeScript models, and auto-generate OpenAPI specs.
+    </p>
+  </div>
+
+  <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+    <!-- 01: rea_scope_app -->
+    <div class="cyber-border-card rounded-2xl p-6 flex flex-col justify-between group">
+      <div>
+        <div class="flex items-center justify-between mb-4">
+          <span class="font-label-mono text-xs px-2.5 py-1 rounded-md bg-emerald-500/15 border border-emerald-500/30 text-emerald-300 font-semibold">01 / SCOPE</span>
+          <span class="material-symbols-outlined text-emerald-400 group-hover:rotate-12 transition-transform">layers</span>
+        </div>
+        <h3 class="text-lg font-bold text-white mb-2 font-mono">rea_scope_app</h3>
+        <p class="text-xs text-[#cbc4d2] leading-relaxed mb-4">
+          Holistic surface inspection of the active tab. Maps scripts, stylesheets, global namespaces, frameworks (React, Vue, Svelte, Angular), API roots, and state managers.
+        </p>
+      </div>
+      <div>
+        <div class="bg-black/40 rounded-lg p-2.5 border border-white/5 font-label-mono text-[11px] text-white/70 mb-3 flex items-center justify-between">
+          <code>scope_app({ depth: 2 })</code>
+          <button class="text-white/40 hover:text-white" onclick="copyTool('rea_scope_app', this)"><span class="material-symbols-outlined text-sm">content_copy</span></button>
+        </div>
+        <div class="flex items-center gap-2 text-[10px] font-label-mono text-emerald-400">
+          <span class="w-1.5 h-1.5 rounded-full bg-emerald-400"></span>
+          <span>DOM Tree → State Graph → Agent Context</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- 02: rea_sourcemap_reconstruct -->
+    <div class="cyber-border-card rounded-2xl p-6 flex flex-col justify-between group">
+      <div>
+        <div class="flex items-center justify-between mb-4">
+          <span class="font-label-mono text-xs px-2.5 py-1 rounded-md bg-[#cfbcff]/15 border border-[#cfbcff]/30 text-[#cfbcff] font-semibold">02 / SOURCEMAP</span>
+          <span class="material-symbols-outlined text-[#cfbcff] group-hover:rotate-12 transition-transform">code_blocks</span>
+        </div>
+        <h3 class="text-lg font-bold text-white mb-2 font-mono">rea_sourcemap_reconstruct</h3>
+        <p class="text-xs text-[#cbc4d2] leading-relaxed mb-4">
+          Discovers inline or linked <code>.map</code> files across bundles. Automatically reconstructs the original unminified TypeScript/JavaScript source tree locally.
+        </p>
+      </div>
+      <div>
+        <div class="bg-black/40 rounded-lg p-2.5 border border-white/5 font-label-mono text-[11px] text-white/70 mb-3 flex items-center justify-between">
+          <code>reconstruct({ outputDir: "./src" })</code>
+          <button class="text-white/40 hover:text-white" onclick="copyTool('rea_sourcemap_reconstruct', this)"><span class="material-symbols-outlined text-sm">content_copy</span></button>
+        </div>
+        <div class="flex items-center gap-2 text-[10px] font-label-mono text-[#cfbcff]">
+          <span class="w-1.5 h-1.5 rounded-full bg-[#cfbcff]"></span>
+          <span>Chunk Bundle → Source Tree Extraction</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- 03: rea_reconstruct_types -->
+    <div class="cyber-border-card rounded-2xl p-6 flex flex-col justify-between group">
+      <div>
+        <div class="flex items-center justify-between mb-4">
+          <span class="font-label-mono text-xs px-2.5 py-1 rounded-md bg-amber-500/15 border border-amber-500/30 text-amber-300 font-semibold">03 / TYPES</span>
+          <span class="material-symbols-outlined text-amber-400 group-hover:rotate-12 transition-transform">schema</span>
+        </div>
+        <h3 class="text-lg font-bold text-white mb-2 font-mono">rea_reconstruct_types</h3>
+        <p class="text-xs text-[#cbc4d2] leading-relaxed mb-4">
+          Analyzes runtime objects, Redux/Zustand stores, network payloads, and GraphQL queries to infer exact TypeScript interfaces and Zod validation schemas.
+        </p>
+      </div>
+      <div>
+        <div class="bg-black/40 rounded-lg p-2.5 border border-white/5 font-label-mono text-[11px] text-white/70 mb-3 flex items-center justify-between">
+          <code>infer_types({ format: "zod" })</code>
+          <button class="text-white/40 hover:text-white" onclick="copyTool('rea_reconstruct_types', this)"><span class="material-symbols-outlined text-sm">content_copy</span></button>
+        </div>
+        <div class="flex items-center gap-2 text-[10px] font-label-mono text-amber-400">
+          <span class="w-1.5 h-1.5 rounded-full bg-amber-400"></span>
+          <span>Runtime Object → Strongly Typed Interface</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- 04: rea_action_to_api -->
+    <div class="cyber-border-card rounded-2xl p-6 flex flex-col justify-between group">
+      <div>
+        <div class="flex items-center justify-between mb-4">
+          <span class="font-label-mono text-xs px-2.5 py-1 rounded-md bg-cyan-500/15 border border-cyan-500/30 text-cyan-300 font-semibold">04 / FLOW</span>
+          <span class="material-symbols-outlined text-cyan-400 group-hover:rotate-12 transition-transform">hub</span>
+        </div>
+        <h3 class="text-lg font-bold text-white mb-2 font-mono">rea_action_to_api</h3>
+        <p class="text-xs text-[#cbc4d2] leading-relaxed mb-4">
+          Correlates user UI interactions (button clicks, form inputs, route changes) with outgoing XHR/Fetch network calls to map business logic directly to endpoints.
+        </p>
+      </div>
+      <div>
+        <div class="bg-black/40 rounded-lg p-2.5 border border-white/5 font-label-mono text-[11px] text-white/70 mb-3 flex items-center justify-between">
+          <code>trace_action({ selector: "#btn-pay" })</code>
+          <button class="text-white/40 hover:text-white" onclick="copyTool('rea_action_to_api', this)"><span class="material-symbols-outlined text-sm">content_copy</span></button>
+        </div>
+        <div class="flex items-center gap-2 text-[10px] font-label-mono text-cyan-400">
+          <span class="w-1.5 h-1.5 rounded-full bg-cyan-400"></span>
+          <span>DOM Event → Trace → REST / RPC Route</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- 05: rea_generate_openapi -->
+    <div class="cyber-border-card rounded-2xl p-6 flex flex-col justify-between group">
+      <div>
+        <div class="flex items-center justify-between mb-4">
+          <span class="font-label-mono text-xs px-2.5 py-1 rounded-md bg-purple-500/15 border border-purple-500/30 text-purple-300 font-semibold">05 / OPENAPI</span>
+          <span class="material-symbols-outlined text-purple-400 group-hover:rotate-12 transition-transform">description</span>
+        </div>
+        <h3 class="text-lg font-bold text-white mb-2 font-mono">rea_generate_openapi</h3>
+        <p class="text-xs text-[#cbc4d2] leading-relaxed mb-4">
+          Synthesizes recorded network traffic, headers, query params, request bodies, and response schemas into a spec-compliant OpenAPI 3.1 YAML or JSON documentation.
+        </p>
+      </div>
+      <div>
+        <div class="bg-black/40 rounded-lg p-2.5 border border-white/5 font-label-mono text-[11px] text-white/70 mb-3 flex items-center justify-between">
+          <code>generate_spec({ version: "3.1.0" })</code>
+          <button class="text-white/40 hover:text-white" onclick="copyTool('rea_generate_openapi', this)"><span class="material-symbols-outlined text-sm">content_copy</span></button>
+        </div>
+        <div class="flex items-center gap-2 text-[10px] font-label-mono text-purple-400">
+          <span class="w-1.5 h-1.5 rounded-full bg-purple-400"></span>
+          <span>Traffic Capture → Valid OpenAPI Spec</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- 06: rea_bundle -->
+    <div class="cyber-border-card rounded-2xl p-6 flex flex-col justify-between group">
+      <div>
+        <div class="flex items-center justify-between mb-4">
+          <span class="font-label-mono text-xs px-2.5 py-1 rounded-md bg-gradient-to-r from-emerald-500/20 to-purple-500/20 border border-emerald-400/30 text-white font-semibold">06 / SUITE</span>
+          <span class="material-symbols-outlined text-emerald-400 group-hover:rotate-12 transition-transform">folder_zip</span>
+        </div>
+        <h3 class="text-lg font-bold text-white mb-2 font-mono">rea_bundle</h3>
+        <p class="text-xs text-[#cbc4d2] leading-relaxed mb-4">
+          Runs the complete reverse-engineering pipeline in parallel. Bundles architecture reports, unminified source code, types, and API specs into a single developer ZIP.
+        </p>
+      </div>
+      <div>
+        <div class="bg-black/40 rounded-lg p-2.5 border border-white/5 font-label-mono text-[11px] text-white/70 mb-3 flex items-center justify-between">
+          <code>bundle_all({ archive: true })</code>
+          <button class="text-white/40 hover:text-white" onclick="copyTool('rea_bundle', this)"><span class="material-symbols-outlined text-sm">content_copy</span></button>
+        </div>
+        <div class="flex items-center gap-2 text-[10px] font-label-mono text-emerald-300">
+          <span class="w-1.5 h-1.5 rounded-full bg-emerald-300"></span>
+          <span>All Tools Executed → Standalone Artifact</span>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- 4. Interactive Dev Tool Interpreter & 40 Tools Section -->
+<section class="py-20 px-4 sm:px-8 max-w-7xl mx-auto border-t border-white/10" id="tools">
+  <div class="flex flex-col md:flex-row md:items-end justify-between mb-10 gap-6">
+    <div>
+      <div class="font-label-mono text-xs text-[#cfbcff] uppercase tracking-wider mb-2">TOOL MATRIX</div>
+      <h2 class="text-3xl sm:text-4xl font-extrabold text-white">40 Granular Browser Bridge Tools</h2>
+      <p class="text-xs sm:text-sm text-[#cbc4d2] mt-2 max-w-xl">
+        Every capability is exposed as an atomic MCP Tool. Agentic LLMs invoke commands via JSON-RPC over local WebSocket with deterministic typings.
+      </p>
+    </div>
+    <!-- Search Input Filter -->
+    <div class="w-full md:w-72">
+      <div class="relative">
+        <span class="material-symbols-outlined absolute left-3 top-2.5 text-white/40 text-lg">search</span>
+        <input class="w-full bg-black/40 border border-white/10 rounded-xl pl-9 pr-4 py-2 text-xs font-label-mono text-white placeholder-white/40 focus:outline-none focus:border-[#cfbcff]" id="tool-search" oninput="filterTools()" placeholder="Search 40 MCP tools..." type="text"/>
+      </div>
+    </div>
+  </div>
+
+  <!-- Filter Pills -->
+  <div class="flex flex-wrap items-center gap-2 mb-8 font-label-mono text-xs" id="category-pills">
+    <button class="category-btn px-3 py-1.5 rounded-lg bg-[#cfbcff]/20 text-[#cfbcff] border border-[#cfbcff]/40 font-medium" onclick="filterCategory('all', this)">All (40)</button>
+    <button class="category-btn px-3 py-1.5 rounded-lg bg-white/5 text-[#cbc4d2] hover:text-white border border-white/10" onclick="filterCategory('rea', this)">Reverse Eng (6)</button>
+    <button class="category-btn px-3 py-1.5 rounded-lg bg-white/5 text-[#cbc4d2] hover:text-white border border-white/10" onclick="filterCategory('dom', this)">DOM &amp; Elements (10)</button>
+    <button class="category-btn px-3 py-1.5 rounded-lg bg-white/5 text-[#cbc4d2] hover:text-white border border-white/10" onclick="filterCategory('network', this)">Network &amp; State (8)</button>
+    <button class="category-btn px-3 py-1.5 rounded-lg bg-white/5 text-[#cbc4d2] hover:text-white border border-white/10" onclick="filterCategory('interaction', this)">Agent Action (9)</button>
+    <button class="category-btn px-3 py-1.5 rounded-lg bg-white/5 text-[#cbc4d2] hover:text-white border border-white/10" onclick="filterCategory('system', this)">Extension &amp; Tabs (7)</button>
+  </div>
+
+  <!-- Tools Grid -->
+  <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4" id="tools-container">
+    <div class="tool-card glass-panel rounded-xl p-4 border border-white/10 hover:border-[#cfbcff]/50 transition-all flex flex-col justify-between" data-cat="dom">
+      <div>
+        <div class="flex items-center justify-between mb-2">
+          <span class="text-[10px] font-label-mono px-2 py-0.5 rounded bg-blue-500/10 text-blue-300 border border-blue-500/20">DOM</span>
+          <button class="text-white/40 hover:text-white" onclick="copyTool('get_clean_dom', this)"><span class="material-symbols-outlined text-sm">content_copy</span></button>
+        </div>
+        <div class="text-xs font-mono font-bold text-white mb-1">get_clean_dom</div>
+        <p class="text-[11px] text-[#cbc4d2] leading-tight">Extracts stripped accessibility trees reducing LLM token context size by 90%.</p>
+      </div>
+      <div class="mt-3 pt-2 border-t border-white/5 text-[10px] font-label-mono text-white/50">returns: CleanNodeTree</div>
+    </div>
+
+    <div class="tool-card glass-panel rounded-xl p-4 border border-white/10 hover:border-[#cfbcff]/50 transition-all flex flex-col justify-between" data-cat="interaction">
+      <div>
+        <div class="flex items-center justify-between mb-2">
+          <span class="text-[10px] font-label-mono px-2 py-0.5 rounded bg-purple-500/10 text-purple-300 border border-purple-500/20">INTERACTION</span>
+          <button class="text-white/40 hover:text-white" onclick="copyTool('smart_click', this)"><span class="material-symbols-outlined text-sm">content_copy</span></button>
+        </div>
+        <div class="text-xs font-mono font-bold text-white mb-1">smart_click</div>
+        <p class="text-[11px] text-[#cbc4d2] leading-tight">Humanized synthetic click with scroll centering and focus event triggers.</p>
+      </div>
+      <div class="mt-3 pt-2 border-t border-white/5 text-[10px] font-label-mono text-white/50">param: selector, delayMs</div>
+    </div>
+
+    <div class="tool-card glass-panel rounded-xl p-4 border border-white/10 hover:border-[#cfbcff]/50 transition-all flex flex-col justify-between" data-cat="network">
+      <div>
+        <div class="flex items-center justify-between mb-2">
+          <span class="text-[10px] font-label-mono px-2 py-0.5 rounded bg-cyan-500/10 text-cyan-300 border border-cyan-500/20">NETWORK</span>
+          <button class="text-white/40 hover:text-white" onclick="copyTool('capture_traffic', this)"><span class="material-symbols-outlined text-sm">content_copy</span></button>
+        </div>
+        <div class="text-xs font-mono font-bold text-white mb-1">capture_traffic</div>
+        <p class="text-[11px] text-[#cbc4d2] leading-tight">Streams full HAR payloads, request headers, cookies, and microservice responses.</p>
+      </div>
+      <div class="mt-3 pt-2 border-t border-white/5 text-[10px] font-label-mono text-white/50">returns: HarSessionLog</div>
+    </div>
+
+    <div class="tool-card glass-panel rounded-xl p-4 border border-white/10 hover:border-[#cfbcff]/50 transition-all flex flex-col justify-between" data-cat="system">
+      <div>
+        <div class="flex items-center justify-between mb-2">
+          <span class="text-[10px] font-label-mono px-2 py-0.5 rounded bg-amber-500/10 text-amber-300 border border-amber-500/20">SYSTEM</span>
+          <button class="text-white/40 hover:text-white" onclick="copyTool('list_tabs', this)"><span class="material-symbols-outlined text-sm">content_copy</span></button>
+        </div>
+        <div class="text-xs font-mono font-bold text-white mb-1">list_tabs</div>
+        <p class="text-[11px] text-[#cbc4d2] leading-tight">Enumerates open Chrome tabs with active URLs, window IDs, and debugging states.</p>
+      </div>
+      <div class="mt-3 pt-2 border-t border-white/5 text-[10px] font-label-mono text-white/50">returns: TabInfo[]</div>
+    </div>
+
+    <div class="tool-card glass-panel rounded-xl p-4 border border-white/10 hover:border-[#cfbcff]/50 transition-all flex flex-col justify-between" data-cat="rea">
+      <div>
+        <div class="flex items-center justify-between mb-2">
+          <span class="text-[10px] font-label-mono px-2 py-0.5 rounded bg-emerald-500/10 text-emerald-300 border border-emerald-500/20">REA</span>
+          <button class="text-white/40 hover:text-white" onclick="copyTool('rea_scope_app', this)"><span class="material-symbols-outlined text-sm">content_copy</span></button>
+        </div>
+        <div class="text-xs font-mono font-bold text-white mb-1">rea_scope_app</div>
+        <p class="text-[11px] text-[#cbc4d2] leading-tight">Autonomous surface mapping of SPA libraries, bundlers, and global variables.</p>
+      </div>
+      <div class="mt-3 pt-2 border-t border-white/5 text-[10px] font-label-mono text-white/50">returns: AppTopologyReport</div>
+    </div>
+
+    <div class="tool-card glass-panel rounded-xl p-4 border border-white/10 hover:border-[#cfbcff]/50 transition-all flex flex-col justify-between" data-cat="dom">
+      <div>
+        <div class="flex items-center justify-between mb-2">
+          <span class="text-[10px] font-label-mono px-2 py-0.5 rounded bg-blue-500/10 text-blue-300 border border-blue-500/20">DOM</span>
+          <button class="text-white/40 hover:text-white" onclick="copyTool('evaluate_js', this)"><span class="material-symbols-outlined text-sm">content_copy</span></button>
+        </div>
+        <div class="text-xs font-mono font-bold text-white mb-1">evaluate_js</div>
+        <p class="text-[11px] text-[#cbc4d2] leading-tight">Executes arbitrary sandboxed JavaScript expressions inside the target window scope.</p>
+      </div>
+      <div class="mt-3 pt-2 border-t border-white/5 text-[10px] font-label-mono text-white/50">param: expression, args</div>
+    </div>
+
+    <div class="tool-card glass-panel rounded-xl p-4 border border-white/10 hover:border-[#cfbcff]/50 transition-all flex flex-col justify-between" data-cat="network">
+      <div>
+        <div class="flex items-center justify-between mb-2">
+          <span class="text-[10px] font-label-mono px-2 py-0.5 rounded bg-cyan-500/10 text-cyan-300 border border-cyan-500/20">NETWORK</span>
+          <button class="text-white/40 hover:text-white" onclick="copyTool('intercept_route', this)"><span class="material-symbols-outlined text-sm">content_copy</span></button>
+        </div>
+        <div class="text-xs font-mono font-bold text-white mb-1">intercept_route</div>
+        <p class="text-[11px] text-[#cbc4d2] leading-tight">Mocks, delays, or redirects dynamic REST endpoints for deterministic edge testing.</p>
+      </div>
+      <div class="mt-3 pt-2 border-t border-white/5 text-[10px] font-label-mono text-white/50">param: urlPattern, mockResponse</div>
+    </div>
+
+    <div class="tool-card glass-panel rounded-xl p-4 border border-white/10 hover:border-[#cfbcff]/50 transition-all flex flex-col justify-between" data-cat="interaction">
+      <div>
+        <div class="flex items-center justify-between mb-2">
+          <span class="text-[10px] font-label-mono px-2 py-0.5 rounded bg-purple-500/10 text-purple-300 border border-purple-500/20">INTERACTION</span>
+          <button class="text-white/40 hover:text-white" onclick="copyTool('fill_form_fields', this)"><span class="material-symbols-outlined text-sm">content_copy</span></button>
+        </div>
+        <div class="text-xs font-mono font-bold text-white mb-1">fill_form_fields</div>
+        <p class="text-[11px] text-[#cbc4d2] leading-tight">Auto-fills complex nested forms with realistic synthetic entity data.</p>
+      </div>
+      <div class="mt-3 pt-2 border-t border-white/5 text-[10px] font-label-mono text-white/50">param: formDataObject</div>
+    </div>
+  </div>
+</section>
+
+<!-- 5. Architecture & Data Flow -->
+<section class="py-24 px-4 sm:px-8 max-w-7xl mx-auto border-t border-white/10" id="architecture">
+  <div class="text-center max-w-3xl mx-auto mb-16">
+    <div class="font-label-mono text-xs text-[#22d3ee] uppercase tracking-wider mb-2">ZERO CLOUD RESIDENCY</div>
+    <h2 class="text-3xl sm:text-5xl font-extrabold text-white">Local-First Architecture</h2>
+    <p class="mt-3 text-sm sm:text-base text-[#cbc4d2]">
+      Data stays strictly between your local browser and your IDE. No remote telemetry, no proxy servers.
+    </p>
+  </div>
+
+  <div class="glass-panel rounded-2xl p-6 sm:p-10 border border-white/10 relative overflow-hidden">
+    <div class="grid grid-cols-1 md:grid-cols-3 gap-6 relative z-10">
+      <div class="bg-black/40 border border-white/10 rounded-xl p-5 flex flex-col justify-between">
+        <div>
+          <div class="flex items-center justify-between mb-3">
+            <span class="text-xs font-label-mono text-yellow-300 bg-yellow-500/10 px-2 py-0.5 rounded border border-yellow-500/20">MV3 MANIFEST</span>
+            <span class="material-symbols-outlined text-yellow-300">tab</span>
+          </div>
+          <h4 class="text-white font-bold text-base mb-1">Local Chrome Tab</h4>
+          <p class="text-xs text-[#cbc4d2] leading-relaxed">
+            Standard Chrome Extension running inside developer browser. Direct DOM &amp; CDP access without sandboxing bottlenecks.
+          </p>
+        </div>
+        <div class="mt-4 pt-3 border-t border-white/5 text-[11px] font-label-mono text-yellow-400">
+          Port: chrome.debugger
+        </div>
+      </div>
+
+      <div class="bg-[#181329]/90 border border-[#cfbcff]/30 rounded-xl p-5 flex flex-col justify-between shadow-[0_0_30px_rgba(103,80,164,0.2)]">
+        <div>
+          <div class="flex items-center justify-between mb-3">
+            <span class="text-xs font-label-mono text-[#cfbcff] bg-[#cfbcff]/15 px-2 py-0.5 rounded border border-[#cfbcff]/30">WEBSOCKET SERVER</span>
+            <span class="material-symbols-outlined text-[#cfbcff]">memory</span>
+          </div>
+          <h4 class="text-white font-bold text-base mb-1">Xtra DevPilot Core</h4>
+          <p class="text-xs text-[#cbc4d2] leading-relaxed">
+            High-performance local bridge. Serializes browser events into standard MCP protocol messages.
+          </p>
+        </div>
+        <div class="mt-4 pt-3 border-t border-white/5 text-[11px] font-label-mono text-emerald-400">
+          ws://127.0.0.1:42819
+        </div>
+      </div>
+
+      <div class="bg-black/40 border border-white/10 rounded-xl p-5 flex flex-col justify-between">
+        <div>
+          <div class="flex items-center justify-between mb-3">
+            <span class="text-xs font-label-mono text-cyan-300 bg-cyan-500/10 px-2 py-0.5 rounded border border-cyan-500/20">MCP CLIENT</span>
+            <span class="material-symbols-outlined text-cyan-300">smart_toy</span>
+          </div>
+          <h4 class="text-white font-bold text-base mb-1">Claude / Cursor / Antigravity</h4>
+          <p class="text-xs text-[#cbc4d2] leading-relaxed">
+            Local MCP Client receives tool calls via stdio JSON-RPC. Direct execution with zero prompt latency.
+          </p>
+        </div>
+        <div class="mt-4 pt-3 border-t border-white/5 text-[11px] font-label-mono text-cyan-400">
+          stdio: mcp-jsonrpc-2.0
+        </div>
+      </div>
+    </div>
+
+    <div class="mt-8 pt-6 border-t border-white/10 flex items-center justify-between text-xs font-label-mono text-white/60">
+      <div class="flex items-center gap-2">
+        <span class="w-2 h-2 rounded-full bg-emerald-400"></span>
+        <span>Secure Localhost Only</span>
+      </div>
+      <div class="hidden sm:block text-[#cbc4d2]">100% On-Device • No Data Leaves Your Machine</div>
+      <div class="text-emerald-400">&lt; 15ms Latency</div>
+    </div>
+  </div>
+</section>
+
+<!-- 6. Integration Matrix & One-Click Configs -->
+<section class="py-20 px-4 sm:px-8 max-w-7xl mx-auto border-t border-white/10" id="integrations">
+  <div class="text-center max-w-3xl mx-auto mb-14">
+    <div class="font-label-mono text-xs text-[#cfbcff] uppercase tracking-wider mb-2">INTEGRATION MATRIX</div>
+    <h2 class="text-3xl sm:text-4xl font-extrabold text-white">Plug into Your Favorite AI Environment</h2>
+    <p class="mt-3 text-xs sm:text-sm text-[#cbc4d2]">
+      Add one block to your configuration file to enable complete browser automation and reverse-engineering.
+    </p>
+  </div>
+  <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+    <div class="glass-panel rounded-2xl p-6 border border-white/10 flex flex-col justify-between">
+      <div>
+        <div class="flex items-center justify-between mb-4">
+          <div class="font-bold text-white text-base flex items-center gap-2">
+            <span class="material-symbols-outlined text-purple-400 text-xl">psychology</span> Claude Desktop
+          </div>
+          <span class="text-[10px] font-label-mono px-2 py-0.5 rounded bg-purple-500/10 text-purple-300">claude_desktop_config.json</span>
+        </div>
+        <pre class="bg-black/60 rounded-xl p-3 text-[11px] font-label-mono text-[#cbc4d2] overflow-x-auto border border-white/5"><code>{
+  "mcpServers": {
+    "xtra-devpilot": {
+      "command": "npx",
+      "args": ["-y", "@xtra/devpilot", "bridge"]
+    }
+  }
+}</code></pre>
+      </div>
+      <button class="mt-4 w-full py-2 rounded-xl bg-white/5 hover:bg-white/10 border border-white/10 text-xs font-label-mono text-white flex items-center justify-center gap-1.5 transition-all" onclick="copySnippet(this, '{\n  &quot;mcpServers&quot;: {\n    &quot;xtra-devpilot&quot;: {\n      &quot;command&quot;: &quot;npx&quot;,\n      &quot;args&quot;: [&quot;-y&quot;, &quot;@xtra/devpilot&quot;, &quot;bridge&quot;]\n    }\n  }\n}')">
+        <span class="material-symbols-outlined text-sm">content_copy</span> Copy Config
+      </button>
+    </div>
+
+    <div class="glass-panel rounded-2xl p-6 border border-white/10 flex flex-col justify-between">
+      <div>
+        <div class="flex items-center justify-between mb-4">
+          <div class="font-bold text-white text-base flex items-center gap-2">
+            <span class="material-symbols-outlined text-cyan-400 text-xl">code</span> Cursor IDE
+          </div>
+          <span class="text-[10px] font-label-mono px-2 py-0.5 rounded bg-cyan-500/10 text-cyan-300">.cursorrules / settings</span>
+        </div>
+        <pre class="bg-black/60 rounded-xl p-3 text-[11px] font-label-mono text-[#cbc4d2] overflow-x-auto border border-white/5"><code>{
+  "cursor.mcp": {
+    "devpilot": {
+      "type": "stdio",
+      "command": "npx @xtra/devpilot bridge"
+    }
+  }
+}</code></pre>
+      </div>
+      <button class="mt-4 w-full py-2 rounded-xl bg-white/5 hover:bg-white/10 border border-white/10 text-xs font-label-mono text-white flex items-center justify-center gap-1.5 transition-all" onclick="copySnippet(this, '{\n  &quot;cursor.mcp&quot;: {\n    &quot;devpilot&quot;: {\n      &quot;type&quot;: &quot;stdio&quot;,\n      &quot;command&quot;: &quot;npx @xtra/devpilot bridge&quot;\n    }\n  }\n}')">
+        <span class="material-symbols-outlined text-sm">content_copy</span> Copy Config
+      </button>
+    </div>
+
+    <div class="glass-panel rounded-2xl p-6 border border-white/10 flex flex-col justify-between">
+      <div>
+        <div class="flex items-center justify-between mb-4">
+          <div class="font-bold text-white text-base flex items-center gap-2">
+            <span class="material-symbols-outlined text-emerald-400 text-xl">satellite_alt</span> Google Antigravity
+          </div>
+          <span class="text-[10px] font-label-mono px-2 py-0.5 rounded bg-emerald-500/10 text-emerald-300">agent_runtime.yaml</span>
+        </div>
+        <pre class="bg-black/60 rounded-xl p-3 text-[11px] font-label-mono text-[#cbc4d2] overflow-x-auto border border-white/5"><code>agents:
+  browser_agent:
+    mcp_endpoint: "stdio://xtra-devpilot"
+    tools: ["rea_*", "get_clean_dom"]</code></pre>
+      </div>
+      <button class="mt-4 w-full py-2 rounded-xl bg-white/5 hover:bg-white/10 border border-white/10 text-xs font-label-mono text-white flex items-center justify-center gap-1.5 transition-all" onclick="copySnippet(this, 'agents:\n  browser_agent:\n    mcp_endpoint: &quot;stdio://xtra-devpilot&quot;\n    tools: [&quot;rea_*&quot;, &quot;get_clean_dom&quot;]')">
+        <span class="material-symbols-outlined text-sm">content_copy</span> Copy Config
+      </button>
+    </div>
+  </div>
+</section>
+
+<!-- Footer -->
+<footer class="mt-auto border-t border-white/10 bg-[#09080e]/95 backdrop-blur-2xl py-12 px-4 sm:px-8">
+  <div class="max-w-7xl mx-auto flex flex-col md:flex-row items-center justify-between gap-6">
+    <div class="flex items-center gap-3">
+      <div class="h-8 w-8 rounded-lg bg-gradient-to-tr from-[#6750a4] to-[#22d3ee] flex items-center justify-center font-bold text-white text-xs">XD</div>
+      <span class="text-white font-bold tracking-tight">Xtra DevPilot</span>
+      <span class="text-xs text-white/40">© 2025 Xtra Engine Inc.</span>
+    </div>
+    <div class="flex items-center gap-4 text-xs font-label-mono">
+      <span class="text-white/60">Bridge Port :42819</span>
+      <a class="text-white/60 hover:text-white transition-colors" href="https://github.com/om0852/XtraDevPilot" target="_blank">GitHub</a>
+      <a class="text-white/60 hover:text-white transition-colors" href="docs.html">Documentation</a>
+    </div>
+  </div>
+</footer>
+
+<!-- Interactive Scripts: WebGL Shader, Smooth Dual-Tier Cursor Animation, Cockpit 3D Tilt, Filters & Copy -->
+<script>
+// 1. WebGL Quantum Plasma Shader
+(function() {
+  const canvas = document.getElementById('shader-canvas-ANIMATION_3');
+  if (!canvas) return;
+
+  function syncSize() {
+    const w = canvas.clientWidth || window.innerWidth || 1280;
+    const h = canvas.clientHeight || window.innerHeight || 720;
+    if (canvas.width !== w || canvas.height !== h) {
+      canvas.width = w;
+      canvas.height = h;
+    }
+  }
+  if (typeof ResizeObserver !== 'undefined') {
+    new ResizeObserver(syncSize).observe(canvas);
+  }
+  syncSize();
+
+  const gl = canvas.getContext('webgl') || canvas.getContext('experimental-webgl');
+  if (!gl) return;
+  const vs = `attribute vec2 a_position;
+varying vec2 v_texCoord;
+void main() {
+  v_texCoord = a_position * 0.5 + 0.5;
+  gl_Position = vec4(a_position, 0.0, 1.0);
+}`;
+  const fs = `precision highp float;
+uniform float u_time;
+uniform vec2 u_resolution;
+uniform vec2 u_mouse;
+varying vec2 v_texCoord;
+
+vec3 mod289(vec3 x) { return x - floor(x * (1.0 / 289.0)) * 289.0; }
+vec2 mod289(vec2 x) { return x - floor(x * (1.0 / 289.0)) * 289.0; }
+vec3 permute(vec3 x) { return mod289(((x*34.0)+1.0)*x); }
+
+float snoise(vec2 v) {
+    const vec4 C = vec4(0.211324865405187, 0.366025403784439, -0.577350269189626, 0.024390243902439);
+    vec2 i = floor(v + dot(v, C.yy));
+    vec2 x0 = v - i + dot(i, C.xx);
+    vec2 i1 = (x0.x > x0.y) ? vec2(1.0, 0.0) : vec2(0.0, 1.0);
+    vec4 x12 = x0.xyxy + C.xxzz;
+    x12.xy -= i1;
+    i = mod289(i);
+    vec3 p = permute(permute(i.y + vec3(0.0, i1.y, 1.0)) + i.x + vec3(0.0, i1.x, 1.0));
+    vec3 m = max(0.5 - vec3(dot(x0,x0), dot(x12.xy,x12.xy), dot(x12.zw,x12.zw)), 0.0);
+    m = m*m;
+    m = m*m;
+    vec3 x = 2.0 * fract(p * C.www) - 1.0;
+    vec3 h = abs(x) - 0.5;
+    vec3 ox = floor(x + 0.5);
+    vec3 a0 = x - ox;
+    m *= 1.79284291400159 - 0.85373472095314 * (a0*a0 + h*h);
+    vec3 g;
+    g.x = a0.x * x0.x + h.x * x0.y;
+    g.yz = a0.yz * x12.xz + h.yz * x12.yw;
+    return 130.0 * dot(m, g);
+}
+
+void main() {
+    vec2 uv = gl_FragCoord.xy / u_resolution.xy;
+    vec2 mouseNorm = (u_mouse / u_resolution) - 0.5;
+    
+    vec2 p = (uv - 0.5) * 2.0;
+    p.x *= u_resolution.x / u_resolution.y;
+    p += mouseNorm * 0.15;
+    
+    float t = u_time * 0.18;
+    
+    float n1 = snoise(p * 1.3 + vec2(t * 0.3, -t * 0.2));
+    float n2 = snoise(p * 2.8 - vec2(t * 0.4, t * 0.3) + n1 * 0.5);
+    float n3 = snoise(p * 5.0 + vec2(sin(t * 0.5), cos(t * 0.4)));
+    
+    float beam1 = smoothstep(0.7, 0.0, abs(p.y + sin(p.x * 2.0 + t) * 0.25 - 0.1));
+    float beam2 = smoothstep(0.8, 0.0, length(p - vec2(mouseNorm.x * 0.8, 0.2)));
+    
+    vec3 bg = vec3(0.043, 0.035, 0.063);
+    vec3 violet = vec3(0.55, 0.25, 0.95);
+    vec3 cyan = vec3(0.13, 0.82, 0.93);
+    vec3 emerald = vec3(0.06, 0.72, 0.50);
+    
+    vec3 col = bg;
+    col += violet * max(0.0, n1 * 0.32 + 0.1) * (1.0 - length(p * 0.4));
+    col += cyan * max(0.0, n2 * 0.22) * smoothstep(1.5, 0.2, length(p));
+    col += emerald * max(0.0, n3 * 0.12) * beam1;
+    col += (violet * 0.6 + cyan * 0.4) * beam2 * 0.25;
+    
+    vec2 gridUV = fract(p * 8.0);
+    float grid = (step(0.97, gridUV.x) + step(0.97, gridUV.y)) * 0.04;
+    col += vec3(grid * 0.6, grid * 0.8, grid * 1.0);
+    
+    float vig = smoothstep(1.6, 0.4, length(uv - 0.5) * 1.4);
+    col *= vig;
+    
+    gl_FragColor = vec4(col, 1.0);
+}`;
+
+  function cs(type, src) {
+    const s = gl.createShader(type);
+    gl.shaderSource(s, src);
+    gl.compileShader(s);
+    return s;
+  }
+  const prog = gl.createProgram();
+  gl.attachShader(prog, cs(gl.VERTEX_SHADER, vs));
+  gl.attachShader(prog, cs(gl.FRAGMENT_SHADER, fs));
+  gl.linkProgram(prog);
+  gl.useProgram(prog);
+  const buf = gl.createBuffer();
+  gl.bindBuffer(gl.ARRAY_BUFFER, buf);
+  gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1,-1, 1,-1, -1,1, 1,1]), gl.STATIC_DRAW);
+  const pos = gl.getAttribLocation(prog, 'a_position');
+  gl.enableVertexAttribArray(pos);
+  gl.vertexAttribPointer(pos, 2, gl.FLOAT, false, 0, 0);
+  const uTime = gl.getUniformLocation(prog, 'u_time');
+  const uRes = gl.getUniformLocation(prog, 'u_resolution');
+  const uMouse = gl.getUniformLocation(prog, 'u_mouse');
+
+  let shaderMouse = { x: canvas.width / 2, y: canvas.height / 2 };
+  let clientX = window.innerWidth / 2;
+  let clientY = window.innerHeight / 2;
+  let curX = clientX, curY = clientY;
+  let ringX = clientX, ringY = clientY;
+
+  const aura = document.getElementById('cursor-aura');
+  const ring = document.getElementById('cursor-ring');
+
+  window.addEventListener('mousemove', (event) => {
+    clientX = event.clientX;
+    clientY = event.clientY;
+
+    const rect = canvas.getBoundingClientRect();
+    if (rect.width && rect.height) {
+      const nx = (event.clientX - rect.left) / rect.width;
+      const ny = 1.0 - (event.clientY - rect.top) / rect.height;
+      shaderMouse.x = nx * canvas.width;
+      shaderMouse.y = ny * canvas.height;
+    }
+
+    const pctX = (event.clientX / window.innerWidth) * 100;
+    const pctY = (event.clientY / window.innerHeight) * 100;
+    document.documentElement.style.setProperty('--mouse-x', `${pctX}%`);
+    document.documentElement.style.setProperty('--mouse-y', `${pctY}%`);
+
+    // Cockpit 3D Tilt
+    const tiltCard = document.getElementById('cockpit-tilt');
+    if (tiltCard) {
+      const r = tiltCard.getBoundingClientRect();
+      const cardX = event.clientX - r.left;
+      const cardY = event.clientY - r.top;
+      if (cardX >= 0 && cardX <= r.width && cardY >= 0 && cardY <= r.height) {
+        const rotX = ((cardY / r.height) - 0.5) * -12;
+        const rotY = ((cardX / r.width) - 0.5) * 12;
+        tiltCard.style.transform = `perspective(1000px) rotateX(${rotX}deg) rotateY(${rotY}deg) scale3d(1.01, 1.01, 1.01)`;
+      } else {
+        tiltCard.style.transform = `perspective(1000px) rotateX(0deg) rotateY(0deg) scale3d(1, 1, 1)`;
+      }
+    }
+  }, { passive: true });
+
+  function render(t) {
+    syncSize();
+    gl.viewport(0, 0, canvas.width, canvas.height);
+    if (uTime) gl.uniform1f(uTime, t * 0.001);
+    if (uRes) gl.uniform2f(uRes, canvas.width, canvas.height);
+    if (uMouse) gl.uniform2f(uMouse, shaderMouse.x, shaderMouse.y);
+    gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
+
+    // Smooth lerping cursor aura & trailing ring
+    curX += (clientX - curX) * 0.15;
+    curY += (clientY - curY) * 0.15;
+    if (aura) aura.style.transform = `translate3d(${curX}px, ${curY}px, 0) translate(-50%, -50%)`;
+
+    ringX += (clientX - ringX) * 0.07;
+    ringY += (clientY - ringY) * 0.07;
+    if (ring) ring.style.transform = `translate3d(${ringX}px, ${ringY}px, 0) translate(-50%, -50%)`;
+
+    requestAnimationFrame(render);
+  }
+  render(0);
+})();
+
+// Cockpit Tab Switcher
+function switchCockpitTab(tab, btn) {
+  document.querySelectorAll('.cockpit-tab-btn').forEach(b => {
+    b.className = 'cockpit-tab-btn py-2.5 text-white/50 hover:text-white flex items-center gap-1.5 transition-colors';
+  });
+  btn.className = 'cockpit-tab-btn py-2.5 text-white border-b-2 border-[#cfbcff] font-medium flex items-center gap-1.5';
+
+  const body = document.getElementById('cockpit-body');
+  if (tab === 'terminal') {
+    body.innerHTML = `
+      <div class="text-white/40">// Establishing local WebSocket link to Chrome Extension MV3 on port 42819...</div>
+      <div class="text-emerald-400 font-semibold">[ATTACHED] Connected to Tab "Checkout / Payment Gateway (Stripe v3)" (tabId: 104)</div>
+      <div class="text-white/70">
+        <span class="text-[#cfbcff]">&gt; MCP stdio:</span> calling <code class="text-yellow-300 font-bold">rea_scope_app</code>(maxDepth: 3, frameworkDetect: true)
+      </div>
+      <div class="pl-4 border-l border-white/10 text-white/60 space-y-1">
+        <div><span class="text-cyan-400">✓ Framework detected:</span> Next.js 14.2 (App Router) + Tailwind CSS + TRPC</div>
+        <div><span class="text-cyan-400">✓ Source Maps:</span> 14 mapped bundles unpacked into memory</div>
+        <div><span class="text-cyan-400">✓ Endpoints identified:</span> 12 internal APIs, 3 WebSocket push handlers</div>
+      </div>
+      <div class="text-white/70">
+        <span class="text-[#cfbcff]">&gt; Agent Execution:</span> <span class="text-emerald-300">rea_generate_openapi</span> → <span class="text-white">Generated valid OpenAPI 3.1 YAML in 240ms</span>
+      </div>
+      <div class="p-3 bg-white/5 rounded-lg border border-white/10 text-[11px] text-white/80 flex items-center justify-between">
+        <span>"rea_bundle": { "scope": "completed", "endpoints": 12, "types": "./types/app.d.ts", "coverage": "98.4%" }</span>
+        <span class="text-emerald-400 font-bold">200 OK</span>
+      </div>
+    `;
+  } else if (tab === 'network') {
+    body.innerHTML = `
+      <div class="text-cyan-400 font-semibold">// Live HAR Network Interceptor active</div>
+      <div class="text-white/80 flex justify-between border-b border-white/5 pb-1">
+        <span>POST /api/trpc/checkout.createSession</span>
+        <span class="text-emerald-400">201 Created (18ms)</span>
+      </div>
+      <div class="text-white/80 flex justify-between border-b border-white/5 pb-1">
+        <span>GET /api/v1/auth/user-permissions</span>
+        <span class="text-emerald-400">200 OK (8ms)</span>
+      </div>
+      <div class="text-white/80 flex justify-between border-b border-white/5 pb-1">
+        <span>POST /api/stripe/payment_intents/pi_92xLq</span>
+        <span class="text-emerald-400">200 OK (38ms)</span>
+      </div>
+      <div class="text-white/50 text-[11px]">Recorded 39 requests (1.8 MB transferred). Headers & Cookies captured locally.</div>
+    `;
+  } else if (tab === 'scope') {
+    body.innerHTML = `
+      <div class="text-purple-300 font-semibold">// AST Source Map Extraction Tree</div>
+      <div class="space-y-1 text-white/80">
+        <div>📁 src/</div>
+        <div class="pl-4">📁 components/checkout/</div>
+        <div class="pl-8 text-emerald-300">📄 PaymentModal.tsx <span class="text-white/40">(18.4 KB - unminified)</span></div>
+        <div class="pl-8 text-emerald-300">📄 CardElement.tsx <span class="text-white/40">(7.2 KB - unminified)</span></div>
+        <div class="pl-4">📁 hooks/</div>
+        <div class="pl-8 text-cyan-300">📄 usePaymentIntent.ts</div>
+        <div class="pl-4">📁 types/</div>
+        <div class="pl-8 text-amber-300">📄 schema.d.ts <span class="text-white/40">(Inferred Zod schema)</span></div>
+      </div>
+    `;
+  }
+}
+
+// Category Filtering
+function filterCategory(cat, btn) {
+  document.querySelectorAll('.category-btn').forEach(b => {
+    b.className = 'category-btn px-3 py-1.5 rounded-lg bg-white/5 text-[#cbc4d2] hover:text-white border border-white/10';
+  });
+  btn.className = 'category-btn px-3 py-1.5 rounded-lg bg-[#cfbcff]/20 text-[#cfbcff] border border-[#cfbcff]/40 font-medium';
+
+  const cards = document.querySelectorAll('.tool-card');
+  cards.forEach(card => {
+    if (cat === 'all' || card.getAttribute('data-cat') === cat) {
+      card.style.display = 'flex';
+    } else {
+      card.style.display = 'none';
+    }
+  });
+}
+
+// Search Filter
+function filterTools() {
+  const q = document.getElementById('tool-search').value.toLowerCase();
+  const cards = document.querySelectorAll('.tool-card');
+  cards.forEach(card => {
+    const text = card.textContent.toLowerCase();
+    card.style.display = text.includes(q) ? 'flex' : 'none';
+  });
+}
+
+// Copy Handlers
+function copyTool(name, btn) {
+  navigator.clipboard.writeText(name);
+  const oldHTML = btn.innerHTML;
+  btn.innerHTML = '<span class="material-symbols-outlined text-sm text-emerald-400">check</span>';
+  setTimeout(() => btn.innerHTML = oldHTML, 1600);
+}
+
+function copySnippet(btn, text) {
+  navigator.clipboard.writeText(text);
+  const old = btn.innerHTML;
+  btn.innerHTML = '<span class="material-symbols-outlined text-sm text-emerald-400">check</span> Copied!';
+  setTimeout(() => btn.innerHTML = old, 1800);
+}
+</script>
+</body>
+</html>

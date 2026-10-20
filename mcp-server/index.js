@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 import fs from 'fs';
 import path from 'path';
+import { fileURLToPath } from 'url';
 import { execSync } from 'child_process';
 import { Server } from '@modelcontextprotocol/sdk/server/index.js';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
@@ -11,6 +12,12 @@ import {
   McpError,
 } from '@modelcontextprotocol/sdk/types.js';
 import { WebSocketServer } from 'ws';
+import { reconstructCodebaseFromDirectory } from '../src/reconstruction/sourcemap-unpacker.js';
+import { scanEndpoints } from '../src/reconstruction/endpoint-scanner.js';
+import { buildReaEvidenceBundle, exportReaEvidenceToFile } from '../src/bridge/rea-exporter.js';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 // Setup WebSocket Server to listen for the Chrome Extension
 const WSS_PORT = 42819;
@@ -20,11 +27,55 @@ let activeExtensionSocket = null;
 let messageIdCounter = 1;
 const pendingRequests = new Map();
 
-function startWebSocketServer() {
+function killPortOccupant(port) {
+  try {
+    const isWin = process.platform === 'win32';
+    if (isWin) {
+      const output = execSync(`netstat -ano | findstr :${port}`, { encoding: 'utf8', stdio: ['pipe', 'pipe', 'ignore'] });
+      const lines = output.split('\n');
+      const pidsToKill = new Set();
+      for (const line of lines) {
+        if (line.includes('LISTENING')) {
+          const parts = line.trim().split(/\s+/);
+          const pid = parseInt(parts[parts.length - 1], 10);
+          if (pid && pid !== process.pid) {
+            pidsToKill.add(pid);
+          }
+        }
+      }
+      for (const pid of pidsToKill) {
+        try {
+          execSync(`taskkill /F /PID ${pid}`, { stdio: 'ignore' });
+          console.error(`[DevPilot Bridge] Terminated stale process PID ${pid} occupying port ${port}.`);
+        } catch (e) {}
+      }
+    } else {
+      try {
+        execSync(`fuser -k -9 ${port}/tcp`, { stdio: 'ignore' });
+      } catch (e) {
+        try {
+          const pid = execSync(`lsof -t -i:${port}`, { encoding: 'utf8' }).trim();
+          if (pid && parseInt(pid, 10) !== process.pid) {
+            execSync(`kill -9 ${pid}`, { stdio: 'ignore' });
+          }
+        } catch (err) {}
+      }
+    }
+  } catch (err) {
+    // Port was likely free or command returned non-zero
+  }
+}
+
+function startWebSocketServer(retryCount = 0) {
   try {
     if (wss) {
       try { wss.close(); } catch (e) {}
     }
+
+    if (retryCount > 0) {
+      killPortOccupant(WSS_PORT);
+    }
+
     wss = new WebSocketServer({ port: WSS_PORT, host: '0.0.0.0' });
     console.error(`[DevPilot Bridge] WebSocket Server listening on 0.0.0.0:${WSS_PORT}`);
 
@@ -87,12 +138,22 @@ function startWebSocketServer() {
     wss.on('error', (err) => {
       console.error(`[DevPilot Bridge] WebSocket Server error: ${err.message}`);
       if (err.code === 'EADDRINUSE') {
-        console.error(`[DevPilot Bridge] Port ${WSS_PORT} is in use. Retrying in 2 seconds...`);
-        setTimeout(startWebSocketServer, 2000);
+        if (retryCount < 3) {
+          console.error(`[DevPilot Bridge] Port ${WSS_PORT} is in use. Forcibly clearing stale occupant...`);
+          killPortOccupant(WSS_PORT);
+          setTimeout(() => startWebSocketServer(retryCount + 1), 500);
+        } else {
+          console.error(`[DevPilot Bridge] Port ${WSS_PORT} remains unavailable after retries.`);
+        }
       }
     });
   } catch (err) {
-    console.error(`[DevPilot Bridge] Failed to start WebSocketServer: ${err.message}`);
+    if (err.code === 'EADDRINUSE' && retryCount < 3) {
+      killPortOccupant(WSS_PORT);
+      setTimeout(() => startWebSocketServer(retryCount + 1), 500);
+    } else {
+      console.error(`[DevPilot Bridge] Failed to start WebSocketServer: ${err.message}`);
+    }
   }
 }
 
@@ -121,6 +182,8 @@ async function askExtension(action, payload = {}) {
   return new Promise((resolve, reject) => {
     let timeoutMs = 15000;
     if (action === 'WAIT_FOR_CLICK') timeoutMs = 60000;
+    else if (action === 'DOWNLOAD_SOURCES') timeoutMs = 90000;
+    else if (action === 'EXPORT_HAR') timeoutMs = 30000;
     else if (payload.timeoutMs) timeoutMs = payload.timeoutMs + 5000;
     else if (action === 'BATCH_FILL_FORM') timeoutMs = 30000;
     else if (action === 'UPLOAD_FILE') timeoutMs = 20000;
@@ -135,7 +198,7 @@ async function askExtension(action, payload = {}) {
       reject: (err) => { clearTimeout(timeout); reject(err); }
     });
 
-    targetSocket.send(JSON.stringify({ id, action, ...payload }));
+    targetSocket.send(JSON.stringify({ ...payload, action, id }));
   });
 }
 
@@ -211,6 +274,32 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
             rootSelector: { type: 'string', description: 'Optional CSS selector to scope the cleaned DOM subtree (e.g. "form" or "#main-content")' },
             tabId: { type: 'number', description: 'Optional target Chrome tab ID' }
           }
+        },
+      },
+      {
+        name: 'get_ax_tree',
+        description: 'Get an ultra-compact ARIA Accessibility Tree representation of the page with indexed node handles. Reduces token usage by up to 95%.',
+        inputSchema: {
+          type: 'object',
+          properties: {
+            tabId: { type: 'number', description: 'Optional target Chrome tab ID' }
+          }
+        },
+      },
+      {
+        name: 'batch_execute',
+        description: 'Executes an array of sequential browser actions (e.g. click, type, select) in a single high-speed payload roundtrip.',
+        inputSchema: {
+          type: 'object',
+          properties: {
+            actions: {
+              type: 'array',
+              items: { type: 'object' },
+              description: 'List of action steps (e.g. [{ action: "CLICK_ELEMENT", selector: "#btn" }])'
+            },
+            tabId: { type: 'number', description: 'Optional target Chrome tab ID' }
+          },
+          required: ['actions']
         },
       },
       {
@@ -313,7 +402,43 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
             timeoutMs: { type: 'number', description: 'Optional wait timeout in ms (default: 3000)' },
             tabId: { type: 'number', description: 'Optional target Chrome tab ID' }
           },
-          required: ['selector', 'text']
+          required: ['text']
+        },
+      },
+      {
+        name: 'press_key',
+        description: 'Simulates pressing keyboard keys (Enter, Tab, Escape, Shift, Backspace, ArrowDown, etc.) with synthetic event triggers.',
+        inputSchema: {
+          type: 'object',
+          properties: {
+            key: { type: 'string', description: 'Key name (e.g. "Enter", "Tab", "Escape", "Backspace", "ArrowDown", "Space")' },
+            selector: { type: 'string', description: 'Optional CSS selector of target element (defaults to document.activeElement)' },
+            shiftKey: { type: 'boolean', description: 'Whether Shift key is held down' },
+            ctrlKey: { type: 'boolean', description: 'Whether Ctrl key is held down' },
+            altKey: { type: 'boolean', description: 'Whether Alt key is held down' },
+            tabId: { type: 'number', description: 'Optional target Chrome tab ID' }
+          },
+          required: ['key']
+        },
+      },
+      {
+        name: 'mouse_action',
+        description: 'Advanced synthetic mouse controller for precise coordinate clicks, right-clicks, double clicks, mouse moves, and drag-and-drop actions.',
+        inputSchema: {
+          type: 'object',
+          properties: {
+            action: { type: 'string', enum: ['click', 'dblclick', 'move', 'drag', 'scroll'], description: 'Mouse action type' },
+            x: { type: 'number', description: 'Target X coordinate (viewport pixels)' },
+            y: { type: 'number', description: 'Target Y coordinate (viewport pixels)' },
+            endX: { type: 'number', description: 'End X coordinate for drag action' },
+            endY: { type: 'number', description: 'End Y coordinate for drag action' },
+            selector: { type: 'string', description: 'Optional CSS selector of target element' },
+            button: { type: 'string', enum: ['left', 'middle', 'right'], description: 'Mouse button (default: left)' },
+            deltaX: { type: 'number', description: 'Horizontal scroll delta for scroll action' },
+            deltaY: { type: 'number', description: 'Vertical scroll delta for scroll action' },
+            tabId: { type: 'number', description: 'Optional target Chrome tab ID' }
+          },
+          required: ['action']
         },
       },
       {
@@ -339,7 +464,8 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
         inputSchema: { 
           type: 'object', 
           properties: {
-            tabId: { type: 'number', description: 'Optional target Chrome tab ID' }
+            tabId: { type: 'number', description: 'Optional target Chrome tab ID' },
+            outputPath: { type: 'string', description: 'Optional absolute file path to save screenshot (default: .devpilot-screenshot.png in CWD)' }
           } 
         },
       },
@@ -504,6 +630,97 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
         name: 'reload_extension',
         description: 'Reloads the Xtra DevPilot Chrome extension background service worker and active connections. Useful when updating extension files.',
         inputSchema: { type: 'object', properties: {} }
+      },
+      {
+        name: 'download_page_html',
+        description: 'Downloads the live, complete HTML markup of the active page or a specific feature/component and saves it directly to a local file in your workspace.',
+        inputSchema: {
+          type: 'object',
+          properties: {
+            outputPath: { type: 'string', description: 'Target file path to save the HTML (defaults to "./downloaded-page.html")' },
+            selector: { type: 'string', description: 'Optional CSS selector to isolate and download only a specific feature/component subtree' },
+            clean: { type: 'boolean', description: 'Optional boolean to strip noisy SVG paths, empty scripts, and comments for cleaner markup (defaults to false)' },
+            tabId: { type: 'number', description: 'Optional target Chrome tab ID' }
+          }
+        }
+      },
+      {
+        name: 'export_har',
+        description: 'Exports captured network requests for the active tab into a standard HAR 1.2 format file and saves it directly to disk for analysis in Chrome DevTools or API clients.',
+        inputSchema: {
+          type: 'object',
+          properties: {
+            outputPath: { type: 'string', description: 'Target file path to save the .har file (defaults to "./network-traffic.har")' },
+            clearAfterExport: { type: 'boolean', description: 'Whether to clear the captured network logs after exporting (defaults to false)' },
+            tabId: { type: 'number', description: 'Optional target Chrome tab ID' }
+          }
+        }
+      },
+      {
+        name: 'download_sources',
+        description: 'Scans the active page for all referenced source files (JavaScript bundles, CSS stylesheets, Source Maps, images, fonts) and downloads them into an organized local directory.',
+        inputSchema: {
+          type: 'object',
+          properties: {
+            outputDir: { type: 'string', description: 'Target directory path to save the downloaded source files (defaults to "./downloaded-sources")' },
+            types: {
+              type: 'array',
+              items: { type: 'string', enum: ['scripts', 'styles', 'sourcemaps', 'images', 'fonts'] },
+              description: 'Asset types to download (defaults to all: ["scripts", "styles", "sourcemaps", "images", "fonts"])'
+            },
+            selector: { type: 'string', description: 'Optional CSS selector to isolate source files referenced within a specific feature/component' },
+            includeSourceMaps: { type: 'boolean', description: 'Whether to detect and download .map source map files (defaults to true)' },
+            tabId: { type: 'number', description: 'Optional target Chrome tab ID' }
+          }
+        }
+      },
+      {
+        name: 'reconstruct_source_tree',
+        description: 'Reconstructs original frontend project source code (TypeScript, React, Vue, Svelte, CSS) from downloaded .map SourceMap files and extracted modules.',
+        inputSchema: {
+          type: 'object',
+          properties: {
+            inputDir: { type: 'string', description: 'Input directory containing downloaded sources and sourcemaps (defaults to "./downloaded-sources")' },
+            outputDir: { type: 'string', description: 'Output directory for reconstructed source code (defaults to "./reconstructed-codebase")' }
+          }
+        }
+      },
+      {
+        name: 'trace_action_network',
+        description: 'Traces outgoing HTTP/XHR/fetch network requests and payload details triggered by a specific user UI action (click, type) on an element.',
+        inputSchema: {
+          type: 'object',
+          properties: {
+            selector: { type: 'string', description: 'CSS selector of the element to interact with' },
+            action: { type: 'string', enum: ['click', 'type'], description: 'Action type to perform (defaults to "click")' },
+            text: { type: 'string', description: 'Text to type if action is "type"' },
+            waitDurationMs: { type: 'number', description: 'Observation window in milliseconds after the action (default: 1500)' },
+            tabId: { type: 'number', description: 'Optional target Chrome tab ID' }
+          },
+          required: ['selector']
+        }
+      },
+      {
+        name: 'extract_api_endpoints',
+        description: 'Scans downloaded JavaScript source files or HAR logs to discover backend API routes, HTTP methods, and generates an OpenAPI 3.0 draft specification.',
+        inputSchema: {
+          type: 'object',
+          properties: {
+            inputPath: { type: 'string', description: 'Path to directory or HAR file to scan (defaults to "./downloaded-sources")' },
+            outputPath: { type: 'string', description: 'Optional file path to save the generated OpenAPI 3.0 JSON specification' }
+          }
+        }
+      },
+      {
+        name: 'export_rea_evidence',
+        description: 'Exports live authenticated browser state (DOM snapshot, HAR requests, cookies, storage, endpoints) into the standard REA (Reverse Engineer Anything) Evidence Bundle format (io.github.morluto/rea).',
+        inputSchema: {
+          type: 'object',
+          properties: {
+            outputPath: { type: 'string', description: 'File path to save the REA Evidence bundle JSON (defaults to "./xtradevpilot-rea-evidence.json")' },
+            tabId: { type: 'number', description: 'Optional target Chrome tab ID' }
+          }
+        }
       }
     ],
   };
@@ -522,6 +739,12 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
           rootSelector: args.rootSelector, 
           tabId: args.tabId 
         });
+        break;
+      case 'get_ax_tree':
+        result = await askExtension('GET_AX_TREE', { tabId: args.tabId });
+        break;
+      case 'batch_execute':
+        result = await askExtension('BATCH_EXECUTE', { actions: args.actions, tabId: args.tabId });
         break;
       case 'highlight_element':
         result = await askExtension('HIGHLIGHT_ELEMENT', { 
@@ -545,6 +768,30 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
           text: args.text, 
           timeoutMs: args.timeoutMs, 
           tabId: args.tabId 
+        });
+        break;
+      case 'press_key':
+        result = await askExtension('PRESS_KEY', {
+          key: args.key,
+          selector: args.selector,
+          shiftKey: args.shiftKey,
+          ctrlKey: args.ctrlKey,
+          altKey: args.altKey,
+          tabId: args.tabId
+        });
+        break;
+      case 'mouse_action':
+        result = await askExtension('MOUSE_ACTION', {
+          action: args.action,
+          x: args.x,
+          y: args.y,
+          endX: args.endX,
+          endY: args.endY,
+          selector: args.selector,
+          button: args.button,
+          deltaX: args.deltaX,
+          deltaY: args.deltaY,
+          tabId: args.tabId
         });
         break;
       case 'upload_file': {
@@ -625,7 +872,11 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         const base64DataUrl = await askExtension('CAPTURE_SCREENSHOT', { tabId: args.tabId });
         if (base64DataUrl && base64DataUrl.startsWith('data:image/png;base64,')) {
           const base64Data = base64DataUrl.replace(/^data:image\/png;base64,/, "");
-          const filePath = path.resolve(process.cwd(), '.devpilot-screenshot.png');
+          const filePath = args.outputPath ? path.resolve(args.outputPath) : path.resolve(process.cwd(), '.devpilot-screenshot.png');
+          const dir = path.dirname(filePath);
+          if (!fs.existsSync(dir)) {
+            fs.mkdirSync(dir, { recursive: true });
+          }
           fs.writeFileSync(filePath, base64Data, 'base64');
           result = `Screenshot saved to: ${filePath}`;
         } else {
@@ -685,7 +936,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       case 'execute_script': {
         let scriptToRun = (args.script || '').trim();
         if (/^\s*return\b/m.test(scriptToRun)) {
-          scriptToRun = `(() => { ${scriptToRun} })()`;
+          scriptToRun = `return (() => { ${scriptToRun} })()`;
         }
         result = await askExtension('EXECUTE_SCRIPT', {
           script: scriptToRun,
@@ -748,6 +999,163 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       case 'reload_extension':
         result = await askExtension('RELOAD_EXTENSION');
         break;
+      case 'download_page_html': {
+        const data = await askExtension('DOWNLOAD_PAGE_HTML', {
+          selector: args.selector,
+          clean: args.clean,
+          tabId: args.tabId
+        });
+        const defaultFileName = args.selector ? 'downloaded-feature.html' : 'downloaded-page.html';
+        const targetPath = args.outputPath ? path.resolve(process.cwd(), args.outputPath) : path.resolve(process.cwd(), defaultFileName);
+        const dir = path.dirname(targetPath);
+        if (!fs.existsSync(dir)) {
+          fs.mkdirSync(dir, { recursive: true });
+        }
+        fs.writeFileSync(targetPath, data.html, 'utf8');
+        const stats = fs.statSync(targetPath);
+        result = {
+          status: 'success',
+          filePath: targetPath,
+          fileSizeKB: Math.round((stats.size / 1024) * 100) / 100,
+          title: data.title,
+          url: data.url,
+          scopedSelector: data.selector || 'FULL_PAGE',
+          characterCount: data.html.length
+        };
+        break;
+      }
+      case 'export_har': {
+        const har = await askExtension('EXPORT_HAR', {
+          clearAfterExport: args.clearAfterExport,
+          tabId: args.tabId
+        });
+        const targetPath = args.outputPath ? path.resolve(process.cwd(), args.outputPath) : path.resolve(process.cwd(), 'network-traffic.har');
+        const dir = path.dirname(targetPath);
+        if (!fs.existsSync(dir)) {
+          fs.mkdirSync(dir, { recursive: true });
+        }
+        const jsonContent = JSON.stringify(har, null, 2);
+        fs.writeFileSync(targetPath, jsonContent, 'utf8');
+        const stats = fs.statSync(targetPath);
+        result = {
+          status: 'success',
+          filePath: targetPath,
+          totalEntries: har.log?.entries?.length || 0,
+          fileSizeKB: Math.round((stats.size / 1024) * 100) / 100,
+          harVersion: har.log?.version || '1.2'
+        };
+        break;
+      }
+      case 'download_sources': {
+        const data = await askExtension('DOWNLOAD_SOURCES', {
+          outputDir: args.outputDir,
+          types: args.types,
+          selector: args.selector,
+          includeSourceMaps: args.includeSourceMaps,
+          tabId: args.tabId
+        });
+        const targetDir = args.outputDir ? path.resolve(process.cwd(), args.outputDir) : path.resolve(process.cwd(), 'downloaded-sources');
+        if (!fs.existsSync(targetDir)) {
+          fs.mkdirSync(targetDir, { recursive: true });
+        }
+
+        const breakdown = { scripts: 0, styles: 0, sourcemaps: 0, images: 0, fonts: 0, other: 0 };
+        let totalBytes = 0;
+
+        if (Array.isArray(data.files)) {
+          for (const f of data.files) {
+            const fullPath = path.resolve(targetDir, f.relativePath);
+            const subDir = path.dirname(fullPath);
+            if (!fs.existsSync(subDir)) {
+              fs.mkdirSync(subDir, { recursive: true });
+            }
+
+            if (f.isBinary && f.base64) {
+              fs.writeFileSync(fullPath, Buffer.from(f.base64, 'base64'));
+              totalBytes += f.size || 0;
+            } else if (f.content !== undefined) {
+              fs.writeFileSync(fullPath, f.content, 'utf8');
+              totalBytes += Buffer.byteLength(f.content, 'utf8');
+            }
+
+            const prefix = f.relativePath.split('/')[0];
+            if (breakdown[prefix] !== undefined) breakdown[prefix]++;
+            else breakdown.other++;
+          }
+        }
+
+        // Write manifest.json
+        const manifestPath = path.resolve(targetDir, 'manifest.json');
+        fs.writeFileSync(manifestPath, JSON.stringify(data.manifest || [], null, 2), 'utf8');
+
+        result = {
+          status: 'success',
+          outputDir: targetDir,
+          totalFiles: data.totalFiles || 0,
+          totalSizeKB: Math.round((totalBytes / 1024) * 100) / 100,
+          manifestPath,
+          breakdown
+        };
+        break;
+      }
+      case 'reconstruct_source_tree': {
+        const inputDir = args.inputDir || './downloaded-sources';
+        const outputDir = args.outputDir || './reconstructed-codebase';
+        result = reconstructCodebaseFromDirectory(inputDir, outputDir);
+        break;
+      }
+      case 'trace_action_network': {
+        result = await askExtension('TRACE_ACTION', {
+          selector: args.selector,
+          action: args.action || 'click',
+          text: args.text,
+          waitDurationMs: args.waitDurationMs || 1500,
+          tabId: args.tabId
+        });
+        break;
+      }
+      case 'extract_api_endpoints': {
+        const inputPath = args.inputPath || './downloaded-sources';
+        const scanRes = scanEndpoints(inputPath);
+        if (args.outputPath) {
+          const resolvedOut = path.resolve(process.cwd(), args.outputPath);
+          const dir = path.dirname(resolvedOut);
+          if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+          fs.writeFileSync(resolvedOut, JSON.stringify(scanRes.openApiSpec, null, 2), 'utf8');
+        }
+        result = {
+          ...scanRes,
+          savedSpecTo: args.outputPath ? path.resolve(process.cwd(), args.outputPath) : undefined
+        };
+        break;
+      }
+      case 'export_rea_evidence': {
+        const outputPath = args.outputPath || 'xtradevpilot-rea-evidence.json';
+        const tabInfo = await askExtension('GET_TAB_INFO', { tabId: args.tabId });
+        const harLog = await askExtension('EXPORT_HAR', { tabId: args.tabId });
+        const domSnapshot = await askExtension('GET_CLEAN_DOM', { tabId: args.tabId });
+        let storage = {};
+        try { storage = await askExtension('GET_STORAGE', { tabId: args.tabId }); } catch (e) {}
+        let cookies = [];
+        try { cookies = await askExtension('MANAGE_COOKIES', { operation: 'get_all', tabId: args.tabId }); } catch (e) {}
+
+        const evidence = buildReaEvidenceBundle({
+          tabInfo,
+          harLog,
+          domSnapshot,
+          storage,
+          cookies
+        });
+
+        const saveRes = exportReaEvidenceToFile(evidence, outputPath);
+        result = {
+          status: 'success',
+          evidenceId: evidence.evidence_id,
+          savedTo: saveRes.savedTo,
+          sizeBytes: saveRes.sizeBytes
+        };
+        break;
+      }
       default:
         throw new McpError(ErrorCode.MethodNotFound, `Unknown tool: ${request.params.name}`);
     }
@@ -768,6 +1176,19 @@ async function run() {
   await server.connect(transport);
   console.error(`[DevPilot Bridge] MCP Server connected to stdio transport.`);
   console.error(`[DevPilot Bridge] WebSocket server listening on port ${WSS_PORT}.`);
+
+  const cleanupAndExit = (signal) => {
+    console.error(`[DevPilot Bridge] Received ${signal || 'exit'}, shutting down WebSocket server...`);
+    if (wss) {
+      try { wss.close(); } catch (e) {}
+    }
+    process.exit(0);
+  };
+
+  process.stdin.on('close', () => cleanupAndExit('STDIN_CLOSE'));
+  process.stdin.on('end', () => cleanupAndExit('STDIN_END'));
+  process.on('SIGINT', () => cleanupAndExit('SIGINT'));
+  process.on('SIGTERM', () => cleanupAndExit('SIGTERM'));
 }
 
 run().catch((error) => {

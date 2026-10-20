@@ -214,6 +214,35 @@ export class XtraDevPilot {
   }
 
   /**
+   * Downloads the live, complete HTML of the page or a specific feature/component subtree.
+   * @param {string} [outputPath]
+   * @param {string} [selector]
+   * @param {boolean} [clean=false]
+   */
+  async downloadPageHtml(outputPath, selector, clean = false) {
+    return await this._callTool('download_page_html', { outputPath, selector, clean });
+  }
+
+  /**
+   * Exports captured network requests into a standard HAR 1.2 file saved to disk.
+   * @param {string} [outputPath]
+   * @param {boolean} [clearAfterExport=false]
+   */
+  async exportHar(outputPath, clearAfterExport = false) {
+    return await this._callTool('export_har', { outputPath, clearAfterExport });
+  }
+
+  /**
+   * Scans the active page for all referenced source files (scripts, stylesheets, sourcemaps, images, fonts)
+   * and downloads them into an organized local directory.
+   * @param {string} [outputDir]
+   * @param {Object} [options]
+   */
+  async downloadSources(outputDir, options = {}) {
+    return await this._callTool('download_sources', { outputDir, ...options });
+  }
+
+  /**
    * Disconnect from the MCP server.
    */
   async disconnect() {

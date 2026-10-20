@@ -33,7 +33,10 @@ export class WebSocketTransport extends BaseTransport {
     'set_viewport_size': 'SET_VIEWPORT_SIZE',
     'get_network_logs': 'GET_NETWORK_LOGS',
     'get_console_logs': 'GET_CONSOLE_LOGS',
-    'get_storage': 'GET_STORAGE'
+    'get_storage': 'GET_STORAGE',
+    'download_page_html': 'DOWNLOAD_PAGE_HTML',
+    'export_har': 'EXPORT_HAR',
+    'download_sources': 'DOWNLOAD_SOURCES'
   };
 
   constructor(logger: Logger, host: string = '127.0.0.1', port: number = 42819, timeoutMs: number = 10000) {

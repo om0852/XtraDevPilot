@@ -127,6 +127,9 @@ All 33 tools have been verified with 100% pass rates against active Chrome sessi
 | `mock_network_response` | Intercepts `window.fetch` calls matching a URL pattern and returns custom mock JSON payloads without a backend. | `urlPattern` *(required)*, `responseBody` *(required)*, `status` |
 | `clear_network_mocks` | Removes all registered URL network intercept mocks, restoring standard network execution. | _None_ |
 | `reload_extension` | Reloads the Chrome extension background service worker and active connections. | _None_ |
+| `download_page_html` | Downloads the live, complete HTML of the page or a specific feature component directly to disk. | `outputPath`, `selector`, `clean`, `tabId` |
+| `export_har` | Exports captured network traffic into a standard HAR 1.2 specification file (`.har`) for DevTools and API clients. | `outputPath`, `clearAfterExport`, `tabId` |
+| `download_sources` | Scans and downloads all source assets (JS bundles, CSS, images, fonts, `.map` source maps) into an organized local directory. | `outputDir`, `types`, `selector`, `includeSourceMaps`, `tabId` |
 
 ---
 

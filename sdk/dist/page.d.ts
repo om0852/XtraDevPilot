@@ -1,6 +1,6 @@
 import { BaseTransport } from './transports/base.js';
 import { Logger } from './utils/logger.js';
-import { ClickOptions, ConsoleLogEntry, NetworkLogEntry, ScreenshotOptions, SecurityAuditReport, AccessibilityAuditReport, StorageData, TypeOptions, TabInfo, ViewportSize, WaitOptions, WebVitalsReport } from './types/index.js';
+import { ClickOptions, ConsoleLogEntry, DownloadHtmlOptions, DownloadSourcesOptions, ExportHarOptions, NetworkLogEntry, ScreenshotOptions, SecurityAuditReport, AccessibilityAuditReport, StorageData, TypeOptions, TabInfo, ViewportSize, WaitOptions, WebVitalsReport } from './types/index.js';
 export declare class Page {
     private transport;
     private logger;
@@ -158,5 +158,18 @@ export declare class Page {
      * Records user interaction flow and compiles it into a Playwright test.
      */
     recordFlow(action: 'start' | 'stop' | 'status', tabId?: number): Promise<any>;
+    /**
+     * Downloads the live, complete HTML of the page or a specific feature/component subtree.
+     */
+    downloadPageHtml(options?: DownloadHtmlOptions, tabId?: number): Promise<any>;
+    /**
+     * Exports captured network requests into a standard HAR 1.2 file saved to disk.
+     */
+    exportHar(options?: ExportHarOptions, tabId?: number): Promise<any>;
+    /**
+     * Scans the active page for all referenced source files (scripts, stylesheets, sourcemaps, images, fonts)
+     * and downloads them into an organized local directory.
+     */
+    downloadSources(options?: DownloadSourcesOptions, tabId?: number): Promise<any>;
 }
 //# sourceMappingURL=page.d.ts.map

@@ -5,6 +5,9 @@ import { Logger } from './utils/logger.js';
 import {
   ClickOptions,
   ConsoleLogEntry,
+  DownloadHtmlOptions,
+  DownloadSourcesOptions,
+  ExportHarOptions,
   MockRouteOptions,
   NetworkLogEntry,
   ScreenshotOptions,
@@ -403,6 +406,46 @@ export class Page {
    */
   public async recordFlow(action: 'start' | 'stop' | 'status', tabId?: number): Promise<any> {
     return await this.transport.sendRequest('record_user_flow', { action, tabId });
+  }
+
+  /**
+   * Downloads the live, complete HTML of the page or a specific feature/component subtree.
+   */
+  public async downloadPageHtml(options?: DownloadHtmlOptions, tabId?: number): Promise<any> {
+    this.logger.info('Downloading page HTML...');
+    return await this.transport.sendRequest('download_page_html', {
+      outputPath: options?.outputPath,
+      selector: options?.selector,
+      clean: options?.clean,
+      tabId
+    });
+  }
+
+  /**
+   * Exports captured network requests into a standard HAR 1.2 file saved to disk.
+   */
+  public async exportHar(options?: ExportHarOptions, tabId?: number): Promise<any> {
+    this.logger.info('Exporting network HAR...');
+    return await this.transport.sendRequest('export_har', {
+      outputPath: options?.outputPath,
+      clearAfterExport: options?.clearAfterExport,
+      tabId
+    });
+  }
+
+  /**
+   * Scans the active page for all referenced source files (scripts, stylesheets, sourcemaps, images, fonts)
+   * and downloads them into an organized local directory.
+   */
+  public async downloadSources(options?: DownloadSourcesOptions, tabId?: number): Promise<any> {
+    this.logger.info('Downloading page source assets...');
+    return await this.transport.sendRequest('download_sources', {
+      outputDir: options?.outputDir,
+      types: options?.types,
+      selector: options?.selector,
+      includeSourceMaps: options?.includeSourceMaps,
+      tabId
+    });
   }
 }
 
