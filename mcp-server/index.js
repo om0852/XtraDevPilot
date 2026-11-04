@@ -545,7 +545,7 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
       },
       {
         name: 'execute_script',
-        description: 'Executes arbitrary JavaScript in the webpage context and returns the evaluated result. Supports async functions and promises. Ideal for inspecting React/Vue/Redux stores, window globals, or triggering custom events.',
+        description: 'Executes arbitrary JavaScript in the webpage (MAIN world) and returns the evaluated result. Use an explicit `return` for multi-statement scripts (a bare single expression is auto-returned). Supports async/await and promises. If the page CSP blocks eval, it transparently falls back to the DevTools protocol so the script still runs. Ideal for inspecting React/Vue/Redux stores, window globals, or triggering custom events.',
         inputSchema: {
           type: 'object',
           properties: {

@@ -169,7 +169,6 @@ async function handleAction(action, payload = {}) {
     case 'WAIT_FOR_ELEMENT':
     case 'SMART_SELECT_COMBOBOX':
     case 'EXTRACT_JOB_DETAILS':
-    case 'EXECUTE_SCRIPT':
     case 'SCROLL_PAGE':
     case 'EXTRACT_STRUCTURED_DATA':
     case 'ASSERT_ELEMENT_STATE':
@@ -184,6 +183,8 @@ async function handleAction(action, payload = {}) {
     case 'RUN_SECURITY_AUDIT':
     case 'RUN_ACCESSIBILITY_AUDIT':
       return await askContentScript(action, payload);
+    case 'EXECUTE_SCRIPT':
+      return await executeScriptWithFallback(payload);
     case 'DOWNLOAD_PAGE_HTML':
       return await askContentScript('DOWNLOAD_PAGE_HTML', payload);
     case 'TRACE_ACTION': {
@@ -533,22 +534,20 @@ async function handleAction(action, payload = {}) {
         if (payload.tabId) {
           chrome.tabs.get(payload.tabId, (tab) => {
             if (chrome.runtime.lastError || !tab) return capture(null);
-            chrome.tabs.update(tab.id, { active: true }, () => {
-              chrome.windows.update(tab.windowId, { focused: true }, () => {
-                setTimeout(() => capture(tab.windowId), 150);
+            // captureVisibleTab grabs the active tab of the window. Only switch the
+            // active tab when needed, and never steal OS focus from the user.
+            if (tab.active) {
+              capture(tab.windowId);
+            } else {
+              chrome.tabs.update(tab.id, { active: true }, () => {
+                // Short settle for the newly-activated tab to paint.
+                setTimeout(() => capture(tab.windowId), 60);
               });
-            });
+            }
           });
         } else {
           chrome.windows.getCurrent((win) => {
-            const winId = win ? win.id : null;
-            if (winId) {
-              chrome.windows.update(winId, { focused: true }, () => {
-                setTimeout(() => capture(winId), 100);
-              });
-            } else {
-              capture(null);
-            }
+            capture(win ? win.id : null);
           });
         }
       });
@@ -609,6 +608,66 @@ async function askContentScript(action, payload = {}) {
       });
     }
   });
+}
+
+// Runs page JS. Fast path = MAIN-world injection (content/injected.js). If the page's
+// Content-Security-Policy blocks eval there, transparently fall back to the Chrome
+// DevTools Protocol, which evaluates in the page context and is not subject to CSP.
+async function executeScriptWithFallback(payload) {
+  try {
+    return await askContentScript('EXECUTE_SCRIPT', payload);
+  } catch (err) {
+    const msg = String((err && err.message) || err);
+    if (/content security policy|unsafe-eval|evalerror|csp\b/i.test(msg)) {
+      return await evaluateViaDebugger(payload);
+    }
+    throw err;
+  }
+}
+
+async function evaluateViaDebugger(payload) {
+  let tabId = payload.tabId;
+  if (!tabId) {
+    const tabs = await new Promise(r => chrome.tabs.query({ active: true, currentWindow: true }, r));
+    if (!tabs || tabs.length === 0) throw new Error('No active tab found for script execution.');
+    tabId = tabs[0].id;
+  }
+  const target = { tabId };
+  const attach = () => new Promise((res, rej) => chrome.debugger.attach(target, '1.3', () => chrome.runtime.lastError ? rej(new Error(chrome.runtime.lastError.message)) : res()));
+  const detach = () => new Promise(res => chrome.debugger.detach(target, () => { void chrome.runtime.lastError; res(); }));
+  const send = (method, params) => new Promise((res, rej) => chrome.debugger.sendCommand(target, method, params || {}, (r) => chrome.runtime.lastError ? rej(new Error(chrome.runtime.lastError.message)) : res(r)));
+
+  const code = payload.script || '';
+  const hasReturn = /^\s*return\b/m.test(code);
+  const exprWrap = `(async () => { ${hasReturn ? code : 'return (' + code + '\n);'} })()`;
+  const stmtWrap = `(async () => { ${code} })()`;
+
+  const runEval = async (expression) => send('Runtime.evaluate', {
+    expression, awaitPromise: true, returnByValue: true, userGesture: true, allowUnsafeEvalBlockedByCSP: true
+  });
+
+  let attached = false;
+  try {
+    await attach();
+    attached = true;
+    let evalRes;
+    try {
+      evalRes = await runEval(exprWrap);
+      // A bare multi-statement body wrapped as an expression is a SyntaxError; retry as statements.
+      if (evalRes && evalRes.exceptionDetails && !hasReturn) evalRes = await runEval(stmtWrap);
+    } catch (e) {
+      evalRes = await runEval(stmtWrap);
+    }
+    if (evalRes && evalRes.exceptionDetails) {
+      const ex = evalRes.exceptionDetails;
+      const text = (ex.exception && (ex.exception.description || ex.exception.value)) || ex.text || 'Script execution error';
+      throw new Error(String(text));
+    }
+    const result = evalRes && evalRes.result ? evalRes.result.value : null;
+    return result !== undefined ? result : null;
+  } finally {
+    if (attached) await detach();
+  }
 }
 
 // Helper to compile standard HAR 1.2 log

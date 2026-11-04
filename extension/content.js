@@ -145,7 +145,7 @@ async function waitForElement(selector, timeoutMs = 3000, state = 'visible', roo
       if (Date.now() - startTime >= timeoutMs) {
         return resolve(null);
       }
-      setTimeout(check, 100);
+      setTimeout(check, 50);
     };
     check();
   });
@@ -277,47 +277,63 @@ function simulateMouseAction(options = {}) {
     view: window
   };
 
+  // Pointer identity so PointerEvent-based apps (canvas editors, drag libs, maps) react.
+  const pointerExtra = { pointerId: 1, pointerType: 'mouse', isPrimary: true, width: 1, height: 1 };
+  // Dispatch both a PointerEvent and its matching MouseEvent so apps on either API respond.
+  const fireBoth = (el, pointerType, mouseType, init) => {
+    const pressed = /down|move/.test(pointerType) && init.buttons !== 0;
+    try { el.dispatchEvent(new PointerEvent(pointerType, { ...init, ...pointerExtra, pressure: pressed ? 0.5 : 0 })); } catch (e) {}
+    if (mouseType) el.dispatchEvent(new MouseEvent(mouseType, init));
+  };
+  const downInit = { ...eventInit }; // buttons already reflects the pressed button
+  const upInit = { ...eventInit, buttons: 0 };
+  const hoverInit = { ...eventInit, buttons: 0 };
+
   if (action === 'move') {
-    targetEl.dispatchEvent(new MouseEvent('mousemove', eventInit));
-    targetEl.dispatchEvent(new PointerEvent('pointermove', eventInit));
+    fireBoth(targetEl, 'pointermove', 'mousemove', hoverInit);
     return { status: 'moved', x: clientX, y: clientY, target: targetEl.tagName };
   }
 
   if (action === 'click') {
-    targetEl.dispatchEvent(new MouseEvent('mousedown', eventInit));
-    targetEl.dispatchEvent(new MouseEvent('mouseup', eventInit));
-    targetEl.dispatchEvent(new MouseEvent('click', eventInit));
+    fireBoth(targetEl, 'pointerover', 'mouseover', hoverInit);
+    fireBoth(targetEl, 'pointerenter', 'mouseenter', hoverInit);
+    fireBoth(targetEl, 'pointermove', 'mousemove', hoverInit);
+    fireBoth(targetEl, 'pointerdown', 'mousedown', downInit);
+    if (typeof targetEl.focus === 'function') { try { targetEl.focus({ preventScroll: true }); } catch (e) {} }
+    fireBoth(targetEl, 'pointerup', 'mouseup', upInit);
     if (button === 'right') {
       targetEl.dispatchEvent(new MouseEvent('contextmenu', eventInit));
+    } else {
+      targetEl.dispatchEvent(new MouseEvent('click', upInit));
     }
     return { status: 'clicked', button, x: clientX, y: clientY, target: targetEl.tagName };
   }
 
   if (action === 'dblclick') {
-    targetEl.dispatchEvent(new MouseEvent('mousedown', eventInit));
-    targetEl.dispatchEvent(new MouseEvent('mouseup', eventInit));
-    targetEl.dispatchEvent(new MouseEvent('click', eventInit));
-    targetEl.dispatchEvent(new MouseEvent('mousedown', eventInit));
-    targetEl.dispatchEvent(new MouseEvent('mouseup', eventInit));
-    targetEl.dispatchEvent(new MouseEvent('click', eventInit));
-    targetEl.dispatchEvent(new MouseEvent('dblclick', eventInit));
+    for (let i = 0; i < 2; i++) {
+      fireBoth(targetEl, 'pointerdown', 'mousedown', downInit);
+      fireBoth(targetEl, 'pointerup', 'mouseup', upInit);
+      targetEl.dispatchEvent(new MouseEvent('click', upInit));
+    }
+    targetEl.dispatchEvent(new MouseEvent('dblclick', upInit));
     return { status: 'double_clicked', x: clientX, y: clientY, target: targetEl.tagName };
   }
 
   if (action === 'drag') {
     const { endX = clientX + 100, endY = clientY + 100, steps = 10 } = options;
-    targetEl.dispatchEvent(new MouseEvent('mousedown', eventInit));
-    
+    fireBoth(targetEl, 'pointerover', 'mouseover', hoverInit);
+    fireBoth(targetEl, 'pointerdown', 'mousedown', downInit);
+
     for (let i = 1; i <= steps; i++) {
       const curX = clientX + (endX - clientX) * (i / steps);
       const curY = clientY + (endY - clientY) * (i / steps);
       const stepInit = { ...eventInit, clientX: curX, clientY: curY, screenX: curX, screenY: curY };
-      targetEl.dispatchEvent(new MouseEvent('mousemove', stepInit));
+      fireBoth(targetEl, 'pointermove', 'mousemove', stepInit);
     }
-    
+
     const dropTarget = document.elementFromPoint(endX, endY) || targetEl;
-    const finalInit = { ...eventInit, clientX: endX, clientY: endY, screenX: endX, screenY: endY };
-    dropTarget.dispatchEvent(new MouseEvent('mouseup', finalInit));
+    const finalInit = { ...eventInit, clientX: endX, clientY: endY, screenX: endX, screenY: endY, buttons: 0 };
+    fireBoth(dropTarget, 'pointerup', 'mouseup', finalInit);
     return { status: 'dragged', start: { x: clientX, y: clientY }, end: { x: endX, y: endY } };
   }
 
