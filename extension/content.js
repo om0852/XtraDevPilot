@@ -93,10 +93,24 @@ function findElement(selector, root = document) {
 }
 
 function setNativeValue(element, value) {
+  if (!element) return;
   const isTextArea = element instanceof HTMLTextAreaElement;
   const isInput = element instanceof HTMLInputElement;
-  
+  const isSelect = element instanceof HTMLSelectElement;
+  const isContentEditable = element.isContentEditable || element.getAttribute('contenteditable') === 'true' || element.getAttribute('role') === 'textbox';
+
   element.focus();
+
+  // Trigger beforeinput (essential for modern React/Vue/Lexical/DraftJS frameworks)
+  try {
+    element.dispatchEvent(new InputEvent('beforeinput', {
+      bubbles: true,
+      cancelable: true,
+      composed: true,
+      inputType: 'insertText',
+      data: String(value)
+    }));
+  } catch (e) {}
 
   if (isInput || isTextArea) {
     const proto = isTextArea ? HTMLTextAreaElement.prototype : HTMLInputElement.prototype;
@@ -106,7 +120,7 @@ function setNativeValue(element, value) {
     } else {
       element.value = value;
     }
-  } else if (element instanceof HTMLSelectElement) {
+  } else if (isSelect) {
     let matched = false;
     for (let i = 0; i < element.options.length; i++) {
       const opt = element.options[i];
@@ -120,6 +134,19 @@ function setNativeValue(element, value) {
     }
     if (!matched) {
       element.value = value;
+    }
+  } else if (isContentEditable) {
+    // Rich-text & contenteditable handlers (Claude/ChatGPT prompt boxes, Notion, Canvas text)
+    let applied = false;
+    try {
+      const sel = window.getSelection();
+      if (sel) {
+        sel.selectAllChildren(element);
+        applied = document.execCommand('insertText', false, String(value));
+      }
+    } catch (e) {}
+    if (!applied) {
+      element.textContent = value;
     }
   } else {
     element.textContent = value;
@@ -153,55 +180,104 @@ async function waitForElement(selector, timeoutMs = 3000, state = 'visible', roo
 
 // --- MCP Visual Badge & Accessibility Tree Helpers ---
 
+let isAutomationStopped = false;
+
 function ensureMcpBadge() {
-  if (document.getElementById('xtradevpilot-mcp-badge')) return;
-  const badge = document.createElement('div');
+  let badge = document.getElementById('xtradevpilot-mcp-badge');
+  if (badge) return badge;
+
+  badge = document.createElement('div');
   badge.id = 'xtradevpilot-mcp-badge';
   badge.style.cssText = `
     position: fixed;
-    top: 12px;
-    right: 12px;
+    top: 14px;
+    right: 14px;
     z-index: 2147483647;
-    background: linear-gradient(135deg, #1e1e2e, #2d2b55);
-    color: #00ffcc;
-    font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-    font-size: 11px;
-    font-weight: 600;
-    padding: 6px 14px;
-    border-radius: 20px;
-    box-shadow: 0 4px 15px rgba(0, 0, 0, 0.3), 0 0 10px rgba(0, 255, 204, 0.4);
-    border: 1px solid rgba(0, 255, 204, 0.5);
+    background: #000000;
+    color: #ffffff;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    font-size: 12px;
+    font-weight: 500;
+    padding: 6px 8px 6px 12px;
+    border-radius: 6px;
+    border: 1px solid #27272a;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
     display: flex;
     align-items: center;
-    gap: 8px;
-    pointer-events: none;
+    gap: 10px;
     user-select: none;
-    transition: all 0.3s ease;
+    pointer-events: auto;
+    transition: opacity 0.2s ease, transform 0.2s ease;
   `;
+
   badge.innerHTML = `
-    <span style="width: 8px; height: 8px; background: #00ffcc; border-radius: 50%; display: inline-block; box-shadow: 0 0 8px #00ffcc; animation: devpilot-pulse 1.5s infinite;"></span>
-    <span>⚡ Controlled by XtraDevPilot MCP</span>
+    <div style="display: flex; align-items: center; gap: 7px;">
+      <span id="xtradevpilot-badge-dot" style="width: 7px; height: 7px; background: #ffffff; border-radius: 50%; display: inline-block;"></span>
+      <span id="xtradevpilot-badge-text" style="color: #ffffff; letter-spacing: -0.2px; font-weight: 500;">Xtra DevPilot</span>
+    </div>
+    <button id="xtradevpilot-stop-btn" type="button" title="Stop browser automation" style="
+      background: #ffffff;
+      color: #000000;
+      border: 1px solid #ffffff;
+      border-radius: 4px;
+      padding: 2px 8px;
+      font-size: 11px;
+      font-weight: 600;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      font-family: inherit;
+      line-height: 1.4;
+      transition: background 0.15s ease;
+    ">
+      <span style="display:inline-block; width:5px; height:5px; background:#000000; border-radius:1px;"></span>
+      Stop
+    </button>
   `;
-  
+
   if (!document.getElementById('xtradevpilot-badge-style')) {
     const style = document.createElement('style');
     style.id = 'xtradevpilot-badge-style';
     style.textContent = `
-      @keyframes devpilot-pulse {
-        0% { transform: scale(0.95); opacity: 0.8; }
-        50% { transform: scale(1.25); opacity: 1; }
-        100% { transform: scale(0.95); opacity: 0.8; }
+      #xtradevpilot-stop-btn:hover {
+        background: #e4e4e7 !important;
+        border-color: #e4e4e7 !important;
       }
       .xtradevpilot-interaction-ring {
-        outline: 3px solid #ff007f !important;
+        outline: 2px solid #000000 !important;
         outline-offset: 2px !important;
-        box-shadow: 0 0 15px rgba(255, 0, 127, 0.8) !important;
-        transition: outline 0.2s ease, box-shadow 0.2s ease !important;
+        box-shadow: none !important;
       }
     `;
     document.head.appendChild(style);
   }
+
   document.body.appendChild(badge);
+
+  const stopBtn = badge.querySelector('#xtradevpilot-stop-btn');
+  const badgeText = badge.querySelector('#xtradevpilot-badge-text');
+  const badgeDot = badge.querySelector('#xtradevpilot-badge-dot');
+
+  if (stopBtn) {
+    stopBtn.onclick = (e) => {
+      e.stopPropagation();
+      e.preventDefault();
+      isAutomationStopped = true;
+      window.__XTRADEVPILOT_STOPPED__ = true;
+      if (badgeText) badgeText.textContent = 'Stopped';
+      if (badgeDot) badgeDot.style.background = '#71717a';
+      stopBtn.textContent = 'Dismiss';
+      stopBtn.onclick = () => {
+        badge.remove();
+      };
+      try {
+        chrome.runtime.sendMessage({ type: 'AUTOMATION_STOPPED' });
+      } catch (err) {}
+    };
+  }
+
+  return badge;
 }
 
 function flashInteractionHighlight(element) {
@@ -210,7 +286,7 @@ function flashInteractionHighlight(element) {
   element.classList.add('xtradevpilot-interaction-ring');
   setTimeout(() => {
     try { element.classList.remove('xtradevpilot-interaction-ring'); } catch(e){}
-  }, 1200);
+  }, 800);
 }
 
 function buildAccessibilityTree(element = document.body, depth = 0) {
@@ -242,20 +318,125 @@ function buildAccessibilityTree(element = document.body, depth = 0) {
   };
 }
 
-// --- Mouse Controller Helper ---
-function simulateMouseAction(options = {}) {
+// --- Virtual Cursor Management (Monochrome Black & White) ---
+let virtualCursorTimer = null;
+
+function ensureVirtualCursor() {
+  let cursor = document.getElementById('xtradevpilot-virtual-cursor');
+  if (!cursor) {
+    cursor = document.createElement('div');
+    cursor.id = 'xtradevpilot-virtual-cursor';
+    cursor.style.cssText = `
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 16px;
+      height: 16px;
+      pointer-events: none;
+      z-index: 2147483647;
+      transition: transform 0.05s linear, opacity 0.2s ease;
+      will-change: transform;
+      transform: translate3d(-100px, -100px, 0);
+      opacity: 0;
+    `;
+    cursor.innerHTML = `
+      <div id="xtradevpilot-cursor-dot" style="
+        width: 10px;
+        height: 10px;
+        border-radius: 50%;
+        background: #000000;
+        border: 2px solid #ffffff;
+        box-shadow: 0 1px 4px rgba(0, 0, 0, 0.4);
+        position: absolute;
+        top: 0;
+        left: 0;
+        transform: translate(-50%, -50%);
+        transition: transform 0.1s ease, background 0.15s ease;
+      "></div>
+    `;
+    document.body.appendChild(cursor);
+  }
+  return cursor;
+}
+
+function updateVirtualCursor(x, y, state = 'move') {
+  const cursor = ensureVirtualCursor();
+  cursor.style.opacity = '1';
+  cursor.style.transform = `translate3d(${x}px, ${y}px, 0)`;
+
+  const dot = document.getElementById('xtradevpilot-cursor-dot');
+
+  if (state === 'click' || state === 'dblclick') {
+    if (dot) {
+      dot.style.background = '#ffffff';
+      dot.style.borderColor = '#000000';
+      dot.style.transform = 'translate(-50%, -50%) scale(0.8)';
+      setTimeout(() => {
+        dot.style.background = '#000000';
+        dot.style.borderColor = '#ffffff';
+        dot.style.transform = 'translate(-50%, -50%) scale(1)';
+      }, 150);
+    }
+  } else if (state === 'drag') {
+    if (dot) {
+      dot.style.background = '#000000';
+      dot.style.borderColor = '#ffffff';
+      dot.style.transform = 'translate(-50%, -50%) scale(1.25)';
+    }
+  } else if (state === 'release') {
+    if (dot) {
+      dot.style.background = '#000000';
+      dot.style.borderColor = '#ffffff';
+      dot.style.transform = 'translate(-50%, -50%) scale(1)';
+    }
+  }
+
+  clearTimeout(virtualCursorTimer);
+  virtualCursorTimer = setTimeout(() => {
+    try { cursor.style.opacity = '0'; } catch(e) {}
+  }, 2000);
+}
+
+function createSyntheticDataTransfer() {
+  const store = {};
+  return {
+    dropEffect: 'move',
+    effectAllowed: 'all',
+    data: store,
+    files: [],
+    items: [],
+    types: ['text/plain'],
+    setData: (format, data) => { store[format] = data; },
+    getData: (format) => store[format] || '',
+    clearData: (format) => { if (format) delete store[format]; else Object.keys(store).forEach(k => delete store[k]); }
+  };
+}
+
+// --- High-Fidelity Mouse & Canvas Gesture Controller ---
+async function simulateMouseAction(options = {}) {
+  if (isAutomationStopped || window.__XTRADEVPILOT_STOPPED__) {
+    throw new Error('Automation was stopped by user.');
+  }
   ensureMcpBadge();
-  const { action = 'click', x, y, selector, button = 'left', deltaX = 0, deltaY = 0 } = options;
+  const { action = 'click', x, y, selector, dropSelector, button = 'left', deltaX = 0, deltaY = 0 } = options;
   let targetEl = selector ? findElement(selector) : null;
   let clientX = x;
   let clientY = y;
 
-  if (!targetEl && (x !== undefined && y !== undefined)) {
-    targetEl = document.elementFromPoint(x, y) || document.body;
-  } else if (targetEl && (x === undefined || y === undefined)) {
+  // Auto-scroll into view and measure exact viewport box model geometry
+  if (targetEl) {
     const rect = targetEl.getBoundingClientRect();
-    clientX = rect.left + rect.width / 2;
-    clientY = rect.top + rect.height / 2;
+    const isOffscreen = rect.top < 0 || rect.bottom > window.innerHeight || rect.left < 0 || rect.right > window.innerWidth;
+    if (isOffscreen && typeof targetEl.scrollIntoView === 'function') {
+      targetEl.scrollIntoView({ behavior: 'instant', block: 'center', inline: 'center' });
+    }
+    const freshRect = targetEl.getBoundingClientRect();
+    if (clientX === undefined || clientY === undefined) {
+      clientX = Math.round(freshRect.left + freshRect.width / 2);
+      clientY = Math.round(freshRect.top + freshRect.height / 2);
+    }
+  } else if (!targetEl && (x !== undefined && y !== undefined)) {
+    targetEl = document.elementFromPoint(x, y) || document.body;
   }
 
   if (!targetEl) targetEl = document.body;
@@ -264,67 +445,226 @@ function simulateMouseAction(options = {}) {
 
   const buttonMap = { left: 0, middle: 1, right: 2 };
   const buttonCode = buttonMap[button] !== undefined ? buttonMap[button] : 0;
-  const eventInit = {
+  const isLeft = buttonCode === 0;
+  const buttonsVal = isLeft ? 1 : (buttonCode === 2 ? 2 : 4);
+
+  const baseInit = {
     clientX: clientX || 100,
     clientY: clientY || 100,
     screenX: clientX || 100,
     screenY: clientY || 100,
     button: buttonCode,
-    buttons: buttonCode === 0 ? 1 : (buttonCode === 2 ? 2 : 4),
+    buttons: buttonsVal,
     bubbles: true,
     cancelable: true,
     composed: true,
     view: window
   };
 
+  const pointerInit = {
+    ...baseInit,
+    pointerId: 1,
+    pointerType: 'mouse',
+    isPrimary: true,
+    width: 1,
+    height: 1,
+    pressure: isLeft ? 0.5 : 0
+  };
+
   if (action === 'move') {
-    targetEl.dispatchEvent(new MouseEvent('mousemove', eventInit));
-    targetEl.dispatchEvent(new PointerEvent('pointermove', eventInit));
-    return { status: 'moved', x: clientX, y: clientY, target: targetEl.tagName };
+    updateVirtualCursor(baseInit.clientX, baseInit.clientY, 'move');
+    targetEl.dispatchEvent(new PointerEvent('pointermove', pointerInit));
+    targetEl.dispatchEvent(new MouseEvent('mousemove', baseInit));
+    return { status: 'moved', x: baseInit.clientX, y: baseInit.clientY, target: targetEl.tagName };
   }
 
   if (action === 'click') {
-    targetEl.dispatchEvent(new MouseEvent('mousedown', eventInit));
-    targetEl.dispatchEvent(new MouseEvent('mouseup', eventInit));
-    targetEl.dispatchEvent(new MouseEvent('click', eventInit));
+    updateVirtualCursor(baseInit.clientX, baseInit.clientY, 'click');
+    targetEl.dispatchEvent(new PointerEvent('pointerdown', pointerInit));
+    targetEl.dispatchEvent(new MouseEvent('mousedown', baseInit));
+    targetEl.dispatchEvent(new PointerEvent('pointerup', pointerInit));
+    targetEl.dispatchEvent(new MouseEvent('mouseup', baseInit));
+    targetEl.dispatchEvent(new MouseEvent('click', baseInit));
     if (button === 'right') {
-      targetEl.dispatchEvent(new MouseEvent('contextmenu', eventInit));
+      targetEl.dispatchEvent(new MouseEvent('contextmenu', baseInit));
     }
-    return { status: 'clicked', button, x: clientX, y: clientY, target: targetEl.tagName };
+    return { status: 'clicked', button, x: baseInit.clientX, y: baseInit.clientY, target: targetEl.tagName };
   }
 
   if (action === 'dblclick') {
-    targetEl.dispatchEvent(new MouseEvent('mousedown', eventInit));
-    targetEl.dispatchEvent(new MouseEvent('mouseup', eventInit));
-    targetEl.dispatchEvent(new MouseEvent('click', eventInit));
-    targetEl.dispatchEvent(new MouseEvent('mousedown', eventInit));
-    targetEl.dispatchEvent(new MouseEvent('mouseup', eventInit));
-    targetEl.dispatchEvent(new MouseEvent('click', eventInit));
-    targetEl.dispatchEvent(new MouseEvent('dblclick', eventInit));
-    return { status: 'double_clicked', x: clientX, y: clientY, target: targetEl.tagName };
+    updateVirtualCursor(baseInit.clientX, baseInit.clientY, 'dblclick');
+    targetEl.dispatchEvent(new PointerEvent('pointerdown', pointerInit));
+    targetEl.dispatchEvent(new MouseEvent('mousedown', baseInit));
+    targetEl.dispatchEvent(new PointerEvent('pointerup', pointerInit));
+    targetEl.dispatchEvent(new MouseEvent('mouseup', baseInit));
+    targetEl.dispatchEvent(new MouseEvent('click', baseInit));
+
+    targetEl.dispatchEvent(new PointerEvent('pointerdown', pointerInit));
+    targetEl.dispatchEvent(new MouseEvent('mousedown', baseInit));
+    targetEl.dispatchEvent(new PointerEvent('pointerup', pointerInit));
+    targetEl.dispatchEvent(new MouseEvent('mouseup', baseInit));
+    targetEl.dispatchEvent(new MouseEvent('click', baseInit));
+    targetEl.dispatchEvent(new MouseEvent('dblclick', baseInit));
+    return { status: 'double_clicked', x: baseInit.clientX, y: baseInit.clientY, target: targetEl.tagName };
   }
 
   if (action === 'drag') {
-    const { endX = clientX + 100, endY = clientY + 100, steps = 10 } = options;
-    targetEl.dispatchEvent(new MouseEvent('mousedown', eventInit));
-    
-    for (let i = 1; i <= steps; i++) {
-      const curX = clientX + (endX - clientX) * (i / steps);
-      const curY = clientY + (endY - clientY) * (i / steps);
-      const stepInit = { ...eventInit, clientX: curX, clientY: curY, screenX: curX, screenY: curY };
-      targetEl.dispatchEvent(new MouseEvent('mousemove', stepInit));
+    let targetEndX = options.endX;
+    let targetEndY = options.endY;
+
+    // Resolve dropSelector if provided
+    if (dropSelector) {
+      const dropEl = findElement(dropSelector);
+      if (dropEl) {
+        const dropR = dropEl.getBoundingClientRect();
+        const isDropOffscreen = dropR.top < 0 || dropR.bottom > window.innerHeight || dropR.left < 0 || dropR.right > window.innerWidth;
+        if (isDropOffscreen && typeof dropEl.scrollIntoView === 'function') {
+          dropEl.scrollIntoView({ behavior: 'instant', block: 'center', inline: 'center' });
+        }
+        const freshDropR = dropEl.getBoundingClientRect();
+        targetEndX = Math.round(freshDropR.left + freshDropR.width / 2);
+        targetEndY = Math.round(freshDropR.top + freshDropR.height / 2);
+      }
     }
-    
+
+    const startX = clientX || 100;
+    const startY = clientY || 100;
+    const endX = targetEndX !== undefined ? targetEndX : startX + 100;
+    const endY = targetEndY !== undefined ? targetEndY : startY + 100;
+    const steps = options.steps ? Math.max(5, parseInt(options.steps, 10)) : 15;
+
+    // Pre-drag state snapshot for closed-loop verification
+    const initialRect = targetEl.getBoundingClientRect();
+    const initialParent = targetEl.parentElement;
+    const initialNextSibling = targetEl.nextSibling;
+
+    updateVirtualCursor(startX, startY, 'drag');
+
+    // 1. Initiate drag on target element (Canvas or DOM node)
+    targetEl.dispatchEvent(new PointerEvent('pointerdown', { ...pointerInit, clientX: startX, clientY: startY }));
+    targetEl.dispatchEvent(new MouseEvent('mousedown', { ...baseInit, clientX: startX, clientY: startY }));
+    window.dispatchEvent(new PointerEvent('pointerdown', { ...pointerInit, clientX: startX, clientY: startY }));
+    await new Promise(r => setTimeout(r, 20));
+
+    // 2. Micro-step activation threshold arming (essential for Kanban boards, React DnD, dnd-kit)
+    const totalDx = endX - startX;
+    const totalDy = endY - startY;
+    const totalDist = Math.hypot(totalDx, totalDy);
+    if (totalDist > 4) {
+      const armX = Math.round(startX + (totalDx / totalDist) * 4);
+      const armY = Math.round(startY + (totalDy / totalDist) * 4);
+      const armBase = { ...baseInit, clientX: armX, clientY: armY, screenX: armX, screenY: armY, buttons: 1 };
+      const armPointer = { ...pointerInit, clientX: armX, clientY: armY, screenX: armX, screenY: armY, buttons: 1, pressure: 0.5 };
+      targetEl.dispatchEvent(new PointerEvent('pointermove', armPointer));
+      targetEl.dispatchEvent(new MouseEvent('mousemove', armBase));
+      window.dispatchEvent(new PointerEvent('pointermove', armPointer));
+      window.dispatchEvent(new MouseEvent('mousemove', armBase));
+      updateVirtualCursor(armX, armY, 'drag');
+      await new Promise(r => setTimeout(r, 16));
+    }
+
+    // 3. Initialize synthetic HTML5 DragEvent if element or parent is draggable
+    const isDraggable = targetEl.draggable || targetEl.getAttribute('draggable') === 'true' || !!targetEl.closest('[draggable="true"]');
+    const dataTransfer = createSyntheticDataTransfer();
+    if (isDraggable) {
+      try {
+        const dragStartEvt = new DragEvent('dragstart', {
+          bubbles: true, cancelable: true, composed: true, view: window,
+          clientX: startX, clientY: startY, dataTransfer
+        });
+        targetEl.dispatchEvent(dragStartEvt);
+      } catch (e) {}
+    }
+
+    // 4. Smooth non-linear interpolation for fluid canvas strokes and drag curves
+    for (let i = 1; i <= steps; i++) {
+      const progress = i / steps;
+      // Cosine ease-in-out curve for natural physical acceleration
+      const ease = 0.5 * (1 - Math.cos(Math.PI * progress));
+      const curX = Math.round(startX + (endX - startX) * ease);
+      const curY = Math.round(startY + (endY - startY) * ease);
+
+      updateVirtualCursor(curX, curY, 'drag');
+
+      const hoverEl = document.elementFromPoint(curX, curY) || targetEl;
+      const stepBase = { ...baseInit, clientX: curX, clientY: curY, screenX: curX, screenY: curY, buttons: 1 };
+      const stepPointer = { ...pointerInit, clientX: curX, clientY: curY, screenX: curX, screenY: curY, buttons: 1, pressure: 0.5 };
+
+      // Dispatch to target, hover, and window
+      targetEl.dispatchEvent(new PointerEvent('pointermove', stepPointer));
+      targetEl.dispatchEvent(new MouseEvent('mousemove', stepBase));
+      if (hoverEl !== targetEl) {
+        hoverEl.dispatchEvent(new PointerEvent('pointermove', stepPointer));
+        hoverEl.dispatchEvent(new MouseEvent('mousemove', stepBase));
+      }
+      window.dispatchEvent(new PointerEvent('pointermove', stepPointer));
+      window.dispatchEvent(new MouseEvent('mousemove', stepBase));
+
+      if (isDraggable) {
+        try {
+          targetEl.dispatchEvent(new DragEvent('drag', { bubbles: true, cancelable: true, composed: true, view: window, clientX: curX, clientY: curY, dataTransfer }));
+          hoverEl.dispatchEvent(new DragEvent('dragover', { bubbles: true, cancelable: true, composed: true, view: window, clientX: curX, clientY: curY, dataTransfer }));
+        } catch (e) {}
+      }
+
+      if (isAutomationStopped || window.__XTRADEVPILOT_STOPPED__) {
+        updateVirtualCursor(curX, curY, 'release');
+        throw new Error('Automation was stopped by user.');
+      }
+
+      await new Promise(r => setTimeout(r, 16));
+    }
+
+    await new Promise(r => setTimeout(r, 20));
+
+    // 5. Release / Drop at destination
     const dropTarget = document.elementFromPoint(endX, endY) || targetEl;
-    const finalInit = { ...eventInit, clientX: endX, clientY: endY, screenX: endX, screenY: endY };
-    dropTarget.dispatchEvent(new MouseEvent('mouseup', finalInit));
-    return { status: 'dragged', start: { x: clientX, y: clientY }, end: { x: endX, y: endY } };
+    const finalBase = { ...baseInit, clientX: endX, clientY: endY, screenX: endX, screenY: endY, buttons: 0 };
+    const finalPointer = { ...pointerInit, clientX: endX, clientY: endY, screenX: endX, screenY: endY, buttons: 0, pressure: 0 };
+
+    if (isDraggable) {
+      try {
+        dropTarget.dispatchEvent(new DragEvent('drop', { bubbles: true, cancelable: true, composed: true, view: window, clientX: endX, clientY: endY, dataTransfer }));
+        targetEl.dispatchEvent(new DragEvent('dragend', { bubbles: true, cancelable: true, composed: true, view: window, clientX: endX, clientY: endY, dataTransfer }));
+      } catch (e) {}
+    }
+
+    dropTarget.dispatchEvent(new PointerEvent('pointerup', finalPointer));
+    dropTarget.dispatchEvent(new MouseEvent('mouseup', finalBase));
+    window.dispatchEvent(new PointerEvent('pointerup', finalPointer));
+    window.dispatchEvent(new MouseEvent('mouseup', finalBase));
+    updateVirtualCursor(endX, endY, 'release');
+
+    // 6. Closed-loop verification: Did the element move or change container?
+    const postRect = targetEl.getBoundingClientRect();
+    const postParent = targetEl.parentElement;
+    const movedDom = postParent !== initialParent || targetEl.nextSibling !== initialNextSibling;
+    const deltaX = Math.round(postRect.left - initialRect.left);
+    const deltaY = Math.round(postRect.top - initialRect.top);
+    const movedCoords = Math.abs(deltaX) > 2 || Math.abs(deltaY) > 2;
+    const isCanvas = targetEl.tagName.toLowerCase() === 'canvas';
+    const verified = movedDom || movedCoords || isCanvas;
+
+    return {
+      status: 'dragged',
+      verified,
+      delta: { x: deltaX, y: deltaY },
+      start: { x: startX, y: startY },
+      end: { x: endX, y: endY },
+      steps,
+      target: targetEl.tagName,
+      dropTarget: dropTarget.tagName
+    };
   }
 
   if (action === 'scroll') {
+    updateVirtualCursor(baseInit.clientX, baseInit.clientY, 'move');
     targetEl.dispatchEvent(new WheelEvent('wheel', {
-      clientX, clientY, deltaX, deltaY, bubbles: true, cancelable: true, view: window
+      clientX: baseInit.clientX, clientY: baseInit.clientY, deltaX, deltaY, deltaMode: 0, bubbles: true, cancelable: true, view: window
     }));
+    try {
+      window.scrollBy({ left: deltaX, top: deltaY, behavior: 'smooth' });
+    } catch (e) {}
     return { status: 'scrolled', deltaX, deltaY };
   }
 
@@ -333,6 +673,31 @@ function simulateMouseAction(options = {}) {
 
 // Respond to IDE Bridge requests
 chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
+  if (request.action === 'STOP_AUTOMATION') {
+    isAutomationStopped = true;
+    window.__XTRADEVPILOT_STOPPED__ = true;
+    const badge = document.getElementById('xtradevpilot-mcp-badge');
+    if (badge) {
+      const badgeText = badge.querySelector('#xtradevpilot-badge-text');
+      const badgeDot = badge.querySelector('#xtradevpilot-badge-dot');
+      const stopBtn = badge.querySelector('#xtradevpilot-stop-btn');
+      if (badgeText) badgeText.textContent = 'Stopped';
+      if (badgeDot) badgeDot.style.background = '#71717a';
+      if (stopBtn) {
+        stopBtn.textContent = 'Dismiss';
+        stopBtn.onclick = () => badge.remove();
+      }
+    }
+    sendResponse({ result: 'Automation stopped successfully.' });
+    return true;
+  }
+
+  // When a new command arrives, ensure stop flag is reset
+  if (request.action && request.action !== 'STOP_AUTOMATION') {
+    isAutomationStopped = false;
+    window.__XTRADEVPILOT_STOPPED__ = false;
+  }
+
   if (request.action === 'GET_DOM') {
     try {
       const html = document.documentElement.outerHTML;
@@ -715,7 +1080,30 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
         }
         if (el) {
           flashInteractionHighlight(el);
-          el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+          el.scrollIntoView({ behavior: 'instant', block: 'center' });
+          const rect = el.getBoundingClientRect();
+          const clientX = Math.round(rect.left + rect.width / 2);
+          const clientY = Math.round(rect.top + rect.height / 2);
+          updateVirtualCursor(clientX, clientY, 'click');
+
+          const baseInit = {
+            clientX,
+            clientY,
+            screenX: clientX,
+            screenY: clientY,
+            button: 0,
+            buttons: 1,
+            bubbles: true,
+            cancelable: true,
+            composed: true,
+            view: window
+          };
+
+          el.dispatchEvent(new PointerEvent('pointerdown', { ...baseInit, pointerId: 1, isPrimary: true, pointerType: 'mouse' }));
+          el.dispatchEvent(new MouseEvent('mousedown', baseInit));
+          if (typeof el.focus === 'function') el.focus();
+          el.dispatchEvent(new PointerEvent('pointerup', { ...baseInit, pointerId: 1, isPrimary: true, pointerType: 'mouse', buttons: 0 }));
+          el.dispatchEvent(new MouseEvent('mouseup', { ...baseInit, buttons: 0 }));
           el.click();
           sendResponse({ result: `Element ${request.selector} clicked successfully.` });
         } else {
@@ -812,12 +1200,14 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
   }
 
   if (request.action === 'MOUSE_ACTION') {
-    try {
-      const res = simulateMouseAction(request);
-      sendResponse({ result: res });
-    } catch (e) {
-      sendResponse({ error: `Mouse action error: ${e.message}` });
-    }
+    (async () => {
+      try {
+        const res = await simulateMouseAction(request);
+        sendResponse({ result: res });
+      } catch (e) {
+        sendResponse({ error: `Mouse action error: ${e.message}` });
+      }
+    })();
     return true;
   }
 

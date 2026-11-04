@@ -1,12 +1,9 @@
 "use client";
 
 import { useEffect, useRef } from "react";
-import SplashCursor from "./SplashCursor";
 
 export default function CyberBackground() {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
-  const cursorRef = useRef<HTMLDivElement | null>(null);
-  const ringRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -14,12 +11,6 @@ export default function CyberBackground() {
 
     let shaderMouseX = (canvas.clientWidth || 1280) / 2;
     let shaderMouseY = (canvas.clientHeight || 720) / 2;
-    let clientMouseX = typeof window !== "undefined" ? window.innerWidth / 2 : 500;
-    let clientMouseY = typeof window !== "undefined" ? window.innerHeight / 2 : 500;
-    let currentX = clientMouseX;
-    let currentY = clientMouseY;
-    let ringX = clientMouseX;
-    let ringY = clientMouseY;
 
     // WebGL Initialization
     const gl =
@@ -167,20 +158,6 @@ void main() {
           if (uMouse) gl.uniform2f(uMouse, shaderMouseX, shaderMouseY);
           gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
 
-          // Smooth lerp for main cursor aura element (fast follow)
-          currentX += (clientMouseX - currentX) * 0.15;
-          currentY += (clientMouseY - currentY) * 0.15;
-          if (cursorRef.current) {
-            cursorRef.current.style.transform = `translate3d(${currentX}px, ${currentY}px, 0) translate(-50%, -50%)`;
-          }
-
-          // Smooth delayed lerp for trailing neon ring (lagged follow)
-          ringX += (clientMouseX - ringX) * 0.07;
-          ringY += (clientMouseY - ringY) * 0.07;
-          if (ringRef.current) {
-            ringRef.current.style.transform = `translate3d(${ringX}px, ${ringY}px, 0) translate(-50%, -50%)`;
-          }
-
           animationFrameId = requestAnimationFrame(render);
         };
 
@@ -190,9 +167,6 @@ void main() {
 
     // Pointer & Mouse Move Listener
     const handleMouseMove = (event: MouseEvent) => {
-      clientMouseX = event.clientX;
-      clientMouseY = event.clientY;
-
       const rect = canvas.getBoundingClientRect();
       if (rect.width && rect.height) {
         const nx = (event.clientX - rect.left) / rect.width;
@@ -233,37 +207,6 @@ void main() {
 
       {/* 3. Fluid Neon Ambient Spotlight Glow */}
       <div className="fixed top-1/4 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[720px] h-[400px] bg-gradient-to-tr from-[#6750a4]/20 via-[#22d3ee]/15 to-transparent blur-[130px] pointer-events-none -z-10 rounded-full" />
-
-      {/* 4. React Bits SplashCursor Fluid Hover Simulation */}
-      <SplashCursor
-        rainbow
-        size={1}
-        force={1}
-        swirl={3}
-        trail={1}
-        clickSplash
-        zIndex={1}
-      />
-
-      {/* 5. Interactive Magnetic Cursor Glow Aura (Soft Wide Field) */}
-      <div
-        ref={cursorRef}
-        className="pointer-events-none fixed top-0 left-0 w-[550px] h-[550px] rounded-full -z-10 opacity-75"
-        style={{
-          background:
-            "radial-gradient(circle, rgba(168, 85, 247, 0.18) 0%, rgba(34, 211, 238, 0.08) 35%, transparent 70%)",
-          willChange: "transform",
-        }}
-      />
-
-      {/* 6. Trailing Cyber Ring (Lagged Neon Ring Follower) */}
-      <div
-        ref={ringRef}
-        className="pointer-events-none fixed top-0 left-0 w-24 h-24 rounded-full -z-10 border border-[#cfbcff]/25 shadow-[0_0_20px_rgba(207,188,255,0.15)]"
-        style={{
-          willChange: "transform",
-        }}
-      />
     </>
   );
 }

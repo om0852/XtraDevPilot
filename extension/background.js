@@ -5,10 +5,21 @@ let consoleLogsByTab = {};
 let harDataByTab = {};
 let harPendingRequests = {};
 
+// Unique session ID generated per browser instance lifetime
+const BROWSER_SESSION_ID = 'devpilot_session_' + Math.random().toString(36).slice(2, 10);
+
 const BRIDGE_URLS = ['ws://127.0.0.1:42819', 'ws://localhost:42819', 'ws://127.0.0.1:42820', 'ws://localhost:42820'];
 let bridgeUrlIndex = 0;
 
 function connectWebSocket() {
+  if (socket && (socket.readyState === WebSocket.OPEN || socket.readyState === WebSocket.CONNECTING)) {
+    return;
+  }
+  if (socket) {
+    try { socket.close(); } catch (e) {}
+    socket = null;
+  }
+
   const url = BRIDGE_URLS[bridgeUrlIndex % BRIDGE_URLS.length];
   console.log(`[DevPilot] Connecting to WebSocket bridge at ${url}...`);
   try {
@@ -22,7 +33,15 @@ function connectWebSocket() {
 
   socket.onopen = () => {
     console.log(`[DevPilot] Connected to IDE Bridge at ${url}`);
-    socket.send(JSON.stringify({ role: 'extension' }));
+    socket.send(JSON.stringify({
+      role: 'extension',
+      sessionId: BROWSER_SESSION_ID,
+      meta: {
+        userAgent: navigator.userAgent,
+        platform: navigator.platform || (navigator.userAgentData ? navigator.userAgentData.platform : 'unknown'),
+        extensionId: chrome.runtime ? chrome.runtime.id : undefined
+      }
+    }));
     
     // Setup 15s Heartbeat Ping
     if (heartbeatInterval) clearInterval(heartbeatInterval);
@@ -64,7 +83,7 @@ function connectWebSocket() {
 }
 
 function ensureConnected() {
-  if (!socket || socket.readyState !== WebSocket.OPEN) {
+  if (!socket || (socket.readyState !== WebSocket.OPEN && socket.readyState !== WebSocket.CONNECTING)) {
     connectWebSocket();
   }
 }
@@ -540,11 +559,11 @@ async function handleAction(action, payload = {}) {
             });
           });
         } else {
-          chrome.windows.getCurrent((win) => {
-            const winId = win ? win.id : null;
+          chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
+            const winId = tabs && tabs.length > 0 ? tabs[0].windowId : null;
             if (winId) {
               chrome.windows.update(winId, { focused: true }, () => {
-                setTimeout(() => capture(winId), 100);
+                setTimeout(() => capture(winId), 150);
               });
             } else {
               capture(null);
@@ -584,7 +603,31 @@ async function askContentScript(action, payload = {}) {
 
       chrome.tabs.sendMessage(tabId, { action, ...payload }, (response) => {
         if (chrome.runtime.lastError) {
-          reject(new Error(chrome.runtime.lastError.message));
+          const errMsg = chrome.runtime.lastError.message || '';
+          if (errMsg.includes('Receiving end does not exist') || errMsg.includes('Could not establish connection')) {
+            // Auto-inject content script and retry
+            chrome.scripting.executeScript({
+              target: { tabId },
+              files: ['content.js']
+            }, () => {
+              if (chrome.runtime.lastError) {
+                return reject(new Error(`Failed to inject content script: ${chrome.runtime.lastError.message}`));
+              }
+              setTimeout(() => {
+                chrome.tabs.sendMessage(tabId, { action, ...payload }, (retryRes) => {
+                  if (chrome.runtime.lastError) {
+                    reject(new Error(chrome.runtime.lastError.message));
+                  } else if (retryRes && retryRes.error) {
+                    reject(new Error(retryRes.error));
+                  } else {
+                    resolve(retryRes ? retryRes.result : null);
+                  }
+                });
+              }, 120);
+            });
+          } else {
+            reject(new Error(errMsg));
+          }
         } else if (response && response.error) {
           reject(new Error(response.error));
         } else {

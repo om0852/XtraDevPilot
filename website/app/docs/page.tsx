@@ -687,7 +687,7 @@ export default function DocsPage() {
 
   return (
     <div className="selection:bg-[#cfbcff]/30 min-h-screen flex flex-col bg-[#0b0912] text-[#e6e0e9] relative overflow-x-hidden">
-      {/* Dynamic WebGL Shader & Cursor Atmosphere */}
+      {/* Dynamic WebGL Shader Atmosphere */}
       <CyberBackground />
 
       {/* Top Navbar */}

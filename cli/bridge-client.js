@@ -4,15 +4,16 @@ if (!WS) {
   try {
     const wsModule = await import('ws');
     WS = wsModule.WebSocket || wsModule.default;
-  } catch (e) {}
+  } catch (e) { }
 }
 
 export class BridgeClient {
-  constructor(port = 42819, host = '127.0.0.1') {
+  constructor(port = 42819, host = '127.0.0.1', defaultBrowserId = undefined) {
     this.url = `ws://${host}:${port}`;
     this.ws = null;
     this.messageIdCounter = 1;
     this.pendingRequests = new Map();
+    this.defaultBrowserId = defaultBrowserId;
   }
 
   async connect(timeoutMs = 5000) {
@@ -21,7 +22,7 @@ export class BridgeClient {
     return new Promise((resolve, reject) => {
       const timer = setTimeout(() => {
         if (this.ws) {
-          try { this.ws.close(); } catch (e) {}
+          try { this.ws.close(); } catch (e) { }
         }
         reject(new Error(`Could not connect to XtraDevPilot bridge at ${this.url}. Ensure the bridge is running (npx xtradevpilot-mcp or devpilot mcp) and Chrome extension is active.`));
       }, timeoutMs);
@@ -50,7 +51,7 @@ export class BridgeClient {
                 reqResolve(msg.result);
               }
             }
-          } catch (e) {}
+          } catch (e) { }
         };
 
         const onError = (err) => {
@@ -87,13 +88,17 @@ export class BridgeClient {
       }, effTimeout);
 
       this.pendingRequests.set(id, { resolve, reject, timer });
-      this.ws.send(JSON.stringify({ ...payload, action, id }));
+      const finalPayload = { ...payload };
+      if (finalPayload.browserId === undefined && this.defaultBrowserId !== undefined) {
+        finalPayload.browserId = this.defaultBrowserId;
+      }
+      this.ws.send(JSON.stringify({ ...finalPayload, action, id }));
     });
   }
 
   close() {
     if (this.ws) {
-      try { this.ws.close(); } catch (e) {}
+      try { this.ws.close(); } catch (e) { }
       this.ws = null;
     }
   }

@@ -442,7 +442,7 @@ export default function LandingPage() {
 
   return (
     <div className="bg-[#0b0912] text-[#e6e0e9] min-h-screen flex flex-col selection:bg-[#cfbcff]/30 relative overflow-x-hidden font-sans">
-      {/* 1. Ambient WebGL Quantum Plasma & Interactive Cursor Animation */}
+      {/* 1. Ambient WebGL Quantum Plasma Background */}
       <CyberBackground />
 
       {/* 2. Floating Glassmorphic Header */}

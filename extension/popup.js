@@ -120,6 +120,18 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   }
 
+  // 0. Stop Browser Automation Button
+  const stopAllBtn = document.getElementById('stopAllBtn');
+  if (stopAllBtn) {
+    stopAllBtn.addEventListener('click', () => {
+      getActiveTab((tab) => {
+        chrome.tabs.sendMessage(tab.id, { action: 'STOP_AUTOMATION' }, (res) => {
+          showToast('Automation stopped on active tab.');
+        });
+      });
+    });
+  }
+
   // 1. 1-Click Profile Autofill
   document.getElementById('autofillBtn').addEventListener('click', () => {
     getActiveTab((tab) => {
