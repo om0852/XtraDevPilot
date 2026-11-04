@@ -42,7 +42,184 @@ function normalizeSelector(selector) {
   return selector;
 }
 
+// --- Selector engine ---------------------------------------------------------
+// Plain CSS works as before. Extra syntax, usable by every selector-based tool:
+//   text=Save            visible text / aria-label / title / placeholder (exact first, then contains)
+//   text*=Sav            contains match
+//   iframe#pay >>> .btn  pierce same-origin iframes (chainable)
+//   <selector> >> nth=2  pick the Nth match (0-based, negative counts from the end)
+const XDP_INTERACTIVE = 'a[href],button,input,select,textarea,summary,label,option,[role="button"],[role="link"],[role="menuitem"],[role="tab"],[role="option"],[role="checkbox"],[role="radio"],[role="switch"],[role="treeitem"],[onclick],[tabindex]:not([tabindex="-1"])';
+
+function normText(t) {
+  return String(t == null ? '' : t).replace(/\s+/g, ' ').trim().toLowerCase();
+}
+
+function isRendered(el) {
+  if (!el || !el.getBoundingClientRect) return false;
+  const r = el.getBoundingClientRect();
+  if (r.width < 1 || r.height < 1) return false;
+  const cs = (el.ownerDocument.defaultView || window).getComputedStyle(el);
+  return cs.visibility !== 'hidden' && cs.display !== 'none' && parseFloat(cs.opacity || '1') > 0.02;
+}
+
+function findAllByText(spec, root = document) {
+  const containsOnly = /^text\*=/.test(spec);
+  const want = normText(spec.replace(/^text\*?=/, '').replace(/^(["'])([\s\S]*)\1$/, '$2'));
+  if (!want) return [];
+  const doc = root.nodeType === 9 ? root : root.ownerDocument;
+  const base = root.nodeType === 9 ? (root.body || root.documentElement) : root;
+  if (!base) return [];
+  const cache = new Map();
+  const textOf = (el) => {
+    if (!cache.has(el)) cache.set(el, normText(el.textContent));
+    return cache.get(el);
+  };
+  const exact = new Set();
+  const partial = new Set();
+  const add = (el, isExact) => {
+    // Prefer the clickable ancestor (button > span "Save") when it carries the same label.
+    const ia = el.closest(XDP_INTERACTIVE);
+    const target = ia && (ia === el || textOf(ia) === textOf(el) || textOf(ia).length <= want.length + 12) ? ia : el;
+    if (!isRendered(target)) return;
+    (isExact ? exact : partial).add(target);
+  };
+  const owners = new Set();
+  const walker = doc.createTreeWalker(base, NodeFilter.SHOW_TEXT);
+  let node;
+  while ((node = walker.nextNode())) {
+    if (!node.nodeValue || !node.nodeValue.trim()) continue;
+    const parent = node.parentElement;
+    if (!parent || /^(SCRIPT|STYLE|NOSCRIPT|TEMPLATE)$/.test(parent.tagName)) continue;
+    owners.add(parent);
+  }
+  const checked = new Set();
+  for (const owner of owners) {
+    let el = owner;
+    for (let depth = 0; el && depth < 4 && el !== doc.documentElement; depth++, el = el.parentElement) {
+      if (checked.has(el)) break;
+      checked.add(el);
+      const t = textOf(el);
+      if (t === want) { add(el, true); break; }
+      if (t.includes(want)) { add(el, false); break; }
+      if (t.length > want.length * 4 + 200) break;
+    }
+  }
+  const attrSel = '[aria-label],[title],[placeholder],[alt],input[type="button"],input[type="submit"],input[type="reset"]';
+  for (const el of base.querySelectorAll(attrSel)) {
+    const vals = [el.getAttribute('aria-label'), el.getAttribute('title'), el.getAttribute('placeholder'), el.getAttribute('alt'),
+      /^(button|submit|reset)$/i.test(el.type || '') ? el.value : null];
+    for (const v of vals) {
+      const t = normText(v);
+      if (!t) continue;
+      if (t === want) { add(el, true); break; }
+      if (t.includes(want)) add(el, false);
+    }
+  }
+  const interactiveFirst = (a, b) => (a.matches(XDP_INTERACTIVE) ? 0 : 1) - (b.matches(XDP_INTERACTIVE) ? 0 : 1);
+  const docOrder = (a, b) => (a.compareDocumentPosition(b) & Node.DOCUMENT_POSITION_FOLLOWING ? -1 : 1);
+  const exactList = [...exact].sort((a, b) => interactiveFirst(a, b) || docOrder(a, b));
+  const partialList = [...partial].filter((e) => !exact.has(e))
+    .sort((a, b) => interactiveFirst(a, b) || (textOf(a).length - textOf(b).length) || docOrder(a, b));
+  if (containsOnly) return [...exactList, ...partialList];
+  return exactList.length ? exactList.concat(partialList) : partialList;
+}
+
+// Walk a ">>>" chain into same-origin iframes. Returns null if a hop is missing or cross-origin.
+function resolveFrameChain(selector, root) {
+  const parts = selector.split('>>>').map((x) => x.trim()).filter(Boolean);
+  let ctx = root;
+  for (let i = 0; i < parts.length - 1; i++) {
+    const frameEl = findElement(parts[i], ctx);
+    if (!frameEl) return null;
+    let doc = null;
+    try { doc = frameEl.contentDocument; } catch (e) { doc = null; }
+    if (!doc) return null;
+    ctx = doc;
+  }
+  return { ctx, last: parts[parts.length - 1] };
+}
+
+function findAllElements(selector, root = document) {
+  const s = String(selector).trim();
+  if (s.includes('>>>')) {
+    const r = resolveFrameChain(s, root);
+    return r ? findAllElements(r.last, r.ctx) : [];
+  }
+  if (/^text\*?=/.test(s)) return findAllByText(s, root);
+  try {
+    const list = root.querySelectorAll(s);
+    if (list.length) return [...list];
+  } catch (e) {}
+  const one = findElementCss(s, root);
+  return one ? [one] : [];
+}
+
 function findElement(selector, root = document) {
+  if (!selector) return null;
+  const s = String(selector).trim();
+  const nth = /^([\s\S]*?)\s*>>\s*nth=(-?\d+)\s*$/.exec(s);
+  if (nth) {
+    const all = findAllElements(nth[1], root);
+    const i = parseInt(nth[2], 10);
+    return all[i < 0 ? all.length + i : i] || null;
+  }
+  if (s.includes('>>>')) {
+    const r = resolveFrameChain(s, root);
+    return r ? findElement(r.last, r.ctx) : null;
+  }
+  if (/^text\*?=/.test(s)) return findAllByText(s, root)[0] || null;
+  return findElementCss(s, root);
+}
+
+// Box of an element in TOP-level viewport coordinates, adding same-origin iframe offsets.
+function topLevelRect(el) {
+  const r = el.getBoundingClientRect();
+  let left = r.left;
+  let top = r.top;
+  let win = el.ownerDocument && el.ownerDocument.defaultView;
+  while (win && win !== window) {
+    let fe = null;
+    try { fe = win.frameElement; } catch (e) { fe = null; }
+    if (!fe) break;
+    const fr = fe.getBoundingClientRect();
+    const cs = fe.ownerDocument.defaultView.getComputedStyle(fe);
+    left += fr.left + fe.clientLeft + (parseFloat(cs.paddingLeft) || 0);
+    top += fr.top + fe.clientTop + (parseFloat(cs.paddingTop) || 0);
+    win = fe.ownerDocument.defaultView;
+  }
+  return { left, top, width: r.width, height: r.height };
+}
+
+function scrollIntoViewDeep(el) {
+  try { el.scrollIntoView({ behavior: 'instant', block: 'center', inline: 'center' }); } catch (e) {}
+  let win = el.ownerDocument && el.ownerDocument.defaultView;
+  while (win && win !== window) {
+    let fe = null;
+    try { fe = win.frameElement; } catch (e) { fe = null; }
+    if (!fe) break;
+    try { fe.scrollIntoView({ behavior: 'instant', block: 'nearest', inline: 'nearest' }); } catch (e) {}
+    win = fe.ownerDocument.defaultView;
+  }
+}
+
+// Would a real click at the element's centre land on it (or its parts / its iframe)?
+function isSameTarget(el, hit) {
+  if (!hit) return true;
+  if (hit === el || el.contains(hit) || hit.contains(el)) return true;
+  const root = el.getRootNode && el.getRootNode();
+  if (root && root.host === hit) return true;
+  let win = el.ownerDocument && el.ownerDocument.defaultView;
+  while (win && win !== window) {
+    let fe = null;
+    try { fe = win.frameElement; } catch (e) { fe = null; }
+    if (!fe) break;
+    if (fe === hit) return true;
+    win = fe.ownerDocument.defaultView;
+  }
+  return false;
+}
+
+function findElementCss(selector, root = document) {
   if (!selector) return null;
 
   // 1. Try direct selector
@@ -373,6 +550,33 @@ function setCursorShape(hand) {
   const handEl = document.getElementById('xdp-cursor-hand');
   if (arrow) arrow.style.display = hand ? 'none' : 'block';
   if (handEl) handEl.style.display = hand ? 'block' : 'none';
+}
+
+// Keystroke HUD: shows chords / typed text near the bottom of the page while
+// DevPilot drives the keyboard (purely visual, never intercepts input).
+let xdpHudTimer = null;
+function showKeysHud(label) {
+  if (!label) return;
+  let hud = document.getElementById('xtradevpilot-keys-hud');
+  if (!hud) {
+    hud = document.createElement('div');
+    hud.id = 'xtradevpilot-keys-hud';
+    hud.style.cssText = 'position:fixed;left:50%;bottom:28px;transform:translateX(-50%);z-index:2147483647;pointer-events:none;display:flex;gap:6px;flex-wrap:wrap;justify-content:center;max-width:80vw;font:600 14px/1 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;transition:opacity .25s ease;opacity:0;';
+    (document.body || document.documentElement).appendChild(hud);
+  }
+  const chip = document.createElement('span');
+  chip.textContent = String(label);
+  chip.style.cssText = 'background:rgba(17,17,17,.9);color:#fff;padding:8px 12px;border-radius:8px;box-shadow:0 4px 14px rgba(0,0,0,.3);border:1px solid rgba(255,255,255,.15);white-space:pre;max-width:60vw;overflow:hidden;text-overflow:ellipsis;';
+  hud.appendChild(chip);
+  while (hud.childElementCount > 4) hud.firstElementChild.remove();
+  hud.style.opacity = '1';
+  clearTimeout(xdpHudTimer);
+  xdpHudTimer = setTimeout(() => {
+    try {
+      hud.style.opacity = '0';
+      setTimeout(() => { if (hud.style.opacity === '0') hud.textContent = ''; }, 300);
+    } catch (e) {}
+  }, 1600);
 }
 
 function updateVirtualCursor(x, y, state = 'move') {
@@ -714,47 +918,62 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
   }
 
   // Visibility probe: Chrome only delivers real (CDP) input to a visible tab.
+  // v = content-script protocol version (4 = text/iframe selectors, drop, HUD)
   if (request.action === 'PAGE_STATE') {
-    // v = content-script protocol version (3 = trusted-input helpers present)
-    sendResponse({ result: { v: 3, visible: document.visibilityState === 'visible', focused: document.hasFocus(), vw: window.innerWidth, vh: window.innerHeight } });
+    sendResponse({ result: { v: 4, visible: document.visibilityState === 'visible', focused: document.hasFocus(), vw: window.innerWidth, vh: window.innerHeight } });
     return false;
   }
 
-  // Resolve selector(s) to viewport points (waiting + scrolling into view) so the
-  // background can aim real CDP mouse input at them.
+  if (request.action === 'KEYS_HUD') {
+    try { showKeysHud(request.label); } catch (e) {}
+    sendResponse({ result: true });
+    return false;
+  }
+
+  // Resolve selector(s) to TOP-level viewport points (waiting, optionally scrolling
+  // into view, iframe-aware) so the background can aim real CDP input at them.
   if (request.action === 'RESOLVE_POINT') {
     (async () => {
       try {
         const timeoutMs = request.timeoutMs !== undefined ? request.timeoutMs : 3000;
-        const locate = async (sel) => {
+        const vw = window.innerWidth;
+        const vh = window.innerHeight;
+        const inView = (x, y) => x >= 0 && y >= 0 && x < vw && y < vh;
+        const locate = async (sel, scroll, optional) => {
           let el = findElement(sel);
           if (!el && timeoutMs > 0) el = await waitForElement(sel, timeoutMs, 'visible');
-          if (!el) throw new Error(`Element not found: ${sel}`);
-          let r = el.getBoundingClientRect();
-          const off = r.top < 0 || r.bottom > window.innerHeight || r.left < 0 || r.right > window.innerWidth;
-          if (off && typeof el.scrollIntoView === 'function') {
-            el.scrollIntoView({ behavior: 'instant', block: 'center', inline: 'center' });
-            r = el.getBoundingClientRect();
+          if (!el) {
+            if (optional) return null;
+            throw new Error(`Element not found: ${sel}${String(sel).includes('>>>') ? ' (iframes must be same-origin)' : ''}`);
+          }
+          let r = topLevelRect(el);
+          if (scroll && !inView(r.left + r.width / 2, r.top + r.height / 2)) {
+            scrollIntoViewDeep(el);
+            r = topLevelRect(el);
           }
           return { el, r };
         };
-        const out = {};
+        const out = { vw, vh };
         if (request.selector) {
-          const { el, r } = await locate(request.selector);
+          const { el, r } = await locate(request.selector, !request.noScroll, false);
           flashInteractionHighlight(el);
           const x = Math.round(r.left + r.width / 2);
           const y = Math.round(r.top + r.height / 2);
-          Object.assign(out, { x, y, w: Math.round(r.width), h: Math.round(r.height), tag: el.tagName.toLowerCase() });
-          // Would a real click at the centre land on this element (or its parts)?
-          const hit = document.elementFromPoint(x, y);
-          const root = el.getRootNode && el.getRootNode();
-          const sameTarget = !hit || hit === el || el.contains(hit) || hit.contains(el) || (root && root.host === hit);
-          if (!sameTarget) { out.occluded = true; out.occludedBy = hit.tagName.toLowerCase(); }
+          Object.assign(out, { x, y, w: Math.round(r.width), h: Math.round(r.height), tag: el.tagName.toLowerCase(), inView: inView(x, y) });
+          if (inView(x, y)) {
+            const hit = document.elementFromPoint(x, y);
+            if (hit && !isSameTarget(el, hit)) { out.occluded = true; out.occludedBy = hit.tagName.toLowerCase(); }
+          }
         }
         if (request.dropSelector) {
-          const { r } = await locate(request.dropSelector);
-          out.endX = Math.round(r.left + r.width / 2);
-          out.endY = Math.round(r.top + r.height / 2);
+          const res = await locate(request.dropSelector, !request.dropNoScroll, !!request.dropOptional);
+          if (!res) {
+            out.endMissing = true;
+          } else {
+            out.endX = Math.round(res.r.left + res.r.width / 2);
+            out.endY = Math.round(res.r.top + res.r.height / 2);
+            out.endInView = inView(out.endX, out.endY);
+          }
         }
         sendResponse({ result: out });
       } catch (e) {
@@ -777,23 +996,78 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
         } else {
           el = document.activeElement || document.body;
         }
-        if (typeof el.scrollIntoView === 'function') el.scrollIntoView({ behavior: 'instant', block: 'center' });
+        scrollIntoViewDeep(el);
         flashInteractionHighlight(el);
         if (typeof el.focus === 'function') el.focus();
         if (request.selectAll) {
           try {
             if (/^(input|textarea)$/i.test(el.tagName) && typeof el.select === 'function') el.select();
             else if (el.isContentEditable) {
-              const range = document.createRange();
+              const range = el.ownerDocument.createRange();
               range.selectNodeContents(el);
-              const sel = window.getSelection();
+              const sel = el.ownerDocument.defaultView.getSelection();
               sel.removeAllRanges();
               sel.addRange(range);
             }
           } catch (e) {}
         }
-        const r = el.getBoundingClientRect();
-        sendResponse({ result: { x: Math.round(r.left + Math.min(r.width / 2, 40)), y: Math.round(r.top + r.height / 2), tag: el.tagName.toLowerCase(), focused: document.activeElement === el } });
+        const r = topLevelRect(el);
+        sendResponse({ result: { x: Math.round(r.left + Math.min(r.width / 2, 40)), y: Math.round(r.top + r.height / 2), tag: el.tagName.toLowerCase(), focused: el.ownerDocument.activeElement === el } });
+      } catch (e) {
+        sendResponse({ error: e.message });
+      }
+    })();
+    return true;
+  }
+
+  // Drop real files (sent as base64 from the IDE) onto a drop zone that has no
+  // <input type=file>: builds File objects + a DataTransfer and fires
+  // dragenter/dragover/drop like the browser does for an OS file drag.
+  if (request.action === 'DROP_FILES') {
+    (async () => {
+      try {
+        const timeoutMs = request.timeoutMs !== undefined ? request.timeoutMs : 3000;
+        let el = null;
+        if (request.selector) {
+          el = findElement(request.selector);
+          if (!el && timeoutMs > 0) el = await waitForElement(request.selector, timeoutMs, 'visible');
+          if (!el) throw new Error(`Drop target not found: ${request.selector}`);
+          scrollIntoViewDeep(el);
+        } else if (request.x != null && request.y != null) {
+          el = document.elementFromPoint(request.x, request.y);
+        } else {
+          throw new Error('drop_files needs a selector or x/y.');
+        }
+        if (!el) throw new Error('No element at the drop point.');
+        const view = el.ownerDocument.defaultView || window;
+        const dt = new view.DataTransfer();
+        const names = [];
+        for (const f of request.files || []) {
+          const bin = atob(f.base64 || '');
+          const bytes = new Uint8Array(bin.length);
+          for (let k = 0; k < bin.length; k++) bytes[k] = bin.charCodeAt(k);
+          dt.items.add(new view.File([bytes], f.name, { type: f.mimeType || 'application/octet-stream', lastModified: Date.now() }));
+          names.push(f.name);
+        }
+        const tr = topLevelRect(el);
+        const cx = tr.left + tr.width / 2;
+        const cy = tr.top + tr.height / 2;
+        const lr = el.getBoundingClientRect();
+        const lx = lr.left + lr.width / 2;
+        const ly = lr.top + lr.height / 2;
+        try { ensureMcpBadge(); updateVirtualCursor(cx, cy, 'drag'); } catch (e) {}
+        flashInteractionHighlight(el);
+        const fire = (type) => {
+          const ev = new view.DragEvent(type, { bubbles: true, cancelable: true, composed: true, dataTransfer: dt, clientX: lx, clientY: ly, view });
+          el.dispatchEvent(ev);
+          return ev;
+        };
+        fire('dragenter');
+        fire('dragover');
+        await new Promise((r) => setTimeout(r, 60));
+        const drop = fire('drop');
+        try { updateVirtualCursor(cx, cy, 'release'); } catch (e) {}
+        sendResponse({ result: { status: 'dropped', files: names, target: el.tagName.toLowerCase() + (el.id ? '#' + el.id : ''), accepted: drop.defaultPrevented } });
       } catch (e) {
         sendResponse({ error: e.message });
       }

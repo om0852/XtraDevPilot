@@ -254,8 +254,12 @@ async function handleAction(action, payload = {}) {
     case 'CLICK_ELEMENT':
     case 'TYPE_TEXT':
     case 'PRESS_KEY':
+    case 'PRESS_KEYS':
     case 'MOUSE_ACTION':
+    case 'TOUCH_ACTION':
       return await runInput(action, payload);
+    case 'DROP_FILES':
+      return await dropFiles(payload);
     case 'EXECUTE_SCRIPT':
       return await executeScriptWithFallback(payload);
     case 'DOWNLOAD_PAGE_HTML':
@@ -769,6 +773,8 @@ const SPECIAL_KEYS = {
   Insert: { code: 'Insert', vk: 45 }
 };
 
+const IS_MAC = /mac/i.test((self.navigator && ((navigator.userAgentData && navigator.userAgentData.platform) || navigator.platform)) || '');
+
 function keyDescriptor(key, shift) {
   if (key === ' ') key = 'Space';
   if (SPECIAL_KEYS[key]) { const k = SPECIAL_KEYS[key]; return { key: k.key || key, code: k.code, vk: k.vk, text: k.text }; }
@@ -783,17 +789,144 @@ function keyDescriptor(key, shift) {
   return { key, code: key, vk: 0 };
 }
 
-async function cdpKey(tabId, key, p = {}) {
-  const d = keyDescriptor(String(key || 'Enter'), !!p.shiftKey);
-  const modifiers = modifierMask(p);
-  const chord = !!(p.ctrlKey || p.altKey || p.metaKey);   // Ctrl+A etc. must not insert text
-  const base = { key: d.key, code: d.code, windowsVirtualKeyCode: d.vk, nativeVirtualKeyCode: d.vk, modifiers };
-  try {
-    await timedSend(tabId, 'Input.dispatchKeyEvent', d.text && !chord ? { ...base, type: 'keyDown', text: d.text, unmodifiedText: d.text } : { ...base, type: 'rawKeyDown' }, null, 'key:down');
-  } catch (e) {
-    throw Object.assign(new Error('tab did not accept input (hidden or busy): ' + e.message), { fallbackOk: true });
+// ---------------------------------------------------------------- keyboard
+const MODIFIER_KEYS = [
+  { flag: 'ctrlKey', key: 'Control', code: 'ControlLeft', vk: 17, bit: 2, label: 'Ctrl' },
+  { flag: 'altKey', key: 'Alt', code: 'AltLeft', vk: 18, bit: 1, label: 'Alt' },
+  { flag: 'shiftKey', key: 'Shift', code: 'ShiftLeft', vk: 16, bit: 8, label: 'Shift' },
+  { flag: 'metaKey', key: 'Meta', code: 'MetaLeft', vk: 91, bit: 4, label: IS_MAC ? 'Cmd' : 'Win' }
+];
+const MOD_ALIASES = { ctrl: 'ctrlKey', control: 'ctrlKey', ctl: 'ctrlKey', alt: 'altKey', option: 'altKey', opt: 'altKey', shift: 'shiftKey', meta: 'metaKey', cmd: 'metaKey', command: 'metaKey', win: 'metaKey', super: 'metaKey' };
+const KEY_ALIASES = { esc: 'Escape', return: 'Enter', del: 'Delete', spacebar: 'Space', up: 'ArrowUp', down: 'ArrowDown', left: 'ArrowLeft', right: 'ArrowRight', pgup: 'PageUp', pgdn: 'PageDown', ins: 'Insert', plus: '+' };
+for (const name of Object.keys(SPECIAL_KEYS)) KEY_ALIASES[name.toLowerCase()] = name;
+// macOS doesn't map editing shortcuts in the renderer, so Cmd+A etc. carry the command.
+const EDIT_COMMANDS = { a: 'selectAll', c: 'copy', x: 'cut', v: 'paste', z: 'undo', y: 'redo' };
+
+function noFallbackError(msg) { return Object.assign(new Error(msg), { noFallback: true }); }
+function hiddenError(e) { return Object.assign(new Error('tab did not accept input (hidden or busy): ' + e.message), { fallbackOk: true }); }
+
+// "Ctrl+Shift+P", "Cmd+A", "Alt+F4", "Ctrl++", "Enter", "a" -> { key, ctrlKey, ... }
+function parseChord(spec, base = {}) {
+  const s = String(spec == null ? '' : spec);
+  const out = { ctrlKey: !!base.ctrlKey, altKey: !!base.altKey, shiftKey: !!base.shiftKey, metaKey: !!base.metaKey, key: s };
+  let parts;
+  if (s.length > 1 && s.includes('+')) {
+    parts = s.endsWith('++') ? s.slice(0, -2).split('+').concat('+') : s.split('+');
+  } else {
+    parts = [s];
   }
-  await timedSend(tabId, 'Input.dispatchKeyEvent', { ...base, type: 'keyUp' }, null, 'key:up');
+  const keyPart = parts.pop();
+  for (const raw of parts) {
+    const flag = MOD_ALIASES[raw.trim().toLowerCase()];
+    if (!flag) throw noFallbackError(`Unknown modifier "${raw}" in "${s}" (use Ctrl, Alt, Shift, Meta/Cmd).`);
+    out[flag] = true;
+  }
+  const k = keyPart.length === 1 ? keyPart : keyPart.trim();
+  if (k.length === 1) {
+    out.key = /[a-z]/i.test(k) ? (out.shiftKey ? k.toUpperCase() : k.toLowerCase()) : k;
+  } else {
+    out.key = KEY_ALIASES[k.toLowerCase()] || (/^f\d{1,2}$/i.test(k) ? k.toUpperCase() : k);
+  }
+  return out;
+}
+
+function chordLabel(c) {
+  const mods = MODIFIER_KEYS.filter((m) => c[m.flag] && m.key !== c.key).map((m) => m.label);
+  let k = c.key === ' ' ? 'Space' : c.key;
+  if (k.length === 1) k = k.toUpperCase();
+  return mods.concat(k).join(' + ');
+}
+
+// Fire-and-forget: show the keystroke HUD in the page.
+function hud(tabId, label) {
+  try {
+    chrome.tabs.sendMessage(tabId, { action: 'KEYS_HUD', label: String(label).slice(0, 80) }, () => { void chrome.runtime.lastError; });
+  } catch (e) {}
+}
+
+function modKeyEvent(m, type, mask) {
+  return { type, key: m.key, code: m.code, windowsVirtualKeyCode: m.vk, nativeVirtualKeyCode: m.vk, modifiers: mask };
+}
+
+// Press a key (optionally with modifiers) the way a keyboard does: modifiers down,
+// key down/up, modifiers up. The first event doubles as the hidden-tab probe.
+async function cdpChord(tabId, chord) {
+  const d = keyDescriptor(String(chord.key || 'Enter'), !!chord.shiftKey);
+  const held = MODIFIER_KEYS.filter((m) => chord[m.flag] && m.key !== d.key);
+  const send = (params, label) => timedSend(tabId, 'Input.dispatchKeyEvent', params, null, label);
+  let first = true;
+  const sendFirst = async (params, label) => {
+    try { await send(params, label); } catch (e) { if (first) throw hiddenError(e); throw e; } finally { first = false; }
+  };
+  let mask = 0;
+  const pressed = [];
+  try {
+    for (const m of held) {
+      mask |= m.bit;
+      await sendFirst(modKeyEvent(m, 'rawKeyDown', mask), 'key:mod-down');
+      pressed.push(m);
+    }
+    const isChord = !!(chord.ctrlKey || chord.altKey || chord.metaKey);
+    const base = { key: d.key, code: d.code, windowsVirtualKeyCode: d.vk, nativeVirtualKeyCode: d.vk, modifiers: mask };
+    const down = d.text && !isChord ? { ...base, type: 'keyDown', text: d.text, unmodifiedText: d.text } : { ...base, type: 'rawKeyDown' };
+    if (IS_MAC && chord.metaKey && !chord.altKey && !chord.ctrlKey && d.key.length === 1) {
+      const cmd = EDIT_COMMANDS[d.key.toLowerCase()];
+      if (cmd) down.commands = [cmd === 'undo' && chord.shiftKey ? 'redo' : cmd];
+    }
+    await sendFirst(down, 'key:down');
+    await send({ ...base, type: 'keyUp' }, 'key:up');
+  } finally {
+    for (const m of pressed.reverse()) {
+      mask &= ~m.bit;
+      try { await send(modKeyEvent(m, 'keyUp', mask), 'key:mod-up'); } catch (e) {}
+    }
+  }
+}
+
+async function cdpKey(tabId, key, p = {}) {
+  return cdpChord(tabId, parseChord(key, p));
+}
+
+// Hold modifier keys for the duration of a mouse gesture (shift-click, ctrl-drag...).
+async function withHeldModifiers(tabId, p, fn) {
+  const held = MODIFIER_KEYS.filter((m) => p[m.flag]);
+  if (!held.length) return fn();
+  const send = (params, label) => timedSend(tabId, 'Input.dispatchKeyEvent', params, null, label);
+  let mask = 0;
+  const pressed = [];
+  try {
+    for (const m of held) {
+      mask |= m.bit;
+      try { await send(modKeyEvent(m, 'rawKeyDown', mask), 'key:mod-down'); } catch (e) { if (!pressed.length) throw hiddenError(e); throw e; }
+      pressed.push(m);
+    }
+    return await fn();
+  } finally {
+    for (const m of pressed.reverse()) {
+      mask &= ~m.bit;
+      try { await send(modKeyEvent(m, 'keyUp', mask), 'key:mod-up'); } catch (e) {}
+    }
+  }
+}
+
+const SHIFTED_CHARS = '~!@#$%^&*()_+{}|:"<>?';
+
+// Human-like typing: one real key event per character with a jittered delay, so
+// code editors, autocomplete boxes and keystroke listeners see actual typing.
+async function cdpTypeKeystrokes(tabId, text, p = {}) {
+  const base = p.delayMs != null ? Math.max(0, Number(p.delayMs)) : 35;
+  let typed = 0;
+  for (const ch of Array.from(String(text == null ? '' : text))) {
+    if (automationStopped) break;
+    if (ch === '\r') continue;
+    if (ch === '\n') await cdpChord(tabId, { key: 'Enter' });
+    else if (ch === '\t') await cdpChord(tabId, { key: 'Tab' });
+    else if (/^[\x20-\x7e]$/.test(ch)) await cdpChord(tabId, { key: ch === ' ' ? 'Space' : ch, shiftKey: /[A-Z]/.test(ch) || SHIFTED_CHARS.includes(ch) });
+    else await timedSend(tabId, 'Input.insertText', { text: ch }, null, 'insertText');   // emoji, accents, CJK
+    typed++;
+    if (base) await sleep(Math.max(0, base + (Math.random() * 2 - 1) * base * 0.4));
+  }
+  return typed;
 }
 
 // Bound a CDP call so a stalled input can never hang the bridge; record slow calls.
@@ -812,6 +945,9 @@ async function timedSend(tabId, method, params, trace, label, ms = 2500) {
   }
 }
 
+// ---------------------------------------------------------------- mouse
+// Drag with real input. If o.measureEnd is given (drop target off-screen), hold
+// the drag at the viewport edge and wheel-scroll until the target shows up.
 async function cdpDrag(tabId, o) {
   const trace = [];
   const mouse = (params) => timedSend(tabId, 'Input.dispatchMouseEvent', params, trace, 'mouse:' + params.type);
@@ -820,14 +956,12 @@ async function cdpDrag(tabId, o) {
   const modifiers = modifierMask(o);
   const steps = Math.max(5, parseInt(o.steps, 10) || 20);
   const stepDelay = o.stepDelayMs != null ? o.stepDelayMs : 16;    // ~one frame per step for rAF-driven apps
-  const { x, y, endX, endY } = o;
+  const { x, y } = o;
+  let endX = o.endX;
+  let endY = o.endY;
 
   // Probe first: a hidden tab never acks input. Bail out before any button press.
-  try {
-    await mouse({ type: 'mouseMoved', x, y, modifiers });
-  } catch (e) {
-    throw Object.assign(new Error('tab did not accept input (hidden or busy): ' + e.message), { fallbackOk: true });
-  }
+  try { await mouse({ type: 'mouseMoved', x, y, modifiers }); } catch (e) { throw hiddenError(e); }
 
   dbgSession.dragData = null;
   let intercepting = false;
@@ -835,39 +969,93 @@ async function cdpDrag(tabId, o) {
 
   let html5 = null;
   let aborted = false;
+  let scrolls = 0;
+  let curX = x;
+  let curY = y;
+  const moveTo = async (cx, cy) => {
+    if (html5) {
+      await dragEvt({ type: 'dragOver', x: cx, y: cy, data: html5, modifiers });
+    } else {
+      await mouse({ type: 'mouseMoved', x: cx, y: cy, button: btn.name, buttons: btn.mask, modifiers });
+      // The element was draggable=true: Chrome handed us its native drag payload.
+      if (dbgSession.dragData) {
+        html5 = dbgSession.dragData;
+        await dragEvt({ type: 'dragEnter', x: cx, y: cy, data: html5, modifiers });
+      }
+    }
+    curX = cx;
+    curY = cy;
+  };
+  const glide = async (tx, ty, n) => {
+    const sx = curX;
+    const sy = curY;
+    for (let i = 1; i <= n; i++) {
+      if (automationStopped) { aborted = true; return; }
+      const cx = sx + (tx - sx) * i / n;
+      const cy = sy + (ty - sy) * i / n;
+      await moveTo(cx, cy);
+      if (i % 2 === 0 || i === n) moveCursor(tabId, cx, cy, 'drag');
+      if (stepDelay) await sleep(stepDelay);
+    }
+  };
+
   try {
     moveCursor(tabId, x, y, 'drag');
     await mouse({ type: 'mousePressed', x, y, button: btn.name, buttons: btn.mask, clickCount: 1, modifiers });
     await sleep(40);
-    for (let i = 1; i <= steps; i++) {
-      if (automationStopped) { aborted = true; break; }
-      const cx = x + (endX - x) * i / steps;
-      const cy = y + (endY - y) * i / steps;
-      if (html5) {
-        await dragEvt({ type: 'dragOver', x: cx, y: cy, data: html5, modifiers });
-      } else {
-        await mouse({ type: 'mouseMoved', x: cx, y: cy, button: btn.name, buttons: btn.mask, modifiers });
-        // The element was draggable=true: Chrome handed us its native drag payload.
-        if (dbgSession.dragData) {
-          html5 = dbgSession.dragData;
-          await dragEvt({ type: 'dragEnter', x: cx, y: cy, data: html5, modifiers });
-        }
+    if (o.measureEnd && o.vp) {
+      const vw = o.vp.w;
+      const vh = o.vp.h;
+      await glide(x + 6, y + 6, 3);              // arm the drag past libraries' movement threshold
+      let target = null;
+      for (let i = 0; i < 40 && !aborted; i++) {
+        const m = await o.measureEnd();
+        if (m && m.inView) { target = m; break; }
+        const my = m ? m.y : vh + 1;           // not rendered yet (virtualized list): keep going down
+        const mx = m ? m.x : curX;
+        const dirY = my >= vh ? 1 : (my < 0 ? -1 : 0);
+        const dirX = mx >= vw ? 1 : (mx < 0 ? -1 : 0);
+        const ex = dirX > 0 ? vw - 8 : dirX < 0 ? 8 : Math.min(Math.max(curX, 8), vw - 8);
+        const ey = dirY > 0 ? vh - 8 : dirY < 0 ? 8 : Math.min(Math.max(curY, 8), vh - 8);
+        await glide(ex, ey, 3);
+        await mouse({ type: 'mouseWheel', x: ex, y: ey, deltaX: dirX * Math.round(vw * 0.85), deltaY: dirY * Math.round(vh * 0.85), buttons: btn.mask, modifiers });
+        scrolls++;
+        await sleep(110);
       }
-      if (i % 2 === 0 || i === steps) moveCursor(tabId, cx, cy, 'drag');
-      if (stepDelay) await sleep(stepDelay);
+      if (!target && !aborted) throw noFallbackError('Drop target never scrolled into view while dragging.');
+      // Wheel scrolling is animated: wait until the target stops moving before aiming.
+      for (let k = 0; target && k < 8 && !aborted; k++) {
+        await sleep(70);
+        const m2 = await o.measureEnd();
+        if (!m2 || !m2.inView) break;
+        const still = Math.abs(m2.x - target.x) < 2 && Math.abs(m2.y - target.y) < 2;
+        target = m2;
+        if (still) break;
+      }
+      if (target) { endX = target.x; endY = target.y; }
+    }
+    if (!aborted) await glide(endX, endY, steps);
+    // Last check before letting go: if the page still shifted, correct the aim.
+    if (!aborted && o.measureEnd) {
+      const fin = await o.measureEnd();
+      if (fin && fin.inView && (Math.abs(fin.x - curX) > 3 || Math.abs(fin.y - curY) > 3)) {
+        endX = fin.x; endY = fin.y;
+        await glide(endX, endY, 4);
+      }
     }
     if (html5) {
       await dragEvt({ type: aborted ? 'dragCancel' : 'drop', x: aborted ? x : endX, y: aborted ? y : endY, data: html5, modifiers });
     }
   } finally {
     // Always release the button, even on error or Stop, so the page isn't left mid-drag.
-    try { await mouse({ type: 'mouseReleased', x: endX, y: endY, button: btn.name, buttons: 0, clickCount: 1, modifiers }); } catch (e) {}
-    moveCursor(tabId, endX, endY, 'release');
+    try { await mouse({ type: 'mouseReleased', x: curX, y: curY, button: btn.name, buttons: 0, clickCount: 1, modifiers }); } catch (e) {}
+    moveCursor(tabId, curX, curY, 'release');
     if (intercepting) { try { await timedSend(tabId, 'Input.setInterceptDrags', { enabled: false }, trace, 'interceptOff'); } catch (e) {} }
     dbgSession.dragData = null;
   }
-  const out = { status: aborted ? 'drag_aborted_by_user' : 'dragged', dragMode: html5 ? 'html5-dnd' : 'pointer', steps };
-  if (!intercepting) out.html5Interception = false;   // native draggable elements won't drop
+  const out = { status: aborted ? 'drag_aborted_by_user' : 'dragged', dragMode: html5 ? 'html5-dnd' : 'pointer', steps, end: { x: Math.round(endX), y: Math.round(endY) } };
+  if (scrolls) out.autoScrolls = scrolls;
+  if (!intercepting) out.html5Interception = false;
   if (trace.length) out.slowCalls = trace;
   return out;
 }
@@ -877,16 +1065,180 @@ async function cdpClick(tabId, x, y, p = {}, clicks = 1) {
   const btn = MOUSE_BUTTONS[p.button] || MOUSE_BUTTONS.left;
   const modifiers = modifierMask(p);
   moveCursor(tabId, x, y, 'move');
-  try {
-    await mouse({ type: 'mouseMoved', x, y, modifiers });
-  } catch (e) {
-    throw Object.assign(new Error('tab did not accept input (hidden or busy): ' + e.message), { fallbackOk: true });
-  }
+  try { await mouse({ type: 'mouseMoved', x, y, modifiers }); } catch (e) { throw hiddenError(e); }
   await sleep(CURSOR_LEAD_MS);
   moveCursor(tabId, x, y, clicks > 1 ? 'dblclick' : 'click');
   for (let c = 1; c <= clicks; c++) {
     await mouse({ type: 'mousePressed', x, y, button: btn.name, buttons: btn.mask, clickCount: c, modifiers });
     await mouse({ type: 'mouseReleased', x, y, button: btn.name, buttons: 0, clickCount: c, modifiers });
+  }
+}
+
+// Press and hold (context menus on canvas apps, press-and-hold buttons).
+async function cdpLongPress(tabId, x, y, p = {}) {
+  const mouse = (params) => timedSend(tabId, 'Input.dispatchMouseEvent', params, null, 'mouse:' + params.type);
+  const btn = MOUSE_BUTTONS[p.button] || MOUSE_BUTTONS.left;
+  const modifiers = modifierMask(p);
+  const holdMs = Math.min(Math.max(parseInt(p.holdMs, 10) || 800, 50), 10000);
+  moveCursor(tabId, x, y, 'move');
+  try { await mouse({ type: 'mouseMoved', x, y, modifiers }); } catch (e) { throw hiddenError(e); }
+  await sleep(CURSOR_LEAD_MS);
+  moveCursor(tabId, x, y, 'drag');
+  await mouse({ type: 'mousePressed', x, y, button: btn.name, buttons: btn.mask, clickCount: 1, modifiers });
+  try {
+    await sleep(holdMs);
+  } finally {
+    try { await mouse({ type: 'mouseReleased', x, y, button: btn.name, buttons: 0, clickCount: 1, modifiers }); } catch (e) {}
+    moveCursor(tabId, x, y, 'release');
+  }
+  return holdMs;
+}
+
+// Catmull-Rom spline through the points (or straight segments), sampled evenly.
+function samplePath(pts, seg, smooth) {
+  const out = [pts[0].slice()];
+  for (let i = 0; i < pts.length - 1; i++) {
+    const p0 = pts[Math.max(0, i - 1)];
+    const p1 = pts[i];
+    const p2 = pts[i + 1];
+    const p3 = pts[Math.min(pts.length - 1, i + 2)];
+    for (let s = 1; s <= seg; s++) {
+      const t = s / seg;
+      if (!smooth) { out.push([p1[0] + (p2[0] - p1[0]) * t, p1[1] + (p2[1] - p1[1]) * t]); continue; }
+      const t2 = t * t;
+      const t3 = t2 * t;
+      const f = (a, b, c, d) => 0.5 * ((2 * b) + (-a + c) * t + (2 * a - 5 * b + 4 * c - d) * t2 + (-a + 3 * b - 3 * c + d) * t3);
+      out.push([f(p0[0], p1[0], p2[0], p3[0]), f(p0[1], p1[1], p2[1], p3[1])]);
+    }
+  }
+  return out;
+}
+
+function normalizePoints(raw) {
+  if (!Array.isArray(raw) || raw.length < 2) throw noFallbackError('path needs a "points" array with at least 2 points, e.g. [[100,100],[200,150]].');
+  return raw.map((pt, i) => {
+    const xy = Array.isArray(pt) ? pt : (pt && typeof pt === 'object' ? [pt.x, pt.y] : null);
+    if (!xy || !Number.isFinite(Number(xy[0])) || !Number.isFinite(Number(xy[1]))) throw noFallbackError(`points[${i}] is not an [x, y] pair.`);
+    return [Number(xy[0]), Number(xy[1])];
+  });
+}
+
+// Freehand stroke: press, follow a (smoothed) polyline, release. Signatures, pen
+// tools, whiteboards, curved sliders. hold:false just moves along the path.
+async function cdpPath(tabId, pts, p = {}) {
+  const mouse = (params) => timedSend(tabId, 'Input.dispatchMouseEvent', params, null, 'mouse:' + params.type);
+  const btn = MOUSE_BUTTONS[p.button] || MOUSE_BUTTONS.left;
+  const modifiers = modifierMask(p);
+  const hold = p.hold !== false;
+  const smooth = p.smooth !== false && pts.length > 2;
+  const seg = Math.min(Math.max(parseInt(p.steps, 10) || 8, 1), 60);
+  const stepDelay = p.stepDelayMs != null ? p.stepDelayMs : 12;
+  const vp = p._viewport;
+  const clamp = (v, max) => (max ? Math.min(Math.max(v, 0), max - 1) : v);
+  const samples = samplePath(pts, seg, smooth).map(([sx, sy]) => [Math.round(clamp(sx, vp && vp.w)), Math.round(clamp(sy, vp && vp.h))]);
+  const [x0, y0] = samples[0];
+  moveCursor(tabId, x0, y0, 'move');
+  try { await mouse({ type: 'mouseMoved', x: x0, y: y0, modifiers }); } catch (e) { throw hiddenError(e); }
+  await sleep(CURSOR_LEAD_MS);
+  let last = samples[0];
+  let aborted = false;
+  if (hold) await mouse({ type: 'mousePressed', x: x0, y: y0, button: btn.name, buttons: btn.mask, clickCount: 1, modifiers });
+  try {
+    for (let k = 1; k < samples.length; k++) {
+      if (automationStopped) { aborted = true; break; }
+      const [sx, sy] = samples[k];
+      await mouse(hold ? { type: 'mouseMoved', x: sx, y: sy, button: btn.name, buttons: btn.mask, modifiers } : { type: 'mouseMoved', x: sx, y: sy, modifiers });
+      last = samples[k];
+      if (k % 2 === 0 || k === samples.length - 1) moveCursor(tabId, sx, sy, hold ? 'drag' : 'move');
+      if (stepDelay) await sleep(stepDelay);
+    }
+  } finally {
+    if (hold) {
+      try { await mouse({ type: 'mouseReleased', x: last[0], y: last[1], button: btn.name, buttons: 0, clickCount: 1, modifiers }); } catch (e) {}
+      moveCursor(tabId, last[0], last[1], 'release');
+    }
+  }
+  return { status: aborted ? 'path_aborted_by_user' : 'path_drawn', points: pts.length, samples: samples.length, smooth, hold };
+}
+
+// ---------------------------------------------------------------- touch
+// Real touch input (tap, double tap, long press, swipe, pinch). Touch emulation is
+// switched on only for the gesture so desktop sites that check for touch support
+// respond, then restored.
+async function cdpTouch(tabId, kind, p) {
+  const send = (type, touchPoints) => timedSend(tabId, 'Input.dispatchTouchEvent', { type, touchPoints, modifiers: 0 }, null, 'touch:' + type);
+  const tp = (tx, ty, id) => ({ x: Math.round(tx), y: Math.round(ty), radiusX: 2, radiusY: 2, force: 1, id });
+  const steps = Math.min(Math.max(parseInt(p.steps, 10) || 12, 2), 80);
+  const stepDelay = p.stepDelayMs != null ? p.stepDelayMs : 16;
+  const { x, y } = p;
+  let emulated = false;
+  if (p.emulateTouch !== false) {
+    try { await dbgSend(tabId, 'Emulation.setTouchEmulationEnabled', { enabled: true, maxTouchPoints: 5 }); emulated = true; await sleep(40); } catch (e) {}
+  }
+  let first = true;
+  const start = async (pts) => {
+    try { await send('touchStart', pts); } catch (e) { if (first) throw hiddenError(e); throw e; } finally { first = false; }
+  };
+  let touching = false;
+  try {
+    if (kind === 'tap' || kind === 'doubletap') {
+      const n = kind === 'doubletap' ? 2 : 1;
+      for (let i = 0; i < n; i++) {
+        moveCursor(tabId, x, y, 'click');
+        await start([tp(x, y, 0)]); touching = true;
+        await sleep(45);
+        await send('touchEnd', []); touching = false;
+        if (i < n - 1) await sleep(110);
+      }
+      return { status: kind === 'tap' ? 'tapped' : 'double_tapped', x, y };
+    }
+    if (kind === 'longpress') {
+      const holdMs = Math.min(Math.max(parseInt(p.holdMs, 10) || 800, 50), 10000);
+      moveCursor(tabId, x, y, 'drag');
+      await start([tp(x, y, 0)]); touching = true;
+      await sleep(holdMs);
+      await send('touchEnd', []); touching = false;
+      moveCursor(tabId, x, y, 'release');
+      return { status: 'long_pressed', x, y, holdMs };
+    }
+    if (kind === 'swipe') {
+      const ex = p.endX;
+      const ey = p.endY;
+      if (ex == null || ey == null) throw noFallbackError('swipe needs endX/endY.');
+      moveCursor(tabId, x, y, 'drag');
+      await start([tp(x, y, 0)]); touching = true;
+      for (let i = 1; i <= steps; i++) {
+        const cx = x + (ex - x) * i / steps;
+        const cy = y + (ey - y) * i / steps;
+        await send('touchMove', [tp(cx, cy, 0)]);
+        if (i % 2 === 0 || i === steps) moveCursor(tabId, cx, cy, 'drag');
+        if (stepDelay) await sleep(stepDelay);
+      }
+      await send('touchEnd', []); touching = false;
+      moveCursor(tabId, ex, ey, 'release');
+      return { status: 'swiped', start: { x, y }, end: { x: ex, y: ey }, steps };
+    }
+    if (kind === 'pinch') {
+      const scale = Number(p.scale) > 0 ? Number(p.scale) : 2;
+      const d0 = Number(p.distance) > 10 ? Number(p.distance) : 120;
+      const d1 = d0 * scale;
+      const at = (d) => [tp(x - d / 2, y, 0), tp(x + d / 2, y, 1)];
+      moveCursor(tabId, x, y, 'drag');
+      await start(at(d0)); touching = true;
+      for (let i = 1; i <= steps; i++) {
+        await send('touchMove', at(d0 + (d1 - d0) * i / steps));
+        if (stepDelay) await sleep(stepDelay);
+      }
+      await send('touchEnd', []); touching = false;
+      moveCursor(tabId, x, y, 'release');
+      return { status: scale >= 1 ? 'pinched_out' : 'pinched_in', center: { x, y }, scale, fromDistance: d0, toDistance: Math.round(d1) };
+    }
+    throw noFallbackError(`Unknown touch action: ${kind} (use tap, doubletap, longpress, swipe, pinch).`);
+  } finally {
+    if (touching) { try { await send('touchCancel', []); } catch (e) {} }
+    if (emulated && !p.keepTouchEmulation) {
+      try { await dbgSend(tabId, 'Emulation.setTouchEmulationEnabled', { enabled: false }); } catch (e) {}
+    }
   }
 }
 
@@ -905,29 +1257,54 @@ async function askHelper(action, payload) {
 }
 
 // --- trusted handlers (each returns the same shape as its synthetic twin) ---
+const TRUSTED_ONLY_MOUSE = new Set(['tripleclick', 'longpress', 'path']);
+
 async function trustedMouseAction(tab, p) {
   const kind = resolveMouseAction(p);
+  if (kind === 'path') {
+    const pts = normalizePoints(p.points);
+    pts.forEach(([px, py], i) => assertInViewport(p, Math.round(px), Math.round(py), `Path point ${i}`));
+    return { ...(await withHeldModifiers(tab.id, p, () => cdpPath(tab.id, pts, p))), inputMode: 'trusted' };
+  }
   let { x, y, endX, endY } = p;
+  let measureEnd = null;
   if (p.selector || p.dropSelector || x == null || y == null) {
-    const pt = await askHelper('RESOLVE_POINT', { selector: p.selector, dropSelector: p.dropSelector, timeoutMs: p.timeoutMs, tabId: tab.id });
+    const autoScroll = kind === 'drag' && !!p.dropSelector && p.autoScroll !== false && !!p._viewport;
+    const pt = await askHelper('RESOLVE_POINT', { selector: p.selector, dropSelector: p.dropSelector, dropNoScroll: autoScroll, dropOptional: autoScroll, timeoutMs: p.timeoutMs, tabId: tab.id });
     if (pt) {
       if (x == null || y == null) { x = pt.x; y = pt.y; }
       if (pt.endX != null) { endX = pt.endX; endY = pt.endY; }
+      if (autoScroll && (pt.endMissing || pt.endInView === false)) {
+        measureEnd = async () => {
+          const m = await askHelper('RESOLVE_POINT', { dropSelector: p.dropSelector, dropNoScroll: true, dropOptional: true, timeoutMs: 0, tabId: tab.id });
+          return m && m.endX != null ? { x: m.endX, y: m.endY, inView: !!m.endInView } : null;
+        };
+      }
     }
   }
-  if (x == null || y == null) throw Object.assign(new Error('mouse_action needs x/y coordinates or a selector.'), { noFallback: true });
+  if (x == null || y == null) throw noFallbackError('mouse_action needs x/y coordinates or a selector.');
   x = Math.round(x); y = Math.round(y);
   const modifiers = modifierMask(p);
   assertInViewport(p, x, y, kind === 'drag' ? 'Drag start' : 'Point');
 
-  if (kind === 'move') {
+  if (kind === 'move' || kind === 'hover') {
     moveCursor(tab.id, x, y, 'move');
     await timedSend(tab.id, 'Input.dispatchMouseEvent', { type: 'mouseMoved', x, y, modifiers }, null, 'mouse:mouseMoved');
+    if (kind === 'hover') {
+      const dwellMs = Math.min(Math.max(parseInt(p.dwellMs, 10) || 600, 0), 10000);
+      if (dwellMs) await sleep(dwellMs);
+      return { status: 'hovered', x, y, dwellMs, inputMode: 'trusted' };
+    }
     return { status: 'moved', x, y, inputMode: 'trusted' };
   }
-  if (kind === 'click' || kind === 'dblclick') {
-    await cdpClick(tab.id, x, y, p, kind === 'dblclick' ? 2 : 1);
-    return { status: kind === 'dblclick' ? 'double_clicked' : 'clicked', button: p.button || 'left', x, y, inputMode: 'trusted' };
+  if (kind === 'click' || kind === 'dblclick' || kind === 'tripleclick') {
+    const clicks = kind === 'tripleclick' ? 3 : kind === 'dblclick' ? 2 : 1;
+    await withHeldModifiers(tab.id, p, () => cdpClick(tab.id, x, y, p, clicks));
+    return { status: { 1: 'clicked', 2: 'double_clicked', 3: 'triple_clicked' }[clicks], button: p.button || 'left', x, y, modifiers: chordLabelMods(p), inputMode: 'trusted' };
+  }
+  if (kind === 'longpress') {
+    const held = await withHeldModifiers(tab.id, p, () => cdpLongPress(tab.id, x, y, p));
+    return { status: 'long_pressed', x, y, holdMs: held, inputMode: 'trusted' };
   }
   if (kind === 'scroll') {
     moveCursor(tab.id, x, y, 'move');
@@ -935,13 +1312,20 @@ async function trustedMouseAction(tab, p) {
     return { status: 'scrolled', deltaX: p.deltaX || 0, deltaY: p.deltaY || 0, inputMode: 'trusted' };
   }
   if (kind === 'drag') {
-    if (endX == null || endY == null) { endX = x + 100; endY = y + 100; }
-    endX = Math.round(endX); endY = Math.round(endY);
-    assertInViewport(p, endX, endY, 'Drag end');
-    const r = await cdpDrag(tab.id, { ...p, x, y, endX, endY });
-    return { ...r, start: { x, y }, end: { x: endX, y: endY }, inputMode: 'trusted' };
+    if (!measureEnd) {
+      if (endX == null || endY == null) { endX = x + 100; endY = y + 100; }
+      endX = Math.round(endX); endY = Math.round(endY);
+      assertInViewport(p, endX, endY, 'Drag end');
+    }
+    const r = await withHeldModifiers(tab.id, p, () => cdpDrag(tab.id, { ...p, x, y, endX, endY, measureEnd, vp: p._viewport }));
+    return { ...r, start: { x, y }, inputMode: 'trusted' };
   }
-  throw Object.assign(new Error(`Unknown mouse action: ${kind}`), { noFallback: true });
+  throw noFallbackError(`Unknown mouse action: ${kind}`);
+}
+
+function chordLabelMods(p) {
+  const mods = MODIFIER_KEYS.filter((m) => p[m.flag]).map((m) => m.label);
+  return mods.length ? mods.join('+') : undefined;
 }
 
 async function trustedClickElement(tab, p) {
@@ -951,35 +1335,92 @@ async function trustedClickElement(tab, p) {
   if (!pt || pt.occluded || !pt.w || !pt.h) {
     throw Object.assign(new Error(pt && pt.occluded ? `element is covered by <${pt.occludedBy}>` : 'element has no visible box'), { fallbackOk: true });
   }
-  await cdpClick(tab.id, pt.x, pt.y, p, 1);
-  return `Element ${p.selector} clicked successfully (trusted input).`;
+  const clicks = Math.min(Math.max(parseInt(p.clicks, 10) || 1, 1), 3);
+  await withHeldModifiers(tab.id, p, () => cdpClick(tab.id, pt.x, pt.y, p, clicks));
+  return `Element ${p.selector} clicked successfully (trusted input${chordLabelMods(p) ? ', ' + chordLabelMods(p) : ''}).`;
 }
 
 async function trustedPressKey(tab, p) {
+  const chord = parseChord(p.key || 'Enter', p);
   if (p.selector) await askHelper('FOCUS_ELEMENT', { selector: p.selector, timeoutMs: p.timeoutMs, tabId: tab.id });
-  await cdpKey(tab.id, p.key, p);
-  return `Key '${p.key || 'Enter'}' pressed successfully (trusted input).`;
+  hud(tab.id, chordLabel(chord));
+  await cdpChord(tab.id, chord);
+  return `Key '${chordLabel(chord)}' pressed successfully (trusted input).`;
+}
+
+async function trustedPressKeys(tab, p) {
+  const keys = Array.isArray(p.keys) ? p.keys.map(String) : String(p.keys || '').split(',').map((k) => k.trim()).filter(Boolean);
+  if (!keys.length) throw noFallbackError('press_keys needs a non-empty "keys" array, e.g. ["Ctrl+A", "Delete"].');
+  const chords = keys.map((k) => parseChord(k));          // validate everything before pressing anything
+  if (p.selector) await askHelper('FOCUS_ELEMENT', { selector: p.selector, timeoutMs: p.timeoutMs, tabId: tab.id });
+  const delay = p.delayMs != null ? Math.max(0, Number(p.delayMs)) : 60;
+  const pressed = [];
+  for (const c of chords) {
+    if (automationStopped) break;
+    hud(tab.id, chordLabel(c));
+    await cdpChord(tab.id, c);
+    pressed.push(chordLabel(c));
+    if (delay) await sleep(delay);
+  }
+  return { status: pressed.length === chords.length ? 'pressed' : 'stopped_by_user', keys: pressed, inputMode: 'trusted' };
 }
 
 async function trustedTypeText(tab, p) {
   const f = await askHelper('FOCUS_ELEMENT', { selector: p.selector, timeoutMs: p.timeoutMs, selectAll: !p.append, tabId: tab.id });
   if (f && f.x != null) moveCursor(tab.id, f.x, f.y, 'click');
-  await timedSend(tab.id, 'Input.insertText', { text: String(p.text == null ? '' : p.text) }, null, 'insertText'); // replaces the selection
+  const text = String(p.text == null ? '' : p.text);
+  hud(tab.id, '⌨ ' + (text.length > 40 ? text.slice(0, 40) + '…' : text));
+  if (p.keystrokes) {
+    const typed = await cdpTypeKeystrokes(tab.id, text, p);
+    return `Typed ${typed} keystrokes into ${p.selector || 'activeElement'} (trusted input).`;
+  }
+  await timedSend(tab.id, 'Input.insertText', { text }, null, 'insertText'); // replaces the selection
   return `Typed text into ${p.selector || 'activeElement'} (trusted input).`;
+}
+
+async function trustedTouch(tab, p) {
+  const kind = String(p.subAction || p.touchAction || 'tap').toLowerCase();
+  let { x, y, endX, endY } = p;
+  if (p.selector || x == null || y == null) {
+    const pt = await askHelper('RESOLVE_POINT', { selector: p.selector, dropSelector: p.dropSelector, timeoutMs: p.timeoutMs, tabId: tab.id });
+    if (pt) {
+      if (x == null || y == null) { x = pt.x; y = pt.y; }
+      if (pt.endX != null) { endX = pt.endX; endY = pt.endY; }
+    }
+  }
+  if (x == null || y == null) throw noFallbackError('touch_action needs x/y coordinates or a selector.');
+  x = Math.round(x); y = Math.round(y);
+  assertInViewport(p, x, y, 'Touch point');
+  if (kind === 'swipe' && endX != null && endY != null) { endX = Math.round(endX); endY = Math.round(endY); assertInViewport(p, endX, endY, 'Swipe end'); }
+  const r = await cdpTouch(tab.id, kind, { ...p, x, y, endX, endY });
+  return { ...r, inputMode: 'trusted' };
 }
 
 const TRUSTED_HANDLERS = {
   MOUSE_ACTION: trustedMouseAction,
   CLICK_ELEMENT: trustedClickElement,
   PRESS_KEY: trustedPressKey,
-  TYPE_TEXT: trustedTypeText
+  PRESS_KEYS: trustedPressKeys,
+  TYPE_TEXT: trustedTypeText,
+  TOUCH_ACTION: trustedTouch
 };
 
+// Actions that only exist as real input (no synthetic twin to fall back to).
+function isTrustedOnly(action, payload) {
+  if (action === 'PRESS_KEYS' || action === 'TOUCH_ACTION') return true;
+  if (action === 'TYPE_TEXT' && payload.keystrokes) return true;
+  if (action === 'MOUSE_ACTION' && TRUSTED_ONLY_MOUSE.has(resolveMouseAction(payload))) return true;
+  return false;
+}
+
 // Trusted by default for mouse/click/key; type_text stays on the React-safe
-// synthetic path unless trusted:true. trusted:false forces the old path.
+// synthetic path unless trusted:true or keystrokes:true. trusted:false forces the
+// old path (where one exists).
 async function runInput(action, payload = {}) {
-  const wantTrusted = action === 'TYPE_TEXT' ? payload.trusted === true : payload.trusted !== false;
-  const synthPayload = action === 'MOUSE_ACTION' ? { ...payload, subAction: resolveMouseAction(payload) } : payload;
+  const trustedOnly = isTrustedOnly(action, payload);
+  const wantTrusted = trustedOnly || (action === 'TYPE_TEXT' ? payload.trusted === true : payload.trusted !== false);
+  const mouseKind = action === 'MOUSE_ACTION' ? resolveMouseAction(payload) : null;
+  const synthPayload = action === 'MOUSE_ACTION' ? { ...payload, subAction: mouseKind === 'hover' ? 'move' : mouseKind } : payload;
   if (!wantTrusted) return askContentScript(action, synthPayload);
 
   const tab = await resolveTargetTab(payload);
@@ -995,11 +1436,13 @@ async function runInput(action, payload = {}) {
   if (visible === false) {
     if (payload.focusTab) {
       await bringTabToFront(tab);
+      const fresh = await pageState(tab.id);
+      if (fresh) Object.assign(state, fresh);
     } else {
-      // A synthetic drag in a hidden tab crawls (timer throttling) and can't drive
-      // real apps anyway, so fail fast instead of hanging until the bridge times out.
-      if (action === 'MOUSE_ACTION' && resolveMouseAction(payload) === 'drag') {
-        throw new Error('Tab is hidden: Chrome only delivers real drag input to a visible tab. Bring the tab to front or pass focusTab:true.');
+      // Drags crawl in hidden tabs (timer throttling) and trusted-only gestures have
+      // no synthetic twin, so fail fast instead of hanging until the bridge times out.
+      if (trustedOnly || mouseKind === 'drag') {
+        throw new Error('Tab is hidden: Chrome only delivers real input to a visible tab. Bring the tab to front or pass focusTab:true.');
       }
       const res = await askContentScript(action, { ...synthPayload, tabId: tab.id });
       return decorate(res, 'synthetic-hidden-tab',
@@ -1012,19 +1455,35 @@ async function runInput(action, payload = {}) {
     return await serializeInput(() => TRUSTED_HANDLERS[action](tab, { ...payload, _viewport: viewport }));
   } catch (err) {
     const msg = String((err && err.message) || err);
+    // A stall mid-gesture almost always means another window covered Chrome, which
+    // stops input delivery. Say so plainly instead of a bare timeout.
+    if (/timed out/i.test(msg) && !(err && err.fallbackOk)) {
+      const st = await pageState(tab.id);
+      if (st && st.visible === false) {
+        throw new Error('Tab is not visible: it became hidden during the action (another window covered Chrome), so Chrome stopped delivering input. The gesture was cancelled safely and the mouse button released. Keep Chrome visible (e.g. side by side) and retry.');
+      }
+    }
     // Only fall back when no trusted input was sent (debugger unavailable, target
     // covered, or the very first event was refused). Falling back mid-sequence
     // would repeat a half-done action.
-    if (!(err && (err.attachFailed || err.fallbackOk))) throw err;
+    if (!(err && (err.attachFailed || err.fallbackOk)) || trustedOnly) throw err;
     const res = await askContentScript(action, { ...synthPayload, tabId: tab.id });
     return decorate(res, 'synthetic-fallback', msg);
   }
 }
 
+// File drop onto a drop zone: synthetic DataTransfer events (what drop-zone
+// libraries read), no visibility requirement.
+async function dropFiles(payload = {}) {
+  const tab = await resolveTargetTab(payload);
+  if (!Array.isArray(payload.files) || !payload.files.length) throw noFallbackError('drop_files needs at least one file.');
+  return askHelper('DROP_FILES', { ...payload, tabId: tab.id });
+}
+
 async function pageState(tabId) {
   try {
     const st = await askContentScript('PAGE_STATE', { tabId });
-    return st ? { visible: !!st.visible, vw: st.vw, vh: st.vh, v: st.v || 0 } : null;
+    return st ? { visible: !!st.visible, focused: !!st.focused, vw: st.vw, vh: st.vh, v: st.v || 0 } : null;
   } catch (e) {
     return null;                     // unknown (no content script): let trusted input try
   }
@@ -1047,7 +1506,17 @@ async function bringTabToFront(tab) {
   const upd = { focused: true };
   if (win && win.state === 'minimized') upd.state = 'normal';   // never un-maximize
   await new Promise((r) => chrome.windows.update(tab.windowId, upd, () => { void chrome.runtime.lastError; r(); }));
-  await sleep(250);                  // let the renderer become visible before input
+  // The OS activates the window asynchronously; a focus change landing mid-gesture
+  // makes Chrome drop pointer capture (drag libraries then lose the drag). Wait
+  // until the page reports visible + focused before sending any input.
+  const t0 = Date.now();
+  while (Date.now() - t0 < 1500) {
+    await sleep(100);
+    const st = await pageState(tab.id);
+    if (!st) break;
+    if (st.visible && st.focused) break;
+  }
+  await sleep(150);
 }
 
 // Capture a tab's viewport via the DevTools Protocol. Unlike captureVisibleTab,

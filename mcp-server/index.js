@@ -269,6 +269,14 @@ async function askExtension(action, payload = {}) {
     else if (action === 'BATCH_FILL_FORM') timeoutMs = 30000;
     else if (action === 'UPLOAD_FILE') timeoutMs = 20000;
 
+    // Long-running input gestures (holds, paths, auto-scroll drags, typing).
+    const LONG_INPUT = { MOUSE_ACTION: 30000, TOUCH_ACTION: 30000, PRESS_KEYS: 30000, DROP_FILES: 30000 };
+    if (LONG_INPUT[action]) timeoutMs = Math.max(timeoutMs, LONG_INPUT[action] + (payload.timeoutMs || 0));
+    if (action === 'TYPE_TEXT' && payload.keystrokes) {
+      const per = (payload.delayMs != null ? Number(payload.delayMs) : 35) + 60;
+      timeoutMs = Math.max(timeoutMs, String(payload.text || '').length * per + 8000);
+    }
+
     const timeout = setTimeout(() => {
       pendingRequests.delete(id);
       reject(new Error(`Timeout waiting for extension to respond to action: ${action}`));
@@ -287,6 +295,25 @@ async function askExtension(action, payload = {}) {
     targetSocket.send(JSON.stringify({ ...wire, action, id }));
   });
 }
+
+// Shared help text for selector / modifier parameters of the input tools.
+const SEL_DOC = 'Selector: CSS, or text=Save / text*=Sav (visible text, aria-label, title, placeholder), iframe#id >>> inner (same-origin iframes, chainable), and append " >> nth=N" to pick the Nth match.';
+const MOD_PROPS = {
+  shiftKey: { type: 'boolean', description: 'Hold Shift during the action (e.g. range select)' },
+  ctrlKey: { type: 'boolean', description: 'Hold Ctrl during the action (e.g. multi-select, open in new tab)' },
+  altKey: { type: 'boolean', description: 'Hold Alt/Option during the action (e.g. duplicate-drag in design tools)' },
+  metaKey: { type: 'boolean', description: 'Hold Meta/Cmd during the action' }
+};
+const TRUSTED_PROP = { type: 'boolean', description: 'Use real browser-level input via the DevTools protocol (isTrusted events, real pointer capture and hit-testing). Default true; set false to force the legacy synthetic DOM events.' };
+const FOCUS_PROP = { type: 'boolean', description: 'Real input can only reach a visible tab. If the target tab is hidden, true brings it to front first; default false keeps your focus (clicks/keys then use synthetic events, gestures fail with TAB_HIDDEN).' };
+const DROP_MIME = {
+  '.png': 'image/png', '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.gif': 'image/gif', '.webp': 'image/webp', '.svg': 'image/svg+xml',
+  '.pdf': 'application/pdf', '.txt': 'text/plain', '.csv': 'text/csv', '.json': 'application/json', '.md': 'text/markdown', '.html': 'text/html',
+  '.zip': 'application/zip', '.mp4': 'video/mp4', '.mov': 'video/quicktime', '.webm': 'video/webm', '.mp3': 'audio/mpeg', '.wav': 'audio/wav',
+  '.doc': 'application/msword', '.docx': 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+  '.xls': 'application/vnd.ms-excel', '.xlsx': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+  '.ppt': 'application/vnd.ms-powerpoint', '.pptx': 'application/vnd.openxmlformats-officedocument.presentationml.presentation'
+};
 
 const server = new Server(
   {
@@ -483,30 +510,56 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
       },
       {
         name: 'click_element',
-        description: 'Clicks an element by CSS selector with real (trusted) browser input, so it also works on canvas apps and strict UI frameworks. Waits up to timeoutMs for the element and scrolls it into view; falls back to a direct synthetic click if the element is covered by another element or the debugger is unavailable.',
+        description: 'Clicks an element with real (trusted) browser input, so it also works on canvas apps and strict UI frameworks. Waits up to timeoutMs, scrolls it into view (also inside same-origin iframes) and falls back to a direct synthetic click if the element is covered or the debugger is unavailable. Modifier flags give Shift-click range select, Ctrl-click multi-select / open in new tab. ' + SEL_DOC,
         inputSchema: {
           type: 'object',
           properties: {
-            selector: { type: 'string' },
+            selector: { type: 'string', description: 'Element selector. ' + SEL_DOC },
+            button: { type: 'string', enum: ['left', 'middle', 'right'], description: 'Mouse button (default left)' },
+            clicks: { type: 'number', description: '1 = click, 2 = double click, 3 = triple click (default 1)' },
+            ...MOD_PROPS,
             timeoutMs: { type: 'number', description: 'Optional wait timeout in ms (default: 3000)' },
-            trusted: { type: 'boolean', description: 'Use real browser-level input via the DevTools protocol (isTrusted events, real pointer capture and hit-testing). Default true; set false to force the legacy synthetic DOM events.' },
-            focusTab: { type: 'boolean', description: 'Real input can only reach a visible tab. If the target tab is hidden, true brings it to front first; default false keeps your focus and uses synthetic events instead.' },
+            trusted: TRUSTED_PROP,
+            focusTab: FOCUS_PROP,
             tabId: { type: 'number', description: 'Optional target Chrome tab ID' }
           },
           required: ['selector']
         },
       },
       {
-        name: 'type_text',
-        description: 'Types text into an input, textarea or contenteditable. By default it uses React-compatible value setters (replaces the value). Set trusted:true to type with real browser text input (Input.insertText) for editors that ignore programmatic values; append:true keeps the existing text.',
+        name: 'click_text',
+        description: 'Clicks the element showing the given visible text (or aria-label / title / placeholder) without needing a CSS selector, e.g. "Sign in", "Rectangle", "Add to cart". Exact matches and clickable elements (buttons, links, menu items) win; otherwise the most specific element containing the text. Same real-input behaviour as click_element.',
         inputSchema: {
           type: 'object',
           properties: {
-            selector: { type: 'string' },
+            text: { type: 'string', description: 'Visible text to find (case and whitespace insensitive)' },
+            contains: { type: 'boolean', description: 'Rank purely by "contains" instead of preferring exact matches (default false)' },
+            nth: { type: 'number', description: 'Pick the Nth match, 0-based (default 0)' },
+            within: { type: 'string', description: 'Optional iframe chain to search inside, e.g. "iframe#editor" (same-origin)' },
+            button: { type: 'string', enum: ['left', 'middle', 'right'], description: 'Mouse button (default left)' },
+            clicks: { type: 'number', description: '1 = click, 2 = double click, 3 = triple click (default 1)' },
+            ...MOD_PROPS,
+            timeoutMs: { type: 'number', description: 'Optional wait timeout in ms (default: 3000)' },
+            trusted: TRUSTED_PROP,
+            focusTab: FOCUS_PROP,
+            tabId: { type: 'number', description: 'Optional target Chrome tab ID' }
+          },
+          required: ['text']
+        },
+      },
+      {
+        name: 'type_text',
+        description: 'Types text into an input, textarea or contenteditable. Default: React-compatible value setters (replaces the value). trusted:true types with real browser text input (Input.insertText). keystrokes:true types it like a person, one real key event per character with small random delays, for code editors (Monaco, CodeMirror), Google Docs, autocomplete boxes and anything listening to keydown. append:true keeps existing text.',
+        inputSchema: {
+          type: 'object',
+          properties: {
+            selector: { type: 'string', description: 'Field selector (defaults to the focused element). ' + SEL_DOC },
             text: { type: 'string' },
             trusted: { type: 'boolean', description: 'Type via real browser text input instead of value setters (default false for this tool).' },
-            append: { type: 'boolean', description: 'With trusted:true, keep existing text and type at the caret instead of replacing it.' },
-            focusTab: { type: 'boolean', description: 'Real input can only reach a visible tab. If the target tab is hidden, true brings it to front first; default false keeps your focus and uses synthetic events instead.' },
+            keystrokes: { type: 'boolean', description: 'Type character by character with real key events (implies trusted).' },
+            delayMs: { type: 'number', description: 'With keystrokes: average delay between keys in ms (default 35, jittered).' },
+            append: { type: 'boolean', description: 'With trusted/keystrokes: keep existing text and type at the caret instead of replacing it.' },
+            focusTab: FOCUS_PROP,
             timeoutMs: { type: 'number', description: 'Optional wait timeout in ms (default: 3000)' },
             tabId: { type: 'number', description: 'Optional target Chrome tab ID' }
           },
@@ -515,46 +568,104 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
       },
       {
         name: 'press_key',
-        description: 'Presses a key with real (trusted) keyboard input: named keys (Enter, Tab, Escape, Backspace, ArrowDown, Space, F1-F12...) or any single character (letters, digits, symbols, e.g. "r" for an editor shortcut). Add ctrlKey/shiftKey/altKey/metaKey for chords such as Ctrl+A.',
+        description: 'Presses one key or chord with real (trusted) keyboard input, shown in the on-page keystroke HUD. Accepts chord strings like "Ctrl+Shift+P", "Cmd+A", "Alt+F4", "Shift+Tab", "Ctrl++", named keys (Enter, Tab, Escape, Backspace, Delete, Space, Arrow*, Home, End, PageUp/Down, F1-F12) or any single character (e.g. "r" for an editor shortcut). The modifier flags are merged with the chord.',
         inputSchema: {
           type: 'object',
           properties: {
-            key: { type: 'string', description: 'Key name (e.g. "Enter", "Tab", "Escape", "Backspace", "ArrowDown", "Space")' },
-            selector: { type: 'string', description: 'Optional CSS selector of target element (defaults to document.activeElement)' },
-            shiftKey: { type: 'boolean', description: 'Whether Shift key is held down' },
-            ctrlKey: { type: 'boolean', description: 'Whether Ctrl key is held down' },
-            altKey: { type: 'boolean', description: 'Whether Alt key is held down' },
-            metaKey: { type: 'boolean', description: 'Whether Meta/Cmd key is held down' },
-            trusted: { type: 'boolean', description: 'Use real browser-level input via the DevTools protocol (isTrusted events, real pointer capture and hit-testing). Default true; set false to force the legacy synthetic DOM events.' },
-            focusTab: { type: 'boolean', description: 'Real input can only reach a visible tab. If the target tab is hidden, true brings it to front first; default false keeps your focus and uses synthetic events instead.' },
+            key: { type: 'string', description: 'Key or chord, e.g. "Enter", "a", "Ctrl+Shift+P"' },
+            selector: { type: 'string', description: 'Optional element to focus first (defaults to the focused element). ' + SEL_DOC },
+            ...MOD_PROPS,
+            trusted: TRUSTED_PROP,
+            focusTab: FOCUS_PROP,
             tabId: { type: 'number', description: 'Optional target Chrome tab ID' }
           },
           required: ['key']
         },
       },
       {
-        name: 'mouse_action',
-        description: 'Mouse controller with real (trusted) browser input: clicks, right-clicks, double clicks, hover moves, wheel scrolls and drags, at viewport coordinates or on selectors. Drags work on canvas apps (design editors, chess boards, maps) and on native HTML5 drag-and-drop (draggable elements, kanban cards). The overlay cursor shows each action.',
+        name: 'press_keys',
+        description: 'Presses a sequence of keys / chords in order with real keyboard input, e.g. ["Ctrl+A", "Delete"] or ["ArrowDown", "ArrowDown", "Enter"]. Every entry is validated before anything is pressed. Optional selector focuses a field first. Each chord shows in the on-page keystroke HUD.',
         inputSchema: {
           type: 'object',
           properties: {
-            action: { type: 'string', enum: ['click', 'dblclick', 'move', 'drag', 'scroll'], description: 'Mouse action type' },
+            keys: { type: 'array', items: { type: 'string' }, description: 'Keys or chords, pressed in order' },
+            selector: { type: 'string', description: 'Optional element to focus first. ' + SEL_DOC },
+            delayMs: { type: 'number', description: 'Pause between keys in ms (default 60)' },
+            focusTab: FOCUS_PROP,
+            tabId: { type: 'number', description: 'Optional target Chrome tab ID' }
+          },
+          required: ['keys']
+        },
+      },
+      {
+        name: 'mouse_action',
+        description: 'Mouse controller with real (trusted) browser input, at viewport coordinates or on selectors, shown by the overlay cursor. Actions: click, dblclick, tripleclick (select a paragraph), move, hover (move + dwell for tooltips/menus), longpress (press and hold), drag, path (freehand stroke through points: signatures, pen tools, whiteboards, curved sliders) and scroll (wheel). Drags work on canvas apps and native HTML5 drag-and-drop; with dropSelector an off-screen target is reached by holding at the viewport edge and auto-scrolling. Modifier flags give Shift/Ctrl/Alt clicks and drags.',
+        inputSchema: {
+          type: 'object',
+          properties: {
+            action: { type: 'string', enum: ['click', 'dblclick', 'tripleclick', 'move', 'hover', 'longpress', 'drag', 'path', 'scroll'], description: 'Mouse action type' },
             x: { type: 'number', description: 'Target X coordinate (viewport pixels)' },
             y: { type: 'number', description: 'Target Y coordinate (viewport pixels)' },
-            endX: { type: 'number', description: 'End X coordinate for drag action' },
-            endY: { type: 'number', description: 'End Y coordinate for drag action' },
-            selector: { type: 'string', description: 'Optional CSS selector of target element' },
-            dropSelector: { type: 'string', description: 'Optional CSS selector of drop destination element for drag action' },
-            steps: { type: 'number', description: 'Number of intermediate move interpolation steps for drag (default: 15)' },
+            endX: { type: 'number', description: 'End X coordinate for drag' },
+            endY: { type: 'number', description: 'End Y coordinate for drag' },
+            selector: { type: 'string', description: 'Target element (instead of x/y). ' + SEL_DOC },
+            dropSelector: { type: 'string', description: 'Drop destination for drag; off-screen targets are reached by auto-scrolling.' },
+            points: { type: 'array', items: { type: 'array', items: { type: 'number' } }, description: 'For path: [[x, y], ...] viewport points, at least 2' },
+            smooth: { type: 'boolean', description: 'For path: draw a smooth curve through the points (default true when 3+ points)' },
+            hold: { type: 'boolean', description: 'For path: hold the button down while moving (default true); false just traces the path' },
+            holdMs: { type: 'number', description: 'For longpress: how long to hold in ms (default 800)' },
+            dwellMs: { type: 'number', description: 'For hover: how long to stay in ms (default 600)' },
+            autoScroll: { type: 'boolean', description: 'For drag with dropSelector: auto-scroll to an off-screen target (default true)' },
+            steps: { type: 'number', description: 'Interpolation steps: per drag (default 20) or per path segment (default 8)' },
+            stepDelayMs: { type: 'number', description: 'Delay between steps in ms (default 16 for drag, 12 for path)' },
             button: { type: 'string', enum: ['left', 'middle', 'right'], description: 'Mouse button (default: left)' },
             deltaX: { type: 'number', description: 'Horizontal scroll delta for scroll action' },
             deltaY: { type: 'number', description: 'Vertical scroll delta for scroll action' },
-            stepDelayMs: { type: 'number', description: 'Delay between drag steps in ms (default 16, about one frame).' },
-            trusted: { type: 'boolean', description: 'Use real browser-level input via the DevTools protocol (isTrusted events, real pointer capture and hit-testing). Default true; set false to force the legacy synthetic DOM events.' },
-            focusTab: { type: 'boolean', description: 'Real input can only reach a visible tab. If the target tab is hidden, true brings it to front first; default false keeps your focus and uses synthetic events instead.' },
+            ...MOD_PROPS,
+            trusted: TRUSTED_PROP,
+            focusTab: FOCUS_PROP,
             tabId: { type: 'number', description: 'Optional target Chrome tab ID' }
           },
           required: ['action']
+        },
+      },
+      {
+        name: 'touch_action',
+        description: 'Real touch input via the DevTools protocol: tap, doubletap, longpress, swipe (x,y to endX,endY) and pinch (two fingers around x,y; scale > 1 zooms in, < 1 zooms out). Touch emulation is switched on just for the gesture so touch-only handlers respond. For mobile sites, maps, carousels and swipeable UIs.',
+        inputSchema: {
+          type: 'object',
+          properties: {
+            action: { type: 'string', enum: ['tap', 'doubletap', 'longpress', 'swipe', 'pinch'], description: 'Gesture' },
+            x: { type: 'number', description: 'X (viewport px); for pinch the centre' },
+            y: { type: 'number', description: 'Y (viewport px); for pinch the centre' },
+            selector: { type: 'string', description: 'Target element instead of x/y. ' + SEL_DOC },
+            endX: { type: 'number', description: 'Swipe end X' },
+            endY: { type: 'number', description: 'Swipe end Y' },
+            scale: { type: 'number', description: 'Pinch scale factor (default 2)' },
+            distance: { type: 'number', description: 'Pinch starting finger distance in px (default 120)' },
+            holdMs: { type: 'number', description: 'Longpress duration in ms (default 800)' },
+            steps: { type: 'number', description: 'Move steps for swipe/pinch (default 12)' },
+            stepDelayMs: { type: 'number', description: 'Delay between steps in ms (default 16)' },
+            focusTab: FOCUS_PROP,
+            tabId: { type: 'number', description: 'Optional target Chrome tab ID' }
+          },
+          required: ['action']
+        },
+      },
+      {
+        name: 'drop_files',
+        description: 'Drops real files from disk onto a drop zone that has no <input type=file> (Gmail/Drive-style uploaders, react-dropzone, Dropzone.js) by firing dragenter / dragover / drop with a DataTransfer holding the files. result.accepted is true when the page handled the drop. Use upload_file instead when there is a file input.',
+        inputSchema: {
+          type: 'object',
+          properties: {
+            filePaths: { type: 'array', items: { type: 'string' }, description: 'Absolute (or cwd-relative) file paths, 25 MB total max' },
+            selector: { type: 'string', description: 'Drop zone element. ' + SEL_DOC },
+            x: { type: 'number', description: 'Drop point X instead of a selector' },
+            y: { type: 'number', description: 'Drop point Y instead of a selector' },
+            timeoutMs: { type: 'number', description: 'Optional wait for the drop zone in ms (default 3000)' },
+            tabId: { type: 'number', description: 'Optional target Chrome tab ID' }
+          },
+          required: ['filePaths']
         },
       },
       {
@@ -933,20 +1044,37 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         result = await askExtension('WAIT_FOR_CLICK');
         break;
       case 'click_element':
+      case 'click_text': {
+        let selector = args.selector;
+        if (request.params.name === 'click_text') {
+          if (!args.text) throw new Error('click_text needs "text".');
+          selector = (args.contains ? 'text*=' : 'text=') + String(args.text);
+          if (args.within) selector = String(args.within) + ' >>> ' + selector;
+          if (Number.isInteger(args.nth)) selector += ` >> nth=${args.nth}`;
+        }
         result = await askExtension('CLICK_ELEMENT', {
-          selector: args.selector,
+          selector,
+          button: args.button,
+          clicks: args.clicks,
+          shiftKey: args.shiftKey,
+          ctrlKey: args.ctrlKey,
+          altKey: args.altKey,
+          metaKey: args.metaKey,
           timeoutMs: args.timeoutMs,
           trusted: args.trusted,
           focusTab: args.focusTab,
           tabId: args.tabId
         });
         break;
+      }
       case 'type_text':
         result = await askExtension('TYPE_TEXT', {
           selector: args.selector,
           text: args.text,
           timeoutMs: args.timeoutMs,
           trusted: args.trusted,
+          keystrokes: args.keystrokes,
+          delayMs: args.delayMs,
           focusTab: args.focusTab,
           append: args.append,
           tabId: args.tabId
@@ -965,6 +1093,15 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
           tabId: args.tabId
         });
         break;
+      case 'press_keys':
+        result = await askExtension('PRESS_KEYS', {
+          keys: args.keys,
+          selector: args.selector,
+          delayMs: args.delayMs,
+          focusTab: args.focusTab,
+          tabId: args.tabId
+        });
+        break;
       case 'mouse_action':
         result = await askExtension('MOUSE_ACTION', {
           action: args.action,
@@ -974,16 +1111,58 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
           endY: args.endY,
           selector: args.selector,
           dropSelector: args.dropSelector,
+          points: args.points,
+          smooth: args.smooth,
+          hold: args.hold,
+          holdMs: args.holdMs,
+          dwellMs: args.dwellMs,
+          autoScroll: args.autoScroll,
           steps: args.steps,
+          stepDelayMs: args.stepDelayMs,
           button: args.button,
           deltaX: args.deltaX,
           deltaY: args.deltaY,
-          stepDelayMs: args.stepDelayMs,
+          shiftKey: args.shiftKey,
+          ctrlKey: args.ctrlKey,
+          altKey: args.altKey,
+          metaKey: args.metaKey,
           trusted: args.trusted,
           focusTab: args.focusTab,
           tabId: args.tabId
         });
         break;
+      case 'touch_action':
+        result = await askExtension('TOUCH_ACTION', {
+          action: args.action,
+          x: args.x,
+          y: args.y,
+          selector: args.selector,
+          endX: args.endX,
+          endY: args.endY,
+          scale: args.scale,
+          distance: args.distance,
+          holdMs: args.holdMs,
+          steps: args.steps,
+          stepDelayMs: args.stepDelayMs,
+          focusTab: args.focusTab,
+          tabId: args.tabId
+        });
+        break;
+      case 'drop_files': {
+        const list = Array.isArray(args.filePaths) ? args.filePaths : (args.filePaths ? [args.filePaths] : []);
+        if (!list.length) throw new Error('drop_files needs filePaths, e.g. ["C:/Users/me/photo.png"].');
+        let total = 0;
+        const files = list.map((fp) => {
+          const abs = path.isAbsolute(fp) ? fp : path.resolve(process.cwd(), fp);
+          if (!fs.existsSync(abs) || !fs.statSync(abs).isFile()) throw new Error(`File not found: ${abs}`);
+          const buf = fs.readFileSync(abs);
+          total += buf.length;
+          if (total > 25 * 1024 * 1024) throw new Error('drop_files is limited to 25 MB in total.');
+          return { name: path.basename(abs), mimeType: DROP_MIME[path.extname(abs).toLowerCase()] || 'application/octet-stream', base64: buf.toString('base64') };
+        });
+        result = await askExtension('DROP_FILES', { files, selector: args.selector, x: args.x, y: args.y, timeoutMs: args.timeoutMs, tabId: args.tabId });
+        break;
+      }
       case 'upload_file': {
         const inputPath = args.filePath;
         const selector = args.selector || 'input[type="file"]';

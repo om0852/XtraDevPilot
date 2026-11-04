@@ -3,6 +3,8 @@
 // WebSocket, drives the server over MCP stdio, and asserts on what the extension
 // actually receives. The real extension never dials this port, so it's isolated.
 import { spawn } from 'node:child_process';
+import fs from 'node:fs';
+import os from 'node:os';
 import { createRequire } from 'node:module';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -119,6 +121,49 @@ try {
   await callTool('get_tab_info', {});
   m = lastOf('GET_TAB_INFO');
   check('no stray subAction on commands without one', m && !('subAction' in m), m);
+
+  // --- power-up tools -------------------------------------------------------
+  check('schema has click_text / press_keys / touch_action / drop_files', ['click_text', 'press_keys', 'touch_action', 'drop_files'].every((n) => tools[n]), Object.keys(tools).filter((n) => /text|keys|touch|drop/.test(n)));
+  const maEnum = (tools.mouse_action.inputSchema.properties.action || {}).enum || [];
+  check('mouse_action enum has tripleclick/hover/longpress/path', ['tripleclick', 'hover', 'longpress', 'path'].every((a) => maEnum.includes(a)), maEnum);
+  check('mouse_action has points/holdMs/dwellMs/autoScroll/modifiers', ['points', 'holdMs', 'dwellMs', 'autoScroll', 'shiftKey', 'ctrlKey', 'altKey', 'metaKey'].every((k) => props('mouse_action').includes(k)), props('mouse_action'));
+  check('type_text has keystrokes/delayMs', ['keystrokes', 'delayMs'].every((k) => props('type_text').includes(k)), props('type_text'));
+  check('click_element has clicks/button/modifiers', ['clicks', 'button', 'shiftKey', 'ctrlKey'].every((k) => props('click_element').includes(k)), props('click_element'));
+
+  await callTool('click_text', { text: 'Sign in' });
+  check('click_text -> CLICK_ELEMENT selector text=Sign in', lastOf('CLICK_ELEMENT').selector === 'text=Sign in', lastOf('CLICK_ELEMENT').selector);
+  await callTool('click_text', { text: 'Save', contains: true, nth: 1, within: 'iframe#ed', ctrlKey: true, clicks: 2 });
+  m = lastOf('CLICK_ELEMENT');
+  check('click_text contains/nth/within/modifiers/clicks', m.selector === 'iframe#ed >>> text*=Save >> nth=1' && m.ctrlKey === true && m.clicks === 2, m);
+
+  await callTool('press_keys', { keys: ['Ctrl+A', 'Delete'], delayMs: 10 });
+  m = lastOf('PRESS_KEYS');
+  check('press_keys passes keys array + delayMs', Array.isArray(m.keys) && m.keys.join('|') === 'Ctrl+A|Delete' && m.delayMs === 10, m);
+
+  await callTool('mouse_action', { action: 'path', points: [[1, 2], [3, 4], [5, 6]], smooth: false, shiftKey: true });
+  m = lastOf('MOUSE_ACTION');
+  check('mouse_action path: subAction/points/smooth/shiftKey', m.subAction === 'path' && m.points.length === 3 && m.smooth === false && m.shiftKey === true, m);
+  await callTool('mouse_action', { action: 'longpress', x: 5, y: 5, holdMs: 900 });
+  check('mouse_action longpress holdMs', lastOf('MOUSE_ACTION').subAction === 'longpress' && lastOf('MOUSE_ACTION').holdMs === 900, lastOf('MOUSE_ACTION'));
+
+  await callTool('type_text', { selector: '#c', text: 'abc', keystrokes: true, delayMs: 5 });
+  m = lastOf('TYPE_TEXT');
+  check('type_text keystrokes/delayMs passed', m.keystrokes === true && m.delayMs === 5, m);
+
+  await callTool('touch_action', { action: 'pinch', x: 100, y: 120, scale: 0.5 });
+  m = lastOf('TOUCH_ACTION');
+  check('touch_action pinch: subAction/scale', m.subAction === 'pinch' && m.scale === 0.5 && m.x === 100, m);
+
+  const tmp = path.join(os.tmpdir(), `xdp-drop-${Date.now()}.txt`);
+  fs.writeFileSync(tmp, 'hello drop');
+  await callTool('drop_files', { filePaths: [tmp], selector: '#zone' });
+  m = lastOf('DROP_FILES');
+  const f0 = m && m.files && m.files[0];
+  check('drop_files reads file -> name/mime/base64', f0 && f0.name === path.basename(tmp) && f0.mimeType === 'text/plain' && Buffer.from(f0.base64, 'base64').toString() === 'hello drop' && m.selector === '#zone', f0 && { name: f0.name, mimeType: f0.mimeType });
+  fs.unlinkSync(tmp);
+  const before = received.length;
+  const missing = await callTool('drop_files', { filePaths: ['C:/definitely/not/here.png'] });
+  check('drop_files missing file errors before reaching the extension', received.length === before && /File not found/.test(textOf(missing)), textOf(missing).slice(0, 120));
 
   // Structured error mapping for the new hidden-tab failure
   replyError = 'Tab is hidden: Chrome only delivers real drag input to a visible tab. Bring the tab to front or pass focusTab:true.';
