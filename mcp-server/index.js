@@ -1117,15 +1117,25 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       case 'extract_api_endpoints': {
         const inputPath = args.inputPath || './downloaded-sources';
         const scanRes = scanEndpoints(inputPath);
-        if (args.outputPath) {
-          const resolvedOut = path.resolve(process.cwd(), args.outputPath);
-          const dir = path.dirname(resolvedOut);
+        // Always persist the full spec + endpoint catalog to disk so the (potentially huge)
+        // result never floods the model's context. Default next to the input if no path given.
+        const outPath = args.outputPath
+          ? path.resolve(process.cwd(), args.outputPath)
+          : path.resolve(process.cwd(), 'xtradevpilot-openapi.json');
+        const catalogPath = outPath.replace(/\.json$/i, '') + '.endpoints.json';
+        try {
+          const dir = path.dirname(outPath);
           if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
-          fs.writeFileSync(resolvedOut, JSON.stringify(scanRes.openApiSpec, null, 2), 'utf8');
-        }
+          fs.writeFileSync(outPath, JSON.stringify(scanRes.openApiSpec, null, 2), 'utf8');
+          fs.writeFileSync(catalogPath, JSON.stringify(scanRes.endpoints, null, 2), 'utf8');
+        } catch (e) {}
+        // Return a concise summary only — full data is on disk.
         result = {
-          ...scanRes,
-          savedSpecTo: args.outputPath ? path.resolve(process.cwd(), args.outputPath) : undefined
+          status: 'success',
+          totalEndpoints: scanRes.totalEndpoints,
+          summary: scanRes.summary,
+          savedSpecTo: outPath,
+          savedEndpointsTo: catalogPath
         };
         break;
       }

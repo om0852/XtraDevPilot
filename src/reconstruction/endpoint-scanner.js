@@ -31,32 +31,52 @@ export function scanEndpoints(inputDirOrFile) {
 
   const endpointsMap = new Map();
 
+  // Static assets are never API endpoints. Covers scripts, styles, fonts, images, media, maps.
+  const STATIC_EXT = /\.(js|mjs|cjs|map|wasm|css|png|jpe?g|gif|svg|ico|webp|avif|bmp|woff2?|ttf|eot|otf|mp4|webm|mov|mp3|wav|ogg|pdf|txt|xml)(\?.*)?$/i;
+  const STATIC_MIME = /^(application\/javascript|text\/javascript|text\/css|font\/|image\/(?!svg\+xml.*json)|video\/|audio\/)/i;
+  // Positive signal that a path is a real API even if other heuristics are unsure.
+  const API_PATH = /\/(api|v[0-9]+|graphql|gql|auth|oauth|rest|rpc|webhook|session|track(?:ing)?|event|collect|beacon|query|search|feed|graph)(\b|\/|$)/i;
+
+  function hostOf(u) {
+    try { return new URL(u).host; } catch (e) { return ''; }
+  }
+  // Approximate registrable domain (eTLD+1) for first/third-party comparison.
+  function regDomain(host) {
+    if (!host) return '';
+    const parts = host.split('.').filter(Boolean);
+    return parts.length <= 2 ? host : parts.slice(-2).join('.');
+  }
+
   function registerEndpoint(urlPath, method = 'GET', sourceFile = '', details = {}) {
     if (!urlPath || typeof urlPath !== 'string') return;
     let clean = urlPath.trim();
     if (clean.startsWith('`') || clean.startsWith('"') || clean.startsWith("'")) {
       clean = clean.slice(1, -1);
     }
-    // Filter out common asset paths
-    if (/\.(png|jpe?g|gif|svg|woff2?|ttf|css|ico)(\?.*)?$/i.test(clean)) return;
     if (clean.length < 3 || clean === '/' || clean.startsWith('http://www.w3.org')) return;
 
-    // Normalize URL
+    const isAbsolute = clean.startsWith('http://') || clean.startsWith('https://');
     let pathKey = clean;
+    let host = details.host || '';
     try {
-      if (clean.startsWith('http://') || clean.startsWith('https://')) {
-        const u = new URL(clean);
-        pathKey = u.pathname;
-      }
+      if (isAbsolute) { const u = new URL(clean); pathKey = u.pathname; host = u.host; }
     } catch (e) {}
 
-    const key = `${method.toUpperCase()} ${pathKey}`;
+    // Reject static assets by extension or response content-type, unless the path
+    // clearly looks like an API (e.g. a JSON API served with a generic type).
+    const mime = (details.mime || '').toLowerCase();
+    const looksApi = API_PATH.test(pathKey) || /json|graphql/.test(mime) || method.toUpperCase() !== 'GET';
+    if (!looksApi && (STATIC_EXT.test(pathKey) || (mime && STATIC_MIME.test(mime)))) return;
+
+    const key = `${method.toUpperCase()} ${host}${pathKey}`;
     if (!endpointsMap.has(key)) {
       endpointsMap.set(key, {
         method: method.toUpperCase(),
         path: pathKey,
-        fullUrl: clean.startsWith('http') ? clean : undefined,
-        sources: [sourceFile],
+        host,
+        fullUrl: isAbsolute ? clean : undefined,
+        contentType: mime || undefined,
+        sources: sourceFile ? [sourceFile] : [],
         parameters: details.parameters || [],
         headers: details.headers || [],
         occurrences: 1
@@ -64,7 +84,7 @@ export function scanEndpoints(inputDirOrFile) {
     } else {
       const existing = endpointsMap.get(key);
       existing.occurrences++;
-      if (!existing.sources.includes(sourceFile)) existing.sources.push(sourceFile);
+      if (sourceFile && !existing.sources.includes(sourceFile)) existing.sources.push(sourceFile);
     }
   }
 
@@ -84,7 +104,8 @@ export function scanEndpoints(inputDirOrFile) {
               const method = req.method || 'GET';
               const queryParams = (req.queryString || []).map(q => q.name);
               const headers = (req.headers || []).map(h => h.name).filter(h => /auth|api|token|session|csrf/i.test(h));
-              registerEndpoint(req.url, method, relPath, { parameters: queryParams, headers });
+              const mime = ((entry.response && entry.response.content && entry.response.content.mimeType) || '').split(';')[0];
+              registerEndpoint(req.url, method, relPath, { parameters: queryParams, headers, mime });
             }
           }
           continue;
@@ -119,6 +140,40 @@ export function scanEndpoints(inputDirOrFile) {
 
   const endpointsList = Array.from(endpointsMap.values());
 
+  // Determine the primary (first-party) host: the registrable domain hosting the most endpoints.
+  const domainCounts = new Map();
+  for (const ep of endpointsList) {
+    const rd = regDomain(ep.host);
+    if (rd) domainCounts.set(rd, (domainCounts.get(rd) || 0) + 1);
+  }
+  const primaryDomain = [...domainCounts.entries()].sort((a, b) => b[1] - a[1])[0]?.[0] || '';
+  for (const ep of endpointsList) {
+    ep.firstParty = !!ep.host && regDomain(ep.host) === primaryDomain;
+  }
+
+  // Host / server summary
+  const hostCounts = new Map();
+  for (const ep of endpointsList) {
+    if (ep.host) hostCounts.set(ep.host, (hostCounts.get(ep.host) || 0) + ep.occurrences);
+  }
+  const topHosts = [...hostCounts.entries()].sort((a, b) => b[1] - a[1]).map(([host, count]) => ({ host, count }));
+  const servers = [...new Set(endpointsList.filter(e => e.host).map(e => `https://${e.host}`))].map(url => ({ url }));
+
+  const firstParty = endpointsList.filter(e => e.firstParty);
+  const methods = {};
+  for (const ep of endpointsList) methods[ep.method] = (methods[ep.method] || 0) + 1;
+
+  const summary = {
+    totalEndpoints: endpointsList.length,
+    firstPartyCount: firstParty.length,
+    thirdPartyCount: endpointsList.length - firstParty.length,
+    hostCount: hostCounts.size,
+    primaryDomain,
+    methods,
+    topHosts: topHosts.slice(0, 15),
+    firstPartyEndpoints: firstParty.slice(0, 50).map(e => `${e.method} ${e.host}${e.path}`)
+  };
+
   // Generate OpenAPI 3.0 draft specification
   const openApiSpec = {
     openapi: "3.0.0",
@@ -127,6 +182,7 @@ export function scanEndpoints(inputDirOrFile) {
       version: "1.0.0",
       description: "Automatically extracted from client-side bundles and network captures."
     },
+    servers,
     paths: {}
   };
 
@@ -153,6 +209,7 @@ export function scanEndpoints(inputDirOrFile) {
 
   return {
     totalEndpoints: endpointsList.length,
+    summary,
     endpoints: endpointsList,
     openApiSpec
   };
