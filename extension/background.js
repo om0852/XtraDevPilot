@@ -106,7 +106,8 @@ function connectWebSocket() {
       if (!message.id || !message.action) return;
 
       const { id, action, ...payload } = message;
-      
+      automationStopped = false; // a new command from the IDE resumes automation
+
       try {
         let result = await handleAction(action, payload);
         socket.send(JSON.stringify({ id, result }));
@@ -231,10 +232,6 @@ async function handleAction(action, payload = {}) {
     case 'BATCH_EXECUTE':
     case 'HIGHLIGHT_ELEMENT':
     case 'WAIT_FOR_CLICK':
-    case 'CLICK_ELEMENT':
-    case 'TYPE_TEXT':
-    case 'PRESS_KEY':
-    case 'MOUSE_ACTION':
     case 'UPLOAD_FILE':
     case 'BATCH_FILL_FORM':
     case 'WAIT_FOR_ELEMENT':
@@ -254,6 +251,11 @@ async function handleAction(action, payload = {}) {
     case 'RUN_SECURITY_AUDIT':
     case 'RUN_ACCESSIBILITY_AUDIT':
       return await askContentScript(action, payload);
+    case 'CLICK_ELEMENT':
+    case 'TYPE_TEXT':
+    case 'PRESS_KEY':
+    case 'MOUSE_ACTION':
+      return await runInput(action, payload);
     case 'EXECUTE_SCRIPT':
       return await executeScriptWithFallback(payload);
     case 'DOWNLOAD_PAGE_HTML':
@@ -265,11 +267,13 @@ async function handleAction(action, payload = {}) {
       const initialNetLogCount = (networkLogsByTab[tabId] || []).length;
 
       let actionResult = null;
-      const actionType = (payload.action || 'click').toLowerCase();
+      // The sub-action travels as `subAction` (a payload key named `action` is clobbered
+      // by the command name in transit). Older senders lose it entirely, so infer.
+      const actionType = String(payload.subAction || payload.traceAction || (payload.text ? 'type' : 'click')).toLowerCase();
       if (actionType === 'click') {
-        actionResult = await askContentScript('CLICK_ELEMENT', { selector: payload.selector, timeoutMs: 3000, tabId });
+        actionResult = await runInput('CLICK_ELEMENT', { selector: payload.selector, timeoutMs: 3000, tabId });
       } else if (actionType === 'type') {
-        actionResult = await askContentScript('TYPE_TEXT', { selector: payload.selector, text: payload.text || '', timeoutMs: 3000, tabId });
+        actionResult = await runInput('TYPE_TEXT', { selector: payload.selector, text: payload.text || '', timeoutMs: 3000, tabId });
       }
 
       const waitMs = Math.min(Math.max(payload.waitDurationMs || 1500, 200), 10000);
@@ -620,33 +624,445 @@ async function executeScriptWithFallback(payload) {
   }
 }
 
+// =====================================================================
+// Trusted input via the Chrome DevTools Protocol
+// ---------------------------------------------------------------------
+// Events made with element.dispatchEvent() are isTrusted:false, carry fake
+// pointer ids (so setPointerCapture() throws) and skip browser hit-testing,
+// which is why canvas apps (design editors, chess boards, maps) ignore them.
+// CDP Input.* injects input at the browser input layer instead: real pointer
+// ids, real hit-testing, isTrusted:true. Synthetic dispatch stays as the
+// fallback whenever the debugger can't attach.
+// =====================================================================
+const DBG_IDLE_MS = 20000;        // keep the session warm between actions
+const CURSOR_LEAD_MS = 110;       // let the overlay cursor glide before a click lands
+const dbgSession = { tabId: null, attaching: null, idleTimer: null, dragData: null };
+let automationStopped = false;    // set by the in-page Stop badge
+let inputChain = Promise.resolve();
+
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+
+function dbgRaw(tabId, method, params) {
+  return new Promise((resolve, reject) => {
+    chrome.debugger.sendCommand({ tabId }, method, params || {}, (r) =>
+      chrome.runtime.lastError ? reject(new Error(chrome.runtime.lastError.message)) : resolve(r));
+  });
+}
+
+function dbgTouch() {
+  clearTimeout(dbgSession.idleTimer);
+  dbgSession.idleTimer = setTimeout(() => { dbgDetach(); }, DBG_IDLE_MS);
+}
+
+async function dbgDetach() {
+  const tabId = dbgSession.tabId;
+  clearTimeout(dbgSession.idleTimer);
+  dbgSession.tabId = null;
+  dbgSession.dragData = null;
+  if (tabId == null) return;
+  await new Promise((res) => chrome.debugger.detach({ tabId }, () => { void chrome.runtime.lastError; res(); }));
+}
+
+// Attach once per working tab and reuse the session for every input, screenshot
+// and CSP-fallback eval: one steady "debugging" banner instead of a flicker per
+// action, and no attach round-trip on the hot path.
+async function dbgEnsure(tabId) {
+  if (dbgSession.tabId === tabId) {
+    if (dbgSession.attaching) await dbgSession.attaching;
+    dbgTouch();
+    return;
+  }
+  if (dbgSession.tabId != null) await dbgDetach();
+  dbgSession.tabId = tabId;
+  const attachOnce = () => new Promise((res, rej) => chrome.debugger.attach({ tabId }, '1.3', () => {
+    const err = chrome.runtime.lastError;
+    if (!err) return res();
+    // A previous service-worker instance may still own the session: adopt it.
+    if (/already attached/i.test(err.message)) {
+      return dbgRaw(tabId, 'Runtime.evaluate', { expression: '1' }).then(res, () => rej(new Error(err.message)));
+    }
+    rej(new Error(err.message));
+  }));
+  dbgSession.attaching = attachOnce().catch(async (e) => {
+    await sleep(150);                // the first attach right after a load can race; retry once
+    return attachOnce().catch(() => { throw e; });
+  });
+  try {
+    await dbgSession.attaching;
+  } catch (e) {
+    dbgSession.tabId = null;
+    e.attachFailed = true;           // nothing was sent yet: safe to fall back to synthetic input
+    throw e;
+  } finally {
+    dbgSession.attaching = null;
+  }
+  dbgTouch();
+}
+
+async function dbgSend(tabId, method, params) {
+  await dbgEnsure(tabId);
+  try {
+    return await dbgRaw(tabId, method, params);
+  } catch (e) {
+    // Session went stale (navigation, DevTools took over): reattach once.
+    if (/not attached|detached|no target/i.test(e.message)) {
+      dbgSession.tabId = null;
+      await dbgEnsure(tabId);
+      return await dbgRaw(tabId, method, params);
+    }
+    throw e;
+  }
+}
+
+chrome.debugger.onDetach.addListener((src) => {
+  if (src.tabId === dbgSession.tabId) {
+    clearTimeout(dbgSession.idleTimer);
+    dbgSession.tabId = null;
+    dbgSession.dragData = null;
+  }
+});
+
+chrome.debugger.onEvent.addListener((src, method, params) => {
+  // Fired when a trusted mouse drag starts a native HTML5 drag (draggable=true).
+  if (method === 'Input.dragIntercepted' && src.tabId === dbgSession.tabId) {
+    dbgSession.dragData = params && params.data;
+  }
+});
+
+// Serialize input sequences so two commands can't interleave a press/release.
+function serializeInput(fn) {
+  const run = inputChain.then(fn, fn);
+  inputChain = run.catch(() => {});
+  return run;
+}
+
+// Fire-and-forget: move the in-page overlay cursor (purely visual).
+function moveCursor(tabId, x, y, state) {
+  try {
+    chrome.tabs.sendMessage(tabId, { action: 'CURSOR', x: Math.round(x), y: Math.round(y), state }, () => { void chrome.runtime.lastError; });
+  } catch (e) {}
+}
+
+function modifierMask(p = {}) {
+  return (p.altKey ? 1 : 0) | (p.ctrlKey ? 2 : 0) | (p.metaKey ? 4 : 0) | (p.shiftKey ? 8 : 0);
+}
+
+const MOUSE_BUTTONS = { left: { name: 'left', mask: 1 }, right: { name: 'right', mask: 2 }, middle: { name: 'middle', mask: 4 } };
+
+// `action` on the wire is the command name, so the mouse sub-action travels as
+// `subAction` (or `mouseAction`). Older bridges drop it entirely; infer intent
+// from the other fields and default to a harmless move, never a click.
+function resolveMouseAction(p = {}) {
+  const explicit = p.subAction || p.mouseAction;
+  if (explicit) return String(explicit).toLowerCase();
+  if (p.endX != null || p.endY != null || p.dropSelector) return 'drag';
+  if (p.deltaX || p.deltaY) return 'scroll';
+  return 'move';
+}
+
+const SPECIAL_KEYS = {
+  Enter: { code: 'Enter', vk: 13, text: '\r' }, Tab: { code: 'Tab', vk: 9 }, Escape: { code: 'Escape', vk: 27 },
+  Backspace: { code: 'Backspace', vk: 8 }, Delete: { code: 'Delete', vk: 46 }, Space: { key: ' ', code: 'Space', vk: 32, text: ' ' },
+  ArrowUp: { code: 'ArrowUp', vk: 38 }, ArrowDown: { code: 'ArrowDown', vk: 40 }, ArrowLeft: { code: 'ArrowLeft', vk: 37 }, ArrowRight: { code: 'ArrowRight', vk: 39 },
+  Home: { code: 'Home', vk: 36 }, End: { code: 'End', vk: 35 }, PageUp: { code: 'PageUp', vk: 33 }, PageDown: { code: 'PageDown', vk: 34 },
+  Shift: { code: 'ShiftLeft', vk: 16 }, Control: { code: 'ControlLeft', vk: 17 }, Alt: { code: 'AltLeft', vk: 18 }, Meta: { code: 'MetaLeft', vk: 91 },
+  Insert: { code: 'Insert', vk: 45 }
+};
+
+function keyDescriptor(key, shift) {
+  if (key === ' ') key = 'Space';
+  if (SPECIAL_KEYS[key]) { const k = SPECIAL_KEYS[key]; return { key: k.key || key, code: k.code, vk: k.vk, text: k.text }; }
+  const f = /^F([1-9]|1[0-2])$/.exec(key);
+  if (f) return { key, code: key, vk: 111 + Number(f[1]) };
+  if (key.length === 1) {
+    const ch = key;
+    if (/[a-z]/i.test(ch)) { const out = shift ? ch.toUpperCase() : ch; return { key: out, code: 'Key' + ch.toUpperCase(), vk: ch.toUpperCase().charCodeAt(0), text: out }; }
+    if (/[0-9]/.test(ch)) return { key: ch, code: 'Digit' + ch, vk: ch.charCodeAt(0), text: ch };
+    return { key: ch, code: '', vk: 0, text: ch };
+  }
+  return { key, code: key, vk: 0 };
+}
+
+async function cdpKey(tabId, key, p = {}) {
+  const d = keyDescriptor(String(key || 'Enter'), !!p.shiftKey);
+  const modifiers = modifierMask(p);
+  const chord = !!(p.ctrlKey || p.altKey || p.metaKey);   // Ctrl+A etc. must not insert text
+  const base = { key: d.key, code: d.code, windowsVirtualKeyCode: d.vk, nativeVirtualKeyCode: d.vk, modifiers };
+  try {
+    await timedSend(tabId, 'Input.dispatchKeyEvent', d.text && !chord ? { ...base, type: 'keyDown', text: d.text, unmodifiedText: d.text } : { ...base, type: 'rawKeyDown' }, null, 'key:down');
+  } catch (e) {
+    throw Object.assign(new Error('tab did not accept input (hidden or busy): ' + e.message), { fallbackOk: true });
+  }
+  await timedSend(tabId, 'Input.dispatchKeyEvent', { ...base, type: 'keyUp' }, null, 'key:up');
+}
+
+// Bound a CDP call so a stalled input can never hang the bridge; record slow calls.
+async function timedSend(tabId, method, params, trace, label, ms = 2500) {
+  const t0 = Date.now();
+  let timer;
+  try {
+    return await Promise.race([
+      dbgSend(tabId, method, params),
+      new Promise((_, rej) => { timer = setTimeout(() => rej(new Error(`${label} timed out after ${ms}ms`)), ms); })
+    ]);
+  } finally {
+    clearTimeout(timer);
+    const dt = Date.now() - t0;
+    if (trace && dt > 150) trace.push({ call: label, ms: dt });
+  }
+}
+
+async function cdpDrag(tabId, o) {
+  const trace = [];
+  const mouse = (params) => timedSend(tabId, 'Input.dispatchMouseEvent', params, trace, 'mouse:' + params.type);
+  const dragEvt = (params) => timedSend(tabId, 'Input.dispatchDragEvent', params, trace, 'drag:' + params.type);
+  const btn = MOUSE_BUTTONS[o.button] || MOUSE_BUTTONS.left;
+  const modifiers = modifierMask(o);
+  const steps = Math.max(5, parseInt(o.steps, 10) || 20);
+  const stepDelay = o.stepDelayMs != null ? o.stepDelayMs : 16;    // ~one frame per step for rAF-driven apps
+  const { x, y, endX, endY } = o;
+
+  // Probe first: a hidden tab never acks input. Bail out before any button press.
+  try {
+    await mouse({ type: 'mouseMoved', x, y, modifiers });
+  } catch (e) {
+    throw Object.assign(new Error('tab did not accept input (hidden or busy): ' + e.message), { fallbackOk: true });
+  }
+
+  dbgSession.dragData = null;
+  let intercepting = false;
+  try { await dbgSend(tabId, 'Input.setInterceptDrags', { enabled: true }); intercepting = true; } catch (e) {}
+
+  let html5 = null;
+  let aborted = false;
+  try {
+    moveCursor(tabId, x, y, 'drag');
+    await mouse({ type: 'mousePressed', x, y, button: btn.name, buttons: btn.mask, clickCount: 1, modifiers });
+    await sleep(40);
+    for (let i = 1; i <= steps; i++) {
+      if (automationStopped) { aborted = true; break; }
+      const cx = x + (endX - x) * i / steps;
+      const cy = y + (endY - y) * i / steps;
+      if (html5) {
+        await dragEvt({ type: 'dragOver', x: cx, y: cy, data: html5, modifiers });
+      } else {
+        await mouse({ type: 'mouseMoved', x: cx, y: cy, button: btn.name, buttons: btn.mask, modifiers });
+        // The element was draggable=true: Chrome handed us its native drag payload.
+        if (dbgSession.dragData) {
+          html5 = dbgSession.dragData;
+          await dragEvt({ type: 'dragEnter', x: cx, y: cy, data: html5, modifiers });
+        }
+      }
+      if (i % 2 === 0 || i === steps) moveCursor(tabId, cx, cy, 'drag');
+      if (stepDelay) await sleep(stepDelay);
+    }
+    if (html5) {
+      await dragEvt({ type: aborted ? 'dragCancel' : 'drop', x: aborted ? x : endX, y: aborted ? y : endY, data: html5, modifiers });
+    }
+  } finally {
+    // Always release the button, even on error or Stop, so the page isn't left mid-drag.
+    try { await mouse({ type: 'mouseReleased', x: endX, y: endY, button: btn.name, buttons: 0, clickCount: 1, modifiers }); } catch (e) {}
+    moveCursor(tabId, endX, endY, 'release');
+    if (intercepting) { try { await timedSend(tabId, 'Input.setInterceptDrags', { enabled: false }, trace, 'interceptOff'); } catch (e) {} }
+    dbgSession.dragData = null;
+  }
+  const out = { status: aborted ? 'drag_aborted_by_user' : 'dragged', dragMode: html5 ? 'html5-dnd' : 'pointer', steps };
+  if (!intercepting) out.html5Interception = false;   // native draggable elements won't drop
+  if (trace.length) out.slowCalls = trace;
+  return out;
+}
+
+async function cdpClick(tabId, x, y, p = {}, clicks = 1) {
+  const mouse = (params) => timedSend(tabId, 'Input.dispatchMouseEvent', params, null, 'mouse:' + params.type);
+  const btn = MOUSE_BUTTONS[p.button] || MOUSE_BUTTONS.left;
+  const modifiers = modifierMask(p);
+  moveCursor(tabId, x, y, 'move');
+  try {
+    await mouse({ type: 'mouseMoved', x, y, modifiers });
+  } catch (e) {
+    throw Object.assign(new Error('tab did not accept input (hidden or busy): ' + e.message), { fallbackOk: true });
+  }
+  await sleep(CURSOR_LEAD_MS);
+  moveCursor(tabId, x, y, clicks > 1 ? 'dblclick' : 'click');
+  for (let c = 1; c <= clicks; c++) {
+    await mouse({ type: 'mousePressed', x, y, button: btn.name, buttons: btn.mask, clickCount: c, modifiers });
+    await mouse({ type: 'mouseReleased', x, y, button: btn.name, buttons: 0, clickCount: c, modifiers });
+  }
+}
+
+// Ask the page-side helpers. Tabs opened before an extension update keep running
+// the old content script, which ignores these messages (the port just closes).
+// Treat that as "fall back to synthetic" rather than an error.
+async function askHelper(action, payload) {
+  try {
+    return await askContentScript(action, payload);
+  } catch (e) {
+    if (/port closed|receiving end does not exist|could not establish connection/i.test(String(e && e.message))) {
+      throw Object.assign(new Error('this page runs an outdated DevPilot content script; reload the page to enable trusted input'), { fallbackOk: true });
+    }
+    throw e;
+  }
+}
+
+// --- trusted handlers (each returns the same shape as its synthetic twin) ---
+async function trustedMouseAction(tab, p) {
+  const kind = resolveMouseAction(p);
+  let { x, y, endX, endY } = p;
+  if (p.selector || p.dropSelector || x == null || y == null) {
+    const pt = await askHelper('RESOLVE_POINT', { selector: p.selector, dropSelector: p.dropSelector, timeoutMs: p.timeoutMs, tabId: tab.id });
+    if (pt) {
+      if (x == null || y == null) { x = pt.x; y = pt.y; }
+      if (pt.endX != null) { endX = pt.endX; endY = pt.endY; }
+    }
+  }
+  if (x == null || y == null) throw Object.assign(new Error('mouse_action needs x/y coordinates or a selector.'), { noFallback: true });
+  x = Math.round(x); y = Math.round(y);
+  const modifiers = modifierMask(p);
+  assertInViewport(p, x, y, kind === 'drag' ? 'Drag start' : 'Point');
+
+  if (kind === 'move') {
+    moveCursor(tab.id, x, y, 'move');
+    await timedSend(tab.id, 'Input.dispatchMouseEvent', { type: 'mouseMoved', x, y, modifiers }, null, 'mouse:mouseMoved');
+    return { status: 'moved', x, y, inputMode: 'trusted' };
+  }
+  if (kind === 'click' || kind === 'dblclick') {
+    await cdpClick(tab.id, x, y, p, kind === 'dblclick' ? 2 : 1);
+    return { status: kind === 'dblclick' ? 'double_clicked' : 'clicked', button: p.button || 'left', x, y, inputMode: 'trusted' };
+  }
+  if (kind === 'scroll') {
+    moveCursor(tab.id, x, y, 'move');
+    await timedSend(tab.id, 'Input.dispatchMouseEvent', { type: 'mouseWheel', x, y, deltaX: p.deltaX || 0, deltaY: p.deltaY || 0, modifiers }, null, 'mouse:mouseWheel');
+    return { status: 'scrolled', deltaX: p.deltaX || 0, deltaY: p.deltaY || 0, inputMode: 'trusted' };
+  }
+  if (kind === 'drag') {
+    if (endX == null || endY == null) { endX = x + 100; endY = y + 100; }
+    endX = Math.round(endX); endY = Math.round(endY);
+    assertInViewport(p, endX, endY, 'Drag end');
+    const r = await cdpDrag(tab.id, { ...p, x, y, endX, endY });
+    return { ...r, start: { x, y }, end: { x: endX, y: endY }, inputMode: 'trusted' };
+  }
+  throw Object.assign(new Error(`Unknown mouse action: ${kind}`), { noFallback: true });
+}
+
+async function trustedClickElement(tab, p) {
+  const pt = await askHelper('RESOLVE_POINT', { selector: p.selector, timeoutMs: p.timeoutMs, tabId: tab.id });
+  // If something covers the element, a real click would land on the cover; keep
+  // the old behaviour (dispatch straight on the element) for that case.
+  if (!pt || pt.occluded || !pt.w || !pt.h) {
+    throw Object.assign(new Error(pt && pt.occluded ? `element is covered by <${pt.occludedBy}>` : 'element has no visible box'), { fallbackOk: true });
+  }
+  await cdpClick(tab.id, pt.x, pt.y, p, 1);
+  return `Element ${p.selector} clicked successfully (trusted input).`;
+}
+
+async function trustedPressKey(tab, p) {
+  if (p.selector) await askHelper('FOCUS_ELEMENT', { selector: p.selector, timeoutMs: p.timeoutMs, tabId: tab.id });
+  await cdpKey(tab.id, p.key, p);
+  return `Key '${p.key || 'Enter'}' pressed successfully (trusted input).`;
+}
+
+async function trustedTypeText(tab, p) {
+  const f = await askHelper('FOCUS_ELEMENT', { selector: p.selector, timeoutMs: p.timeoutMs, selectAll: !p.append, tabId: tab.id });
+  if (f && f.x != null) moveCursor(tab.id, f.x, f.y, 'click');
+  await timedSend(tab.id, 'Input.insertText', { text: String(p.text == null ? '' : p.text) }, null, 'insertText'); // replaces the selection
+  return `Typed text into ${p.selector || 'activeElement'} (trusted input).`;
+}
+
+const TRUSTED_HANDLERS = {
+  MOUSE_ACTION: trustedMouseAction,
+  CLICK_ELEMENT: trustedClickElement,
+  PRESS_KEY: trustedPressKey,
+  TYPE_TEXT: trustedTypeText
+};
+
+// Trusted by default for mouse/click/key; type_text stays on the React-safe
+// synthetic path unless trusted:true. trusted:false forces the old path.
+async function runInput(action, payload = {}) {
+  const wantTrusted = action === 'TYPE_TEXT' ? payload.trusted === true : payload.trusted !== false;
+  const synthPayload = action === 'MOUSE_ACTION' ? { ...payload, subAction: resolveMouseAction(payload) } : payload;
+  if (!wantTrusted) return askContentScript(action, synthPayload);
+
+  const tab = await resolveTargetTab(payload);
+  const decorate = (res, mode, note) => {
+    if (res && typeof res === 'object' && !Array.isArray(res)) return { ...res, inputMode: mode, note };
+    return typeof res === 'string' ? res + ' [' + mode + ': ' + note + ']' : res;
+  };
+
+  // Chrome never acknowledges real input sent to a hidden tab (it would just hang),
+  // and we don't steal focus unless the caller opts in with focusTab:true.
+  const state = await pageState(tab.id);
+  const visible = state ? state.visible : null;
+  if (visible === false) {
+    if (payload.focusTab) {
+      await bringTabToFront(tab);
+    } else {
+      // A synthetic drag in a hidden tab crawls (timer throttling) and can't drive
+      // real apps anyway, so fail fast instead of hanging until the bridge times out.
+      if (action === 'MOUSE_ACTION' && resolveMouseAction(payload) === 'drag') {
+        throw new Error('Tab is hidden: Chrome only delivers real drag input to a visible tab. Bring the tab to front or pass focusTab:true.');
+      }
+      const res = await askContentScript(action, { ...synthPayload, tabId: tab.id });
+      return decorate(res, 'synthetic-hidden-tab',
+        'the tab is not visible, so real input cannot be delivered; used synthetic events (canvas apps may ignore them). Pass focusTab:true to bring it to front and use trusted input.');
+    }
+  }
+
+  try {
+    const viewport = state && state.vw ? { w: state.vw, h: state.vh } : null;
+    return await serializeInput(() => TRUSTED_HANDLERS[action](tab, { ...payload, _viewport: viewport }));
+  } catch (err) {
+    const msg = String((err && err.message) || err);
+    // Only fall back when no trusted input was sent (debugger unavailable, target
+    // covered, or the very first event was refused). Falling back mid-sequence
+    // would repeat a half-done action.
+    if (!(err && (err.attachFailed || err.fallbackOk))) throw err;
+    const res = await askContentScript(action, { ...synthPayload, tabId: tab.id });
+    return decorate(res, 'synthetic-fallback', msg);
+  }
+}
+
+async function pageState(tabId) {
+  try {
+    const st = await askContentScript('PAGE_STATE', { tabId });
+    return st ? { visible: !!st.visible, vw: st.vw, vh: st.vh, v: st.v || 0 } : null;
+  } catch (e) {
+    return null;                     // unknown (no content script): let trusted input try
+  }
+}
+
+// Real input outside the viewport hits nothing (or the browser chrome). Coordinates
+// are viewport-relative, so say so instead of silently missing.
+function assertInViewport(p, x, y, label) {
+  const v = p._viewport;
+  if (!v) return;
+  if (x < 0 || y < 0 || x >= v.w || y >= v.h) {
+    throw Object.assign(new Error(`${label} (${x}, ${y}) is outside the visible viewport (${v.w}x${v.h}). Coordinates are viewport-relative: scroll it into view first, or target it with a selector (auto-scrolls).`), { noFallback: true });
+  }
+}
+
+// Opt-in only (focusTab:true): make the tab visible so Chrome will accept real input.
+async function bringTabToFront(tab) {
+  await new Promise((r) => chrome.tabs.update(tab.id, { active: true }, () => { void chrome.runtime.lastError; r(); }));
+  const win = await new Promise((r) => chrome.windows.get(tab.windowId, (w) => { void chrome.runtime.lastError; r(w); }));
+  const upd = { focused: true };
+  if (win && win.state === 'minimized') upd.state = 'normal';   // never un-maximize
+  await new Promise((r) => chrome.windows.update(tab.windowId, upd, () => { void chrome.runtime.lastError; r(); }));
+  await sleep(250);                  // let the renderer become visible before input
+}
+
 // Capture a tab's viewport via the DevTools Protocol. Unlike captureVisibleTab,
 // this does not require the tab to be active/visible and does not steal focus.
 async function captureViaDebugger(tabId, payload = {}) {
-  const target = { tabId };
-  const attach = () => new Promise((res, rej) => chrome.debugger.attach(target, '1.3', () => chrome.runtime.lastError ? rej(new Error(chrome.runtime.lastError.message)) : res()));
-  const detach = () => new Promise(res => chrome.debugger.detach(target, () => { void chrome.runtime.lastError; res(); }));
-  const send = (method, params) => new Promise((res, rej) => chrome.debugger.sendCommand(target, method, params || {}, (r) => chrome.runtime.lastError ? rej(new Error(chrome.runtime.lastError.message)) : res(r)));
-  let attached = false;
-  try {
-    await attach();
-    attached = true;
-    const params = { format: 'png', captureBeyondViewport: !!payload.fullPage };
-    const res = await send('Page.captureScreenshot', params);
-    if (!res || !res.data) throw new Error('No screenshot data returned by CDP.');
-    return 'data:image/png;base64,' + res.data;
-  } finally {
-    if (attached) await detach();
-  }
+  const params = { format: 'png', captureBeyondViewport: !!payload.fullPage };
+  const res = await dbgSend(tabId, 'Page.captureScreenshot', params);
+  if (!res || !res.data) throw new Error('No screenshot data returned by CDP.');
+  return 'data:image/png;base64,' + res.data;
 }
 
 async function evaluateViaDebugger(payload) {
   const resolved = await resolveTargetTab(payload);
   const tabId = resolved.id;
-  const target = { tabId };
-  const attach = () => new Promise((res, rej) => chrome.debugger.attach(target, '1.3', () => chrome.runtime.lastError ? rej(new Error(chrome.runtime.lastError.message)) : res()));
-  const detach = () => new Promise(res => chrome.debugger.detach(target, () => { void chrome.runtime.lastError; res(); }));
-  const send = (method, params) => new Promise((res, rej) => chrome.debugger.sendCommand(target, method, params || {}, (r) => chrome.runtime.lastError ? rej(new Error(chrome.runtime.lastError.message)) : res(r)));
+  const send = (method, params) => dbgSend(tabId, method, params);
 
   const code = payload.script || '';
   const hasReturn = /^\s*return\b/m.test(code);
@@ -656,10 +1072,7 @@ async function evaluateViaDebugger(payload) {
     expression, awaitPromise: true, returnByValue: true, userGesture: true, allowUnsafeEvalBlockedByCSP: true
   });
 
-  let attached = false;
-  try {
-    await attach();
-    attached = true;
+  {
     let evalRes;
     try {
       evalRes = await runEval(exprWrap);
@@ -674,8 +1087,6 @@ async function evaluateViaDebugger(payload) {
     }
     const result = evalRes && evalRes.result ? evalRes.result.value : null;
     return result !== undefined ? result : null;
-  } finally {
-    if (attached) await detach();
   }
 }
 
@@ -973,6 +1384,11 @@ if (chrome.webRequest) {
 
 // Listen for messages from content.js or popup.js
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
+  if (message && message.type === 'AUTOMATION_STOPPED') {
+    automationStopped = true; // aborts an in-flight trusted drag
+    return false;
+  }
+
   if (message.action === 'START_SELECTION' && message.tabId) {
     chrome.tabs.sendMessage(message.tabId, { action: 'WAIT_FOR_CLICK' }, (response) => {
       if (response && response.result) {

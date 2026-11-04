@@ -20,7 +20,9 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 // Setup WebSocket Server to listen for the Chrome Extension
-const WSS_PORT = 42819;
+// Override with XTRADEVPILOT_PORT to run a second bridge (e.g. for tests); the
+// extension itself only dials 42819/42820.
+const WSS_PORT = parseInt(process.env.XTRADEVPILOT_PORT, 10) || 42819;
 
 let wss = null;
 let activeExtensionSocket = null;
@@ -277,7 +279,12 @@ async function askExtension(action, payload = {}) {
       reject: (err) => { clearTimeout(timeout); reject(err); }
     });
 
-    targetSocket.send(JSON.stringify({ ...payload, action, id }));
+    // The wire format uses `action` for the command name, so a tool's own `action`
+    // argument (mouse_action's click/drag, trace_action_network's click/type) would
+    // be silently overwritten. Ship it as `subAction` instead.
+    const { action: subAction, ...rest } = payload;
+    const wire = subAction !== undefined ? { ...rest, subAction } : rest;
+    targetSocket.send(JSON.stringify({ ...wire, action, id }));
   });
 }
 
@@ -476,12 +483,14 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
       },
       {
         name: 'click_element',
-        description: 'Simulates a user click on an element specified by a CSS selector. Automatically waits up to timeoutMs if the element is still rendering.',
-        inputSchema: { 
-          type: 'object', 
-          properties: { 
+        description: 'Clicks an element by CSS selector with real (trusted) browser input, so it also works on canvas apps and strict UI frameworks. Waits up to timeoutMs for the element and scrolls it into view; falls back to a direct synthetic click if the element is covered by another element or the debugger is unavailable.',
+        inputSchema: {
+          type: 'object',
+          properties: {
             selector: { type: 'string' },
             timeoutMs: { type: 'number', description: 'Optional wait timeout in ms (default: 3000)' },
+            trusted: { type: 'boolean', description: 'Use real browser-level input via the DevTools protocol (isTrusted events, real pointer capture and hit-testing). Default true; set false to force the legacy synthetic DOM events.' },
+            focusTab: { type: 'boolean', description: 'Real input can only reach a visible tab. If the target tab is hidden, true brings it to front first; default false keeps your focus and uses synthetic events instead.' },
             tabId: { type: 'number', description: 'Optional target Chrome tab ID' }
           },
           required: ['selector']
@@ -489,12 +498,15 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
       },
       {
         name: 'type_text',
-        description: 'Simulates typing text into an input or textarea using React-compatible state triggers. Automatically waits up to timeoutMs if the element is still rendering.',
-        inputSchema: { 
-          type: 'object', 
-          properties: { 
+        description: 'Types text into an input, textarea or contenteditable. By default it uses React-compatible value setters (replaces the value). Set trusted:true to type with real browser text input (Input.insertText) for editors that ignore programmatic values; append:true keeps the existing text.',
+        inputSchema: {
+          type: 'object',
+          properties: {
             selector: { type: 'string' },
             text: { type: 'string' },
+            trusted: { type: 'boolean', description: 'Type via real browser text input instead of value setters (default false for this tool).' },
+            append: { type: 'boolean', description: 'With trusted:true, keep existing text and type at the caret instead of replacing it.' },
+            focusTab: { type: 'boolean', description: 'Real input can only reach a visible tab. If the target tab is hidden, true brings it to front first; default false keeps your focus and uses synthetic events instead.' },
             timeoutMs: { type: 'number', description: 'Optional wait timeout in ms (default: 3000)' },
             tabId: { type: 'number', description: 'Optional target Chrome tab ID' }
           },
@@ -503,7 +515,7 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
       },
       {
         name: 'press_key',
-        description: 'Simulates pressing keyboard keys (Enter, Tab, Escape, Shift, Backspace, ArrowDown, etc.) with synthetic event triggers.',
+        description: 'Presses a key with real (trusted) keyboard input: named keys (Enter, Tab, Escape, Backspace, ArrowDown, Space, F1-F12...) or any single character (letters, digits, symbols, e.g. "r" for an editor shortcut). Add ctrlKey/shiftKey/altKey/metaKey for chords such as Ctrl+A.',
         inputSchema: {
           type: 'object',
           properties: {
@@ -512,6 +524,9 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
             shiftKey: { type: 'boolean', description: 'Whether Shift key is held down' },
             ctrlKey: { type: 'boolean', description: 'Whether Ctrl key is held down' },
             altKey: { type: 'boolean', description: 'Whether Alt key is held down' },
+            metaKey: { type: 'boolean', description: 'Whether Meta/Cmd key is held down' },
+            trusted: { type: 'boolean', description: 'Use real browser-level input via the DevTools protocol (isTrusted events, real pointer capture and hit-testing). Default true; set false to force the legacy synthetic DOM events.' },
+            focusTab: { type: 'boolean', description: 'Real input can only reach a visible tab. If the target tab is hidden, true brings it to front first; default false keeps your focus and uses synthetic events instead.' },
             tabId: { type: 'number', description: 'Optional target Chrome tab ID' }
           },
           required: ['key']
@@ -519,7 +534,7 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
       },
       {
         name: 'mouse_action',
-        description: 'Advanced synthetic mouse controller for precise coordinate clicks, right-clicks, double clicks, mouse moves, and drag-and-drop actions.',
+        description: 'Mouse controller with real (trusted) browser input: clicks, right-clicks, double clicks, hover moves, wheel scrolls and drags, at viewport coordinates or on selectors. Drags work on canvas apps (design editors, chess boards, maps) and on native HTML5 drag-and-drop (draggable elements, kanban cards). The overlay cursor shows each action.',
         inputSchema: {
           type: 'object',
           properties: {
@@ -534,6 +549,9 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
             button: { type: 'string', enum: ['left', 'middle', 'right'], description: 'Mouse button (default: left)' },
             deltaX: { type: 'number', description: 'Horizontal scroll delta for scroll action' },
             deltaY: { type: 'number', description: 'Vertical scroll delta for scroll action' },
+            stepDelayMs: { type: 'number', description: 'Delay between drag steps in ms (default 16, about one frame).' },
+            trusted: { type: 'boolean', description: 'Use real browser-level input via the DevTools protocol (isTrusted events, real pointer capture and hit-testing). Default true; set false to force the legacy synthetic DOM events.' },
+            focusTab: { type: 'boolean', description: 'Real input can only reach a visible tab. If the target tab is hidden, true brings it to front first; default false keeps your focus and uses synthetic events instead.' },
             tabId: { type: 'number', description: 'Optional target Chrome tab ID' }
           },
           required: ['action']
@@ -835,6 +853,8 @@ function classifyError(message) {
     return { code: 'NO_ACTIVE_TAB', hint: 'Pass an explicit tabId (from list_tabs) or focus a tab.' };
   if (/tab with id .* not found|no tab with id/i.test(m))
     return { code: 'TAB_NOT_FOUND', hint: 'The tabId is stale. Call list_tabs for current ids.' };
+  if (/tab is hidden|not visible/i.test(m))
+    return { code: 'TAB_HIDDEN', hint: 'Real input only reaches a visible tab. Pass focusTab:true to bring it to front, or ask the user to switch to it.' };
   if (/timeout/i.test(m))
     return { code: 'TIMEOUT', hint: 'The page/element was not ready. Use wait_for_element first, or raise timeoutMs.' };
   if (/cannot access chrome:\/\/|restricted/i.test(m))
@@ -913,18 +933,23 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         result = await askExtension('WAIT_FOR_CLICK');
         break;
       case 'click_element':
-        result = await askExtension('CLICK_ELEMENT', { 
-          selector: args.selector, 
-          timeoutMs: args.timeoutMs, 
-          tabId: args.tabId 
+        result = await askExtension('CLICK_ELEMENT', {
+          selector: args.selector,
+          timeoutMs: args.timeoutMs,
+          trusted: args.trusted,
+          focusTab: args.focusTab,
+          tabId: args.tabId
         });
         break;
       case 'type_text':
-        result = await askExtension('TYPE_TEXT', { 
-          selector: args.selector, 
-          text: args.text, 
-          timeoutMs: args.timeoutMs, 
-          tabId: args.tabId 
+        result = await askExtension('TYPE_TEXT', {
+          selector: args.selector,
+          text: args.text,
+          timeoutMs: args.timeoutMs,
+          trusted: args.trusted,
+          focusTab: args.focusTab,
+          append: args.append,
+          tabId: args.tabId
         });
         break;
       case 'press_key':
@@ -934,6 +959,9 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
           shiftKey: args.shiftKey,
           ctrlKey: args.ctrlKey,
           altKey: args.altKey,
+          metaKey: args.metaKey,
+          trusted: args.trusted,
+          focusTab: args.focusTab,
           tabId: args.tabId
         });
         break;
@@ -950,6 +978,9 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
           button: args.button,
           deltaX: args.deltaX,
           deltaY: args.deltaY,
+          stepDelayMs: args.stepDelayMs,
+          trusted: args.trusted,
+          focusTab: args.focusTab,
           tabId: args.tabId
         });
         break;

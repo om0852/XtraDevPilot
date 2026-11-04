@@ -377,6 +377,9 @@ function setCursorShape(hand) {
 
 function updateVirtualCursor(x, y, state = 'move') {
   const cursor = ensureVirtualCursor();
+  cursor.style.transition = state === 'drag'
+    ? 'transform 0.06s linear, opacity 0.25s ease'
+    : 'transform 0.32s cubic-bezier(0.22,0.61,0.36,1), opacity 0.25s ease';
   cursor.style.opacity = '1';
   cursor.style.transform = `translate3d(${x}px, ${y}px, 0)`;
   const glyph = document.getElementById(state === 'drag' ? 'xdp-cursor-hand' : 'xdp-cursor-arrow');
@@ -699,6 +702,102 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
       }
     }
     sendResponse({ result: 'Automation stopped successfully.' });
+    return true;
+  }
+
+  // --- Helpers for trusted (CDP) input driven from the background ---
+  // Visual only: move the overlay cursor while the browser performs real input.
+  if (request.action === 'CURSOR') {
+    try { ensureMcpBadge(); updateVirtualCursor(request.x, request.y, request.state || 'move'); } catch (e) {}
+    sendResponse({ result: true });
+    return false;
+  }
+
+  // Visibility probe: Chrome only delivers real (CDP) input to a visible tab.
+  if (request.action === 'PAGE_STATE') {
+    // v = content-script protocol version (3 = trusted-input helpers present)
+    sendResponse({ result: { v: 3, visible: document.visibilityState === 'visible', focused: document.hasFocus(), vw: window.innerWidth, vh: window.innerHeight } });
+    return false;
+  }
+
+  // Resolve selector(s) to viewport points (waiting + scrolling into view) so the
+  // background can aim real CDP mouse input at them.
+  if (request.action === 'RESOLVE_POINT') {
+    (async () => {
+      try {
+        const timeoutMs = request.timeoutMs !== undefined ? request.timeoutMs : 3000;
+        const locate = async (sel) => {
+          let el = findElement(sel);
+          if (!el && timeoutMs > 0) el = await waitForElement(sel, timeoutMs, 'visible');
+          if (!el) throw new Error(`Element not found: ${sel}`);
+          let r = el.getBoundingClientRect();
+          const off = r.top < 0 || r.bottom > window.innerHeight || r.left < 0 || r.right > window.innerWidth;
+          if (off && typeof el.scrollIntoView === 'function') {
+            el.scrollIntoView({ behavior: 'instant', block: 'center', inline: 'center' });
+            r = el.getBoundingClientRect();
+          }
+          return { el, r };
+        };
+        const out = {};
+        if (request.selector) {
+          const { el, r } = await locate(request.selector);
+          flashInteractionHighlight(el);
+          const x = Math.round(r.left + r.width / 2);
+          const y = Math.round(r.top + r.height / 2);
+          Object.assign(out, { x, y, w: Math.round(r.width), h: Math.round(r.height), tag: el.tagName.toLowerCase() });
+          // Would a real click at the centre land on this element (or its parts)?
+          const hit = document.elementFromPoint(x, y);
+          const root = el.getRootNode && el.getRootNode();
+          const sameTarget = !hit || hit === el || el.contains(hit) || hit.contains(el) || (root && root.host === hit);
+          if (!sameTarget) { out.occluded = true; out.occludedBy = hit.tagName.toLowerCase(); }
+        }
+        if (request.dropSelector) {
+          const { r } = await locate(request.dropSelector);
+          out.endX = Math.round(r.left + r.width / 2);
+          out.endY = Math.round(r.top + r.height / 2);
+        }
+        sendResponse({ result: out });
+      } catch (e) {
+        sendResponse({ error: e.message });
+      }
+    })();
+    return true;
+  }
+
+  // Focus (and optionally select the contents of) a field before trusted typing/keys.
+  if (request.action === 'FOCUS_ELEMENT') {
+    (async () => {
+      try {
+        const timeoutMs = request.timeoutMs !== undefined ? request.timeoutMs : 3000;
+        let el = null;
+        if (request.selector) {
+          el = findElement(request.selector);
+          if (!el && timeoutMs > 0) el = await waitForElement(request.selector, timeoutMs, 'visible');
+          if (!el) throw new Error(`Element not found: ${request.selector}`);
+        } else {
+          el = document.activeElement || document.body;
+        }
+        if (typeof el.scrollIntoView === 'function') el.scrollIntoView({ behavior: 'instant', block: 'center' });
+        flashInteractionHighlight(el);
+        if (typeof el.focus === 'function') el.focus();
+        if (request.selectAll) {
+          try {
+            if (/^(input|textarea)$/i.test(el.tagName) && typeof el.select === 'function') el.select();
+            else if (el.isContentEditable) {
+              const range = document.createRange();
+              range.selectNodeContents(el);
+              const sel = window.getSelection();
+              sel.removeAllRanges();
+              sel.addRange(range);
+            }
+          } catch (e) {}
+        }
+        const r = el.getBoundingClientRect();
+        sendResponse({ result: { x: Math.round(r.left + Math.min(r.width / 2, 40)), y: Math.round(r.top + r.height / 2), tag: el.tagName.toLowerCase(), focused: document.activeElement === el } });
+      } catch (e) {
+        sendResponse({ error: e.message });
+      }
+    })();
     return true;
   }
 
@@ -1177,7 +1276,7 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
           'Enter': 13, 'Tab': 9, 'Escape': 27, 'Backspace': 8, 'Delete': 46,
           'ArrowUp': 38, 'ArrowDown': 40, 'ArrowLeft': 37, 'ArrowRight': 39, 'Space': 32
         };
-        const keyCode = keyCodeMap[key] || 13;
+        const keyCode = keyCodeMap[key] || (key.length === 1 ? key.toUpperCase().charCodeAt(0) : 0);
 
         const eventInit = {
           key: key,
@@ -1216,7 +1315,12 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
   if (request.action === 'MOUSE_ACTION') {
     (async () => {
       try {
-        const res = await simulateMouseAction(request);
+        // `action` here is the command name; the mouse type travels as subAction.
+        // Older bridges drop it, so infer (drag/scroll) and default to a harmless move.
+        const kind = request.subAction || request.mouseAction ||
+          ((request.endX != null || request.endY != null || request.dropSelector) ? 'drag'
+            : (request.deltaX || request.deltaY) ? 'scroll' : 'move');
+        const res = await simulateMouseAction({ ...request, action: kind });
         sendResponse({ result: res });
       } catch (e) {
         sendResponse({ error: `Mouse action error: ${e.message}` });

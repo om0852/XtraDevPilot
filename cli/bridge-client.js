@@ -92,7 +92,11 @@ export class BridgeClient {
       if (finalPayload.browserId === undefined && this.defaultBrowserId !== undefined) {
         finalPayload.browserId = this.defaultBrowserId;
       }
-      this.ws.send(JSON.stringify({ ...finalPayload, action, id }));
+      // Ship a payload `action` (e.g. mouse click/drag) as `subAction` so it isn't
+      // overwritten by the command name on the wire.
+      const { action: subAction, ...rest } = finalPayload;
+      const wire = subAction !== undefined ? { ...rest, subAction } : rest;
+      this.ws.send(JSON.stringify({ ...wire, action, id }));
     });
   }
 
