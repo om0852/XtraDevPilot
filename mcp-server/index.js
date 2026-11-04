@@ -314,30 +314,31 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
       },
       {
         name: 'open_tab',
-        description: 'Opens a new browser tab in Chrome and navigates to the specified URL.',
+        description: 'Opens a new browser tab and navigates to the URL. The new tab becomes the sticky "working tab" that later commands target by default, so the user switching tabs never redirects automation. Set background:true to open it without stealing focus from the user.',
         inputSchema: {
           type: 'object',
           properties: {
-            url: { type: 'string', description: 'Target URL to open in a new tab (e.g. "https://google.com")' }
+            url: { type: 'string', description: 'Target URL to open in a new tab (e.g. "https://google.com")' },
+            background: { type: 'boolean', description: 'Open in the background without activating/focusing it (default false).' }
           },
           required: ['url']
         },
       },
       {
         name: 'navigate',
-        description: 'Navigates the browser tab to the specified URL.',
+        description: 'Navigates a tab to the URL. With no tabId it navigates the sticky "working tab" DevPilot is operating on — NOT whatever tab the user currently has focused — so it never hijacks the user\'s active tab. The navigated tab becomes the working tab.',
         inputSchema: {
           type: 'object',
           properties: {
             url: { type: 'string', description: 'Target URL to navigate to' },
-            tabId: { type: 'number', description: 'Optional target Chrome tab ID' }
+            tabId: { type: 'number', description: 'Optional target Chrome tab ID. When set, it becomes the working tab.' }
           },
           required: ['url']
         },
       },
       {
         name: 'list_tabs',
-        description: 'Lists all open Chrome tabs with their tab IDs, titles, URLs, and active status.',
+        description: 'Lists all open Chrome tabs with their tab IDs, titles, URLs, active status, and a "working" flag marking the sticky tab DevPilot targets by default.',
         inputSchema: { type: 'object', properties: {} },
       },
       {
@@ -557,13 +558,14 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
       },
       {
         name: 'capture_screenshot',
-        description: 'Captures a visible screenshot of the active browser tab and returns the absolute path to the image file.',
-        inputSchema: { 
-          type: 'object', 
+        description: 'Captures a screenshot of the working tab (or tabId if given) and returns the absolute image path. Uses the DevTools protocol so it captures the tab WITHOUT activating it or stealing window focus, and works even when the tab is in the background (no more blank captures).',
+        inputSchema: {
+          type: 'object',
           properties: {
-            tabId: { type: 'number', description: 'Optional target Chrome tab ID' },
+            tabId: { type: 'number', description: 'Optional target Chrome tab ID (defaults to the sticky working tab)' },
+            fullPage: { type: 'boolean', description: 'Capture the full page beyond the viewport (default false).' },
             outputPath: { type: 'string', description: 'Optional absolute file path to save screenshot (default: .devpilot-screenshot.png in CWD)' }
-          } 
+          }
         },
       },
       {
@@ -1047,7 +1049,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         break;
       }
       case 'capture_screenshot': {
-        const base64DataUrl = await askExtension('CAPTURE_SCREENSHOT', { tabId: args.tabId });
+        const base64DataUrl = await askExtension('CAPTURE_SCREENSHOT', { tabId: args.tabId, fullPage: args.fullPage });
         if (base64DataUrl && base64DataUrl.startsWith('data:image/png;base64,')) {
           const base64Data = base64DataUrl.replace(/^data:image\/png;base64,/, "");
           const filePath = args.outputPath ? path.resolve(args.outputPath) : path.resolve(process.cwd(), '.devpilot-screenshot.png');
@@ -1103,7 +1105,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         result = await askExtension('GET_TAB_INFO', { tabId: args.tabId });
         break;
       case 'open_tab':
-        result = await askExtension('OPEN_TAB', { url: args.url });
+        result = await askExtension('OPEN_TAB', { url: args.url, background: args.background });
         break;
       case 'navigate':
         result = await askExtension('NAVIGATE', { url: args.url, tabId: args.tabId });

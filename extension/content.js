@@ -318,83 +318,93 @@ function buildAccessibilityTree(element = document.body, depth = 0) {
   };
 }
 
-// --- Virtual Cursor Management (Monochrome Black & White) ---
+// --- Virtual Cursor (animated pointer overlay, à la Claude-in-Chrome) ---
+// A visible arrow cursor that glides to each action target and pulses a ripple
+// on click, so you can watch DevPilot act. Default is an arrow; it switches to a
+// pointing hand while clicking/dragging (the "hand cursor"). Purely visual
+// (pointer-events:none) — it never intercepts real input.
 let virtualCursorTimer = null;
 
 function ensureVirtualCursor() {
   let cursor = document.getElementById('xtradevpilot-virtual-cursor');
-  if (!cursor) {
-    cursor = document.createElement('div');
-    cursor.id = 'xtradevpilot-virtual-cursor';
-    cursor.style.cssText = `
-      position: fixed;
-      top: 0;
-      left: 0;
-      width: 16px;
-      height: 16px;
-      pointer-events: none;
-      z-index: 2147483647;
-      transition: transform 0.05s linear, opacity 0.2s ease;
-      will-change: transform;
-      transform: translate3d(-100px, -100px, 0);
-      opacity: 0;
+  if (cursor) return cursor;
+
+  if (!document.getElementById('xtradevpilot-cursor-style')) {
+    const st = document.createElement('style');
+    st.id = 'xtradevpilot-cursor-style';
+    st.textContent = `
+      @keyframes xdp-ripple { 0% { transform: translate(-50%,-50%) scale(0.2); opacity: 0.5; } 100% { transform: translate(-50%,-50%) scale(1); opacity: 0; } }
     `;
-    cursor.innerHTML = `
-      <div id="xtradevpilot-cursor-dot" style="
-        width: 10px;
-        height: 10px;
-        border-radius: 50%;
-        background: #000000;
-        border: 2px solid #ffffff;
-        box-shadow: 0 1px 4px rgba(0, 0, 0, 0.4);
-        position: absolute;
-        top: 0;
-        left: 0;
-        transform: translate(-50%, -50%);
-        transition: transform 0.1s ease, background 0.15s ease;
-      "></div>
-    `;
-    document.body.appendChild(cursor);
+    (document.head || document.documentElement).appendChild(st);
   }
+
+  cursor = document.createElement('div');
+  cursor.id = 'xtradevpilot-virtual-cursor';
+  cursor.style.cssText = `
+    position: fixed; top: 0; left: 0; width: 26px; height: 26px;
+    pointer-events: none; z-index: 2147483647;
+    transform: translate3d(-200px, -200px, 0);
+    transition: transform 0.32s cubic-bezier(0.22,0.61,0.36,1), opacity 0.25s ease;
+    opacity: 0; will-change: transform;
+  `;
+  cursor.innerHTML = `
+    <div id="xdp-cursor-ripple" style="position:absolute; left:5px; top:4px; width:46px; height:46px; border-radius:50%; background: radial-gradient(circle, rgba(37,99,235,0.45) 0%, rgba(37,99,235,0) 70%); transform: translate(-50%,-50%) scale(0); opacity:0;"></div>
+    <svg id="xdp-cursor-arrow" width="26" height="26" viewBox="0 0 20 22" style="position:absolute; left:0; top:0; filter: drop-shadow(0 1px 2px rgba(0,0,0,0.5));">
+      <path d="M3 2 L3 18.6 L7.4 14.4 L10.3 20.8 L13.2 19.4 L10.3 13.1 L16.2 13.1 Z" fill="#111111" stroke="#ffffff" stroke-width="1.3" stroke-linejoin="round"/>
+    </svg>
+    <svg id="xdp-cursor-hand" width="24" height="24" viewBox="0 0 24 24" style="position:absolute; left:0; top:0; display:none; filter: drop-shadow(0 1px 2px rgba(0,0,0,0.5));">
+      <path d="M8 11 V6 a1.5 1.5 0 0 1 3 0 v4 V5 a1.5 1.5 0 0 1 3 0 v5 V7 a1.5 1.5 0 0 1 3 0 v5 a1.5 1.5 0 0 1 3 0 v4 a6 6 0 0 1 -6 6 h-2.2 a5 5 0 0 1 -3.7 -1.6 L5.2 15.8 a1.6 1.6 0 0 1 2.3 -2.2 L8 14 Z" fill="#111111" stroke="#ffffff" stroke-width="1.1" stroke-linejoin="round"/>
+    </svg>
+  `;
+  (document.body || document.documentElement).appendChild(cursor);
   return cursor;
+}
+
+function spawnCursorRipple() {
+  const ripple = document.getElementById('xdp-cursor-ripple');
+  if (!ripple) return;
+  ripple.style.animation = 'none';
+  void ripple.offsetWidth; // reflow to restart the animation
+  ripple.style.animation = 'xdp-ripple 0.5s ease-out';
+}
+
+function setCursorShape(hand) {
+  const arrow = document.getElementById('xdp-cursor-arrow');
+  const handEl = document.getElementById('xdp-cursor-hand');
+  if (arrow) arrow.style.display = hand ? 'none' : 'block';
+  if (handEl) handEl.style.display = hand ? 'block' : 'none';
 }
 
 function updateVirtualCursor(x, y, state = 'move') {
   const cursor = ensureVirtualCursor();
   cursor.style.opacity = '1';
   cursor.style.transform = `translate3d(${x}px, ${y}px, 0)`;
-
-  const dot = document.getElementById('xtradevpilot-cursor-dot');
+  const glyph = document.getElementById(state === 'drag' ? 'xdp-cursor-hand' : 'xdp-cursor-arrow');
 
   if (state === 'click' || state === 'dblclick') {
-    if (dot) {
-      dot.style.background = '#ffffff';
-      dot.style.borderColor = '#000000';
-      dot.style.transform = 'translate(-50%, -50%) scale(0.8)';
-      setTimeout(() => {
-        dot.style.background = '#000000';
-        dot.style.borderColor = '#ffffff';
-        dot.style.transform = 'translate(-50%, -50%) scale(1)';
-      }, 150);
+    setCursorShape(true);
+    spawnCursorRipple();
+    if (state === 'dblclick') setTimeout(spawnCursorRipple, 150);
+    if (glyph) {
+      // (glyph here is the arrow) brief press then restore to arrow
     }
+    const arrow = document.getElementById('xdp-cursor-arrow');
+    if (arrow) { arrow.style.transition = 'transform 0.1s ease'; arrow.style.transform = 'scale(0.82)'; }
+    setTimeout(() => { try { setCursorShape(false); const a=document.getElementById('xdp-cursor-arrow'); if(a) a.style.transform='scale(1)'; } catch(e){} }, 180);
   } else if (state === 'drag') {
-    if (dot) {
-      dot.style.background = '#000000';
-      dot.style.borderColor = '#ffffff';
-      dot.style.transform = 'translate(-50%, -50%) scale(1.25)';
-    }
+    setCursorShape(true);
+    const h = document.getElementById('xdp-cursor-hand');
+    if (h) { h.style.transition = 'transform 0.1s ease'; h.style.transform = 'scale(1.1)'; }
   } else if (state === 'release') {
-    if (dot) {
-      dot.style.background = '#000000';
-      dot.style.borderColor = '#ffffff';
-      dot.style.transform = 'translate(-50%, -50%) scale(1)';
-    }
+    const h = document.getElementById('xdp-cursor-hand');
+    if (h) h.style.transform = 'scale(1)';
+    setTimeout(() => { try { setCursorShape(false); } catch(e){} }, 120);
+  } else {
+    setCursorShape(false);
   }
 
   clearTimeout(virtualCursorTimer);
-  virtualCursorTimer = setTimeout(() => {
-    try { cursor.style.opacity = '0'; } catch(e) {}
-  }, 2000);
+  virtualCursorTimer = setTimeout(() => { try { cursor.style.opacity = '0'; } catch(e) {} }, 2200);
 }
 
 function createSyntheticDataTransfer() {
@@ -1140,6 +1150,10 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
           if (typeof el.scrollIntoView === 'function') {
             el.scrollIntoView({ behavior: 'smooth', block: 'center' });
           }
+          try {
+            const r = el.getBoundingClientRect();
+            updateVirtualCursor(Math.round(r.left + Math.min(r.width / 2, 40)), Math.round(r.top + r.height / 2), 'click');
+          } catch (e) {}
           setNativeValue(el, request.text);
           sendResponse({ result: `Typed text into ${selector || (el.tagName ? el.tagName.toLowerCase() : 'activeElement')}` });
         } else {

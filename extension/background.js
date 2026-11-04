@@ -5,6 +5,54 @@ let consoleLogsByTab = {};
 let harDataByTab = {};
 let harPendingRequests = {};
 
+// The "sticky" tab xtradevpilot is actively working on. Commands that arrive
+// without an explicit tabId target this tab instead of whatever tab the user
+// happens to have in front, so switching tabs or windows by hand never hijacks
+// or interrupts automation (and navigate() never loads a URL into the user's tab).
+let stickyTabId = null;
+
+function getTabById(id) {
+  return new Promise((resolve) => {
+    try {
+      chrome.tabs.get(id, (tab) => resolve(!chrome.runtime.lastError && tab ? tab : null));
+    } catch (e) { resolve(null); }
+  });
+}
+
+function queryActiveTab() {
+  return new Promise((resolve) => {
+    chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => resolve(tabs && tabs[0] ? tabs[0] : null));
+  });
+}
+
+// Resolve the tab a command should act on: an explicit tabId always wins (and
+// becomes the new sticky target); otherwise the current sticky tab is used if it
+// still exists; otherwise we fall back to the active tab and remember it. Pure
+// read-only callers pass { updateSticky:false } so meta queries (tab info, logs)
+// never change which tab automation is working on.
+async function resolveTargetTab(payload = {}, { updateSticky = true } = {}) {
+  if (payload && payload.tabId != null) {
+    const t = await getTabById(payload.tabId);
+    if (!t) throw new Error(`Tab with ID ${payload.tabId} not found.`);
+    if (updateSticky) stickyTabId = t.id;
+    return t;
+  }
+  if (stickyTabId != null) {
+    const t = await getTabById(stickyTabId);
+    if (t) return t;
+    stickyTabId = null; // sticky tab was closed; fall through to active
+  }
+  const active = await queryActiveTab();
+  if (!active) throw new Error('No active tab found.');
+  if (updateSticky) stickyTabId = active.id;
+  return active;
+}
+
+function setStickyTab(id) { if (id != null) stickyTabId = id; }
+
+// Forget the sticky tab if the user closes it, so we cleanly fall back next time.
+chrome.tabs.onRemoved.addListener((tabId) => { if (tabId === stickyTabId) stickyTabId = null; });
+
 // Unique session ID generated per browser instance lifetime
 const BROWSER_SESSION_ID = 'devpilot_session_' + Math.random().toString(36).slice(2, 10);
 
@@ -97,13 +145,13 @@ chrome.tabs.onUpdated.addListener(ensureConnected);
 chrome.runtime.onStartup.addListener(ensureConnected);
 chrome.runtime.onInstalled.addListener(ensureConnected);
 
-function getActiveTabLogs(logsObj) {
-  return new Promise((resolve) => {
-    chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
-      if (tabs.length === 0) return resolve([]);
-      resolve(logsObj[tabs[0].id] || []);
-    });
-  });
+async function getActiveTabLogs(logsObj, payload) {
+  try {
+    const tab = await resolveTargetTab(payload || {}, { updateSticky: false });
+    return logsObj[tab.id] || [];
+  } catch (e) {
+    return [];
+  }
 }
 
 async function handleAction(action, payload = {}) {
@@ -112,24 +160,30 @@ async function handleAction(action, payload = {}) {
     case 'NAVIGATE':
       return new Promise((resolve, reject) => {
         const url = payload.url || 'https://google.com';
+        // open_tab may open in the background (active:false) so it never steals
+        // focus from what the user is doing; it still becomes the sticky target.
         if (action === 'OPEN_TAB' || payload.newTab) {
-          chrome.tabs.create({ url, active: true }, (tab) => {
+          chrome.tabs.create({ url, active: payload.background ? false : true }, (tab) => {
             if (chrome.runtime.lastError) return reject(new Error(chrome.runtime.lastError.message));
+            setStickyTab(tab.id);
             resolve({ tabId: tab.id, url: tab.url, status: tab.status });
           });
         } else if (payload.tabId) {
           chrome.tabs.update(payload.tabId, { url }, (tab) => {
             if (chrome.runtime.lastError) return reject(new Error(chrome.runtime.lastError.message));
+            setStickyTab(tab.id);
             resolve({ tabId: tab.id, url: tab.url, status: tab.status });
           });
         } else {
-          chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
-            if (tabs.length === 0) return reject(new Error("No active tab found."));
-            chrome.tabs.update(tabs[0].id, { url }, (tab) => {
+          // No tabId: navigate the tab automation is working on (sticky), NOT
+          // whatever tab the user currently has focused.
+          resolveTargetTab(payload).then((target) => {
+            chrome.tabs.update(target.id, { url }, (tab) => {
               if (chrome.runtime.lastError) return reject(new Error(chrome.runtime.lastError.message));
+              setStickyTab(tab.id);
               resolve({ tabId: tab.id, url: tab.url, status: tab.status });
             });
-          });
+          }).catch(reject);
         }
       });
     case 'GET_TAB_INFO':
@@ -150,10 +204,7 @@ async function handleAction(action, payload = {}) {
             resolve(parseTab(tab));
           });
         } else {
-          chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
-            if (tabs.length === 0) return reject(new Error("No active tab found."));
-            resolve(parseTab(tabs[0]));
-          });
+          resolveTargetTab(payload, { updateSticky: false }).then((tab) => resolve(parseTab(tab))).catch(reject);
         }
       });
     case 'LIST_TABS':
@@ -165,14 +216,15 @@ async function handleAction(action, payload = {}) {
             title: t.title,
             url: t.url,
             active: t.active,
+            working: t.id === stickyTabId,
             status: t.status
           })));
         });
       });
     case 'GET_NETWORK_LOGS':
-      return await getActiveTabLogs(networkLogsByTab);
+      return await getActiveTabLogs(networkLogsByTab, payload);
     case 'GET_CONSOLE_LOGS':
-      return await getActiveTabLogs(consoleLogsByTab);
+      return await getActiveTabLogs(consoleLogsByTab, payload);
     case 'GET_DOM':
     case 'GET_CLEAN_DOM':
     case 'GET_AX_TREE':
@@ -207,16 +259,7 @@ async function handleAction(action, payload = {}) {
     case 'DOWNLOAD_PAGE_HTML':
       return await askContentScript('DOWNLOAD_PAGE_HTML', payload);
     case 'TRACE_ACTION': {
-      let targetTab = null;
-      if (payload.tabId) {
-        try { targetTab = await new Promise(r => chrome.tabs.get(payload.tabId, r)); } catch (e) {}
-      }
-      if (!targetTab) {
-        const tabs = await new Promise(r => chrome.tabs.query({ active: true, currentWindow: true }, r));
-        targetTab = tabs && tabs.length > 0 ? tabs[0] : null;
-      }
-      if (!targetTab) throw new Error("No active tab found to trace action.");
-
+      const targetTab = await resolveTargetTab(payload);
       const tabId = targetTab.id;
       const initialHarCount = (harDataByTab[tabId] || []).length;
       const initialNetLogCount = (networkLogsByTab[tabId] || []).length;
@@ -257,17 +300,7 @@ async function handleAction(action, payload = {}) {
       };
     }
     case 'EXPORT_HAR': {
-      let targetTab = null;
-      if (payload.tabId) {
-        try {
-          targetTab = await new Promise(r => chrome.tabs.get(payload.tabId, r));
-        } catch (e) {}
-      }
-      if (!targetTab) {
-        const tabs = await new Promise(r => chrome.tabs.query({ active: true, currentWindow: true }, r));
-        targetTab = tabs && tabs.length > 0 ? tabs[0] : { id: 1, title: 'Active Tab', url: '' };
-      }
-
+      const targetTab = await resolveTargetTab(payload);
       const tabId = targetTab.id;
       const entries = harDataByTab[tabId] || [];
       const harLog = buildHarLog(tabId, targetTab.title, targetTab.url, entries);
@@ -279,17 +312,8 @@ async function handleAction(action, payload = {}) {
       return harLog;
     }
     case 'DOWNLOAD_SOURCES': {
-      let targetTab = null;
-      if (payload.tabId) {
-        try {
-          targetTab = await new Promise(r => chrome.tabs.get(payload.tabId, r));
-        } catch (e) {}
-      }
-      if (!targetTab) {
-        const tabs = await new Promise(r => chrome.tabs.query({ active: true, currentWindow: true }, r));
-        targetTab = tabs && tabs.length > 0 ? tabs[0] : null;
-      }
-      const tabId = targetTab ? targetTab.id : null;
+      const targetTab = await resolveTargetTab(payload);
+      const tabId = targetTab.id;
 
       const collected = await askContentScript('COLLECT_SOURCE_URLS', { ...payload, tabId });
       if (!collected) {
@@ -533,45 +557,31 @@ async function handleAction(action, payload = {}) {
           reject(new Error(`Unknown cookie operation: ${op}`));
         }
       });
-    case 'CAPTURE_SCREENSHOT':
-      return new Promise((resolve, reject) => {
-        const fallbackToContentScript = () => {
-          askContentScript('GET_CANVAS_SNAPSHOT', payload)
-            .then(dataUrl => resolve(dataUrl))
-            .catch(err => reject(err));
-        };
-
-        const capture = (windowId) => {
-          chrome.tabs.captureVisibleTab(windowId, { format: 'png' }, (dataUrl) => {
-            if (chrome.runtime.lastError || !dataUrl) {
-              return fallbackToContentScript();
-            }
-            resolve(dataUrl);
-          });
-        };
-
-        if (payload.tabId) {
-          chrome.tabs.get(payload.tabId, (tab) => {
-            if (chrome.runtime.lastError || !tab) return capture(null);
-            chrome.tabs.update(tab.id, { active: true }, () => {
-              chrome.windows.update(tab.windowId, { focused: true }, () => {
-                setTimeout(() => capture(tab.windowId), 150);
-              });
+    case 'CAPTURE_SCREENSHOT': {
+      const target = await resolveTargetTab(payload);
+      const tabId = target.id;
+      // Primary: CDP Page.captureScreenshot. Grabs the target tab WITHOUT
+      // activating it or focusing its window (so it never interrupts the user),
+      // and works even when the tab is backgrounded (no more blank captures).
+      try {
+        return await captureViaDebugger(tabId, payload);
+      } catch (cdpErr) {
+        // Fallback: capture the visible tab as-is. We deliberately do NOT switch
+        // tabs or focus the window here — if the target isn't visible this will
+        // fail and we drop to the content-script canvas snapshot below.
+        try {
+          const dataUrl = await new Promise((resolve, reject) => {
+            chrome.tabs.captureVisibleTab(target.windowId, { format: 'png' }, (d) => {
+              if (chrome.runtime.lastError || !d) return reject(new Error(chrome.runtime.lastError ? chrome.runtime.lastError.message : 'captureVisibleTab failed'));
+              resolve(d);
             });
           });
-        } else {
-          chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
-            const winId = tabs && tabs.length > 0 ? tabs[0].windowId : null;
-            if (winId) {
-              chrome.windows.update(winId, { focused: true }, () => {
-                setTimeout(() => capture(winId), 150);
-              });
-            } else {
-              capture(null);
-            }
-          });
+          return dataUrl;
+        } catch (visErr) {
+          return await askContentScript('GET_CANVAS_SNAPSHOT', { ...payload, tabId });
         }
-      });
+      }
+    }
     case 'RELOAD_EXTENSION':
       setTimeout(() => {
         chrome.runtime.reload();
@@ -610,13 +620,29 @@ async function executeScriptWithFallback(payload) {
   }
 }
 
-async function evaluateViaDebugger(payload) {
-  let tabId = payload.tabId;
-  if (!tabId) {
-    const tabs = await new Promise(r => chrome.tabs.query({ active: true, currentWindow: true }, r));
-    if (!tabs || tabs.length === 0) throw new Error('No active tab found for script execution.');
-    tabId = tabs[0].id;
+// Capture a tab's viewport via the DevTools Protocol. Unlike captureVisibleTab,
+// this does not require the tab to be active/visible and does not steal focus.
+async function captureViaDebugger(tabId, payload = {}) {
+  const target = { tabId };
+  const attach = () => new Promise((res, rej) => chrome.debugger.attach(target, '1.3', () => chrome.runtime.lastError ? rej(new Error(chrome.runtime.lastError.message)) : res()));
+  const detach = () => new Promise(res => chrome.debugger.detach(target, () => { void chrome.runtime.lastError; res(); }));
+  const send = (method, params) => new Promise((res, rej) => chrome.debugger.sendCommand(target, method, params || {}, (r) => chrome.runtime.lastError ? rej(new Error(chrome.runtime.lastError.message)) : res(r)));
+  let attached = false;
+  try {
+    await attach();
+    attached = true;
+    const params = { format: 'png', captureBeyondViewport: !!payload.fullPage };
+    const res = await send('Page.captureScreenshot', params);
+    if (!res || !res.data) throw new Error('No screenshot data returned by CDP.');
+    return 'data:image/png;base64,' + res.data;
+  } finally {
+    if (attached) await detach();
   }
+}
+
+async function evaluateViaDebugger(payload) {
+  const resolved = await resolveTargetTab(payload);
+  const tabId = resolved.id;
   const target = { tabId };
   const attach = () => new Promise((res, rej) => chrome.debugger.attach(target, '1.3', () => chrome.runtime.lastError ? rej(new Error(chrome.runtime.lastError.message)) : res()));
   const detach = () => new Promise(res => chrome.debugger.detach(target, () => { void chrome.runtime.lastError; res(); }));
@@ -654,6 +680,9 @@ async function evaluateViaDebugger(payload) {
 }
 
 async function askContentScript(action, payload = {}) {
+  // Resolve the working tab up front (explicit tabId > sticky tab > active tab),
+  // so no command silently follows whatever tab the user switched to.
+  const resolvedTab = await resolveTargetTab(payload);
   return new Promise((resolve, reject) => {
     const sendToTab = (tabId, tabUrl) => {
       if (tabUrl && tabUrl.startsWith('chrome://')) {
@@ -695,21 +724,7 @@ async function askContentScript(action, payload = {}) {
       });
     };
 
-    if (payload.tabId) {
-      chrome.tabs.get(payload.tabId, (tab) => {
-        if (chrome.runtime.lastError || !tab) {
-          return reject(new Error(`Tab with ID ${payload.tabId} not found: ${chrome.runtime.lastError ? chrome.runtime.lastError.message : ''}`));
-        }
-        sendToTab(tab.id, tab.url);
-      });
-    } else {
-      chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
-        if (tabs.length === 0) {
-          return reject(new Error("No active tab found."));
-        }
-        sendToTab(tabs[0].id, tabs[0].url);
-      });
-    }
+    sendToTab(resolvedTab.id, resolvedTab.url);
   });
 }
 
