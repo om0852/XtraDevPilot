@@ -5,10 +5,21 @@ let consoleLogsByTab = {};
 let harDataByTab = {};
 let harPendingRequests = {};
 
+// Unique session ID generated per browser instance lifetime
+const BROWSER_SESSION_ID = 'devpilot_session_' + Math.random().toString(36).slice(2, 10);
+
 const BRIDGE_URLS = ['ws://127.0.0.1:42819', 'ws://localhost:42819', 'ws://127.0.0.1:42820', 'ws://localhost:42820'];
 let bridgeUrlIndex = 0;
 
 function connectWebSocket() {
+  if (socket && (socket.readyState === WebSocket.OPEN || socket.readyState === WebSocket.CONNECTING)) {
+    return;
+  }
+  if (socket) {
+    try { socket.close(); } catch (e) {}
+    socket = null;
+  }
+
   const url = BRIDGE_URLS[bridgeUrlIndex % BRIDGE_URLS.length];
   console.log(`[DevPilot] Connecting to WebSocket bridge at ${url}...`);
   try {
@@ -22,7 +33,15 @@ function connectWebSocket() {
 
   socket.onopen = () => {
     console.log(`[DevPilot] Connected to IDE Bridge at ${url}`);
-    socket.send(JSON.stringify({ role: 'extension' }));
+    socket.send(JSON.stringify({
+      role: 'extension',
+      sessionId: BROWSER_SESSION_ID,
+      meta: {
+        userAgent: navigator.userAgent,
+        platform: navigator.platform || (navigator.userAgentData ? navigator.userAgentData.platform : 'unknown'),
+        extensionId: chrome.runtime ? chrome.runtime.id : undefined
+      }
+    }));
     
     // Setup 15s Heartbeat Ping
     if (heartbeatInterval) clearInterval(heartbeatInterval);
@@ -64,7 +83,7 @@ function connectWebSocket() {
 }
 
 function ensureConnected() {
-  if (!socket || socket.readyState !== WebSocket.OPEN) {
+  if (!socket || (socket.readyState !== WebSocket.OPEN && socket.readyState !== WebSocket.CONNECTING)) {
     connectWebSocket();
   }
 }
@@ -78,9 +97,8 @@ chrome.tabs.onUpdated.addListener(ensureConnected);
 chrome.runtime.onStartup.addListener(ensureConnected);
 chrome.runtime.onInstalled.addListener(ensureConnected);
 
-function getActiveTabLogs(logsObj, tabId) {
+function getActiveTabLogs(logsObj) {
   return new Promise((resolve) => {
-    if (tabId) return resolve(logsObj[tabId] || []);
     chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
       if (tabs.length === 0) return resolve([]);
       resolve(logsObj[tabs[0].id] || []);
@@ -152,14 +170,13 @@ async function handleAction(action, payload = {}) {
         });
       });
     case 'GET_NETWORK_LOGS':
-      return await getActiveTabLogs(networkLogsByTab, payload.tabId);
+      return await getActiveTabLogs(networkLogsByTab);
     case 'GET_CONSOLE_LOGS':
-      return await getActiveTabLogs(consoleLogsByTab, payload.tabId);
+      return await getActiveTabLogs(consoleLogsByTab);
     case 'GET_DOM':
     case 'GET_CLEAN_DOM':
     case 'GET_AX_TREE':
     case 'BATCH_EXECUTE':
-    case 'WAIT_FOR':
     case 'HIGHLIGHT_ELEMENT':
     case 'WAIT_FOR_CLICK':
     case 'CLICK_ELEMENT':
@@ -171,6 +188,7 @@ async function handleAction(action, payload = {}) {
     case 'WAIT_FOR_ELEMENT':
     case 'SMART_SELECT_COMBOBOX':
     case 'EXTRACT_JOB_DETAILS':
+    case 'EXECUTE_SCRIPT':
     case 'SCROLL_PAGE':
     case 'EXTRACT_STRUCTURED_DATA':
     case 'ASSERT_ELEMENT_STATE':
@@ -185,8 +203,6 @@ async function handleAction(action, payload = {}) {
     case 'RUN_SECURITY_AUDIT':
     case 'RUN_ACCESSIBILITY_AUDIT':
       return await askContentScript(action, payload);
-    case 'EXECUTE_SCRIPT':
-      return await executeScriptWithFallback(payload);
     case 'DOWNLOAD_PAGE_HTML':
       return await askContentScript('DOWNLOAD_PAGE_HTML', payload);
     case 'TRACE_ACTION': {
@@ -536,20 +552,22 @@ async function handleAction(action, payload = {}) {
         if (payload.tabId) {
           chrome.tabs.get(payload.tabId, (tab) => {
             if (chrome.runtime.lastError || !tab) return capture(null);
-            // captureVisibleTab grabs the active tab of the window. Only switch the
-            // active tab when needed, and never steal OS focus from the user.
-            if (tab.active) {
-              capture(tab.windowId);
-            } else {
-              chrome.tabs.update(tab.id, { active: true }, () => {
-                // Short settle for the newly-activated tab to paint.
-                setTimeout(() => capture(tab.windowId), 60);
+            chrome.tabs.update(tab.id, { active: true }, () => {
+              chrome.windows.update(tab.windowId, { focused: true }, () => {
+                setTimeout(() => capture(tab.windowId), 150);
               });
-            }
+            });
           });
         } else {
-          chrome.windows.getCurrent((win) => {
-            capture(win ? win.id : null);
+          chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
+            const winId = tabs && tabs.length > 0 ? tabs[0].windowId : null;
+            if (winId) {
+              chrome.windows.update(winId, { focused: true }, () => {
+                setTimeout(() => capture(winId), 150);
+              });
+            } else {
+              capture(null);
+            }
           });
         }
       });
@@ -585,7 +603,31 @@ async function askContentScript(action, payload = {}) {
 
       chrome.tabs.sendMessage(tabId, { action, ...payload }, (response) => {
         if (chrome.runtime.lastError) {
-          reject(new Error(chrome.runtime.lastError.message));
+          const errMsg = chrome.runtime.lastError.message || '';
+          if (errMsg.includes('Receiving end does not exist') || errMsg.includes('Could not establish connection')) {
+            // Auto-inject content script and retry
+            chrome.scripting.executeScript({
+              target: { tabId },
+              files: ['content.js']
+            }, () => {
+              if (chrome.runtime.lastError) {
+                return reject(new Error(`Failed to inject content script: ${chrome.runtime.lastError.message}`));
+              }
+              setTimeout(() => {
+                chrome.tabs.sendMessage(tabId, { action, ...payload }, (retryRes) => {
+                  if (chrome.runtime.lastError) {
+                    reject(new Error(chrome.runtime.lastError.message));
+                  } else if (retryRes && retryRes.error) {
+                    reject(new Error(retryRes.error));
+                  } else {
+                    resolve(retryRes ? retryRes.result : null);
+                  }
+                });
+              }, 120);
+            });
+          } else {
+            reject(new Error(errMsg));
+          }
         } else if (response && response.error) {
           reject(new Error(response.error));
         } else {
@@ -610,66 +652,6 @@ async function askContentScript(action, payload = {}) {
       });
     }
   });
-}
-
-// Runs page JS. Fast path = MAIN-world injection (content/injected.js). If the page's
-// Content-Security-Policy blocks eval there, transparently fall back to the Chrome
-// DevTools Protocol, which evaluates in the page context and is not subject to CSP.
-async function executeScriptWithFallback(payload) {
-  try {
-    return await askContentScript('EXECUTE_SCRIPT', payload);
-  } catch (err) {
-    const msg = String((err && err.message) || err);
-    if (/content security policy|unsafe-eval|evalerror|csp\b/i.test(msg)) {
-      return await evaluateViaDebugger(payload);
-    }
-    throw err;
-  }
-}
-
-async function evaluateViaDebugger(payload) {
-  let tabId = payload.tabId;
-  if (!tabId) {
-    const tabs = await new Promise(r => chrome.tabs.query({ active: true, currentWindow: true }, r));
-    if (!tabs || tabs.length === 0) throw new Error('No active tab found for script execution.');
-    tabId = tabs[0].id;
-  }
-  const target = { tabId };
-  const attach = () => new Promise((res, rej) => chrome.debugger.attach(target, '1.3', () => chrome.runtime.lastError ? rej(new Error(chrome.runtime.lastError.message)) : res()));
-  const detach = () => new Promise(res => chrome.debugger.detach(target, () => { void chrome.runtime.lastError; res(); }));
-  const send = (method, params) => new Promise((res, rej) => chrome.debugger.sendCommand(target, method, params || {}, (r) => chrome.runtime.lastError ? rej(new Error(chrome.runtime.lastError.message)) : res(r)));
-
-  const code = payload.script || '';
-  const hasReturn = /^\s*return\b/m.test(code);
-  const exprWrap = `(async () => { ${hasReturn ? code : 'return (' + code + '\n);'} })()`;
-  const stmtWrap = `(async () => { ${code} })()`;
-
-  const runEval = async (expression) => send('Runtime.evaluate', {
-    expression, awaitPromise: true, returnByValue: true, userGesture: true, allowUnsafeEvalBlockedByCSP: true
-  });
-
-  let attached = false;
-  try {
-    await attach();
-    attached = true;
-    let evalRes;
-    try {
-      evalRes = await runEval(exprWrap);
-      // A bare multi-statement body wrapped as an expression is a SyntaxError; retry as statements.
-      if (evalRes && evalRes.exceptionDetails && !hasReturn) evalRes = await runEval(stmtWrap);
-    } catch (e) {
-      evalRes = await runEval(stmtWrap);
-    }
-    if (evalRes && evalRes.exceptionDetails) {
-      const ex = evalRes.exceptionDetails;
-      const text = (ex.exception && (ex.exception.description || ex.exception.value)) || ex.text || 'Script execution error';
-      throw new Error(String(text));
-    }
-    const result = evalRes && evalRes.result ? evalRes.result.value : null;
-    return result !== undefined ? result : null;
-  } finally {
-    if (attached) await detach();
-  }
 }
 
 // Helper to compile standard HAR 1.2 log

@@ -24,6 +24,10 @@ const WSS_PORT = 42819;
 
 let wss = null;
 let activeExtensionSocket = null;
+const browserSessions = new Map(); // browserId -> { id, sessionId, ws, meta, connectedAt, lastSeen }
+const sessionToBrowserId = new Map(); // sessionId -> browserId
+let nextBrowserId = 1;
+let currentBrowserId = 1;
 let messageIdCounter = 1;
 const pendingRequests = new Map();
 
@@ -88,13 +92,43 @@ function startWebSocketServer(retryCount = 0) {
           
           if (data.role === 'extension') {
             isExtensionSocket = true;
+            const sessionId = data.sessionId;
+            let browserId = ws.browserId;
+            if (!browserId && sessionId && sessionToBrowserId.has(sessionId)) {
+              browserId = sessionToBrowserId.get(sessionId);
+            }
+            if (!browserId) {
+              browserId = nextBrowserId++;
+              if (sessionId) sessionToBrowserId.set(sessionId, browserId);
+            }
+            ws.browserId = browserId;
+
+            // If an older socket was registered under this browserId, gracefully terminate it
+            const existing = browserSessions.get(browserId);
+            if (existing && existing.ws !== ws) {
+              try { existing.ws.close(); } catch (e) {}
+            }
+
+            browserSessions.set(ws.browserId, {
+              id: ws.browserId,
+              sessionId,
+              ws,
+              connectedAt: existing ? existing.connectedAt : Date.now(),
+              lastSeen: Date.now(),
+              meta: data.meta || {}
+            });
             activeExtensionSocket = ws;
-            console.error(`[DevPilot Bridge] Chrome Extension registered via WebSocket.`);
+            if (!currentBrowserId || !browserSessions.has(currentBrowserId)) {
+              currentBrowserId = ws.browserId;
+            }
+            console.error(`[DevPilot Bridge] Browser #${ws.browserId} connected on port ${WSS_PORT}. Total active browsers: ${browserSessions.size}`);
             return;
           }
           
           if (data.type === 'PING') {
-            activeExtensionSocket = ws;
+            if (ws.browserId && browserSessions.has(ws.browserId)) {
+              browserSessions.get(ws.browserId).lastSeen = Date.now();
+            }
             return; // Ignore keep-alive pings
           }
           
@@ -111,7 +145,38 @@ function startWebSocketServer(retryCount = 0) {
           
           if (data.id && data.action) {
             try {
-              const result = await askExtension(data.action, data);
+              let result;
+              if (data.action === 'LIST_BROWSERS') {
+                const browsers = [];
+                for (const [id, session] of browserSessions.entries()) {
+                  if (session.ws.readyState === 1) {
+                    let activeTab = null;
+                    try {
+                      activeTab = await askExtension('GET_TAB_INFO', { browserId: id, timeoutMs: 2000 });
+                    } catch (e) {}
+                    browsers.push({
+                      browserId: id,
+                      active: id === currentBrowserId,
+                      title: activeTab?.title || 'Unknown Tab',
+                      url: activeTab?.url || '',
+                      dimensions: activeTab ? `${activeTab.width}x${activeTab.height}` : undefined,
+                      connectedAt: new Date(session.connectedAt).toISOString(),
+                      lastSeen: new Date(session.lastSeen).toISOString(),
+                      meta: session.meta || {}
+                    });
+                  }
+                }
+                result = browsers;
+              } else if (data.action === 'SWITCH_BROWSER') {
+                const targetId = parseInt(data.browserId, 10);
+                if (!browserSessions.has(targetId) || browserSessions.get(targetId).ws.readyState !== 1) {
+                  throw new Error(`Browser #${targetId} is not connected.`);
+                }
+                currentBrowserId = targetId;
+                result = { success: true, currentBrowserId: targetId };
+              } else {
+                result = await askExtension(data.action, data);
+              }
               ws.send(JSON.stringify({ id: data.id, result }));
             } catch (err) {
               ws.send(JSON.stringify({ id: data.id, error: err.message }));
@@ -124,8 +189,18 @@ function startWebSocketServer(retryCount = 0) {
       });
 
       ws.on('close', () => {
+        if (ws.browserId) {
+          const current = browserSessions.get(ws.browserId);
+          if (current && current.ws === ws) {
+            browserSessions.delete(ws.browserId);
+            console.error(`[DevPilot Bridge] Browser #${ws.browserId} disconnected. Remaining active: ${browserSessions.size}`);
+            if (currentBrowserId === ws.browserId) {
+              const alive = Array.from(browserSessions.keys()).filter(id => browserSessions.get(id).ws.readyState === 1);
+              currentBrowserId = alive.length > 0 ? alive[0] : null;
+            }
+          }
+        }
         if (activeExtensionSocket === ws) {
-          console.error(`[DevPilot Bridge] Chrome Extension disconnected.`);
           activeExtensionSocket = null;
         }
       });
@@ -160,21 +235,25 @@ function startWebSocketServer(retryCount = 0) {
 startWebSocketServer();
 
 async function askExtension(action, payload = {}) {
-  let targetSocket = activeExtensionSocket;
-  if (!targetSocket || targetSocket.readyState !== 1) {
-    if (wss && wss.clients) {
-      for (const client of wss.clients) {
-        if (client.readyState === 1) {
-          targetSocket = client;
-          activeExtensionSocket = client;
-          break;
-        }
+  // 1. Resolve target browser socket (explicit browserId or currentBrowserId)
+  let targetId = payload.browserId !== undefined ? parseInt(payload.browserId, 10) : currentBrowserId;
+  let targetSession = browserSessions.get(targetId);
+
+  // 2. If target session is not found or dead, pick the first active session
+  if (!targetSession || targetSession.ws.readyState !== 1) {
+    for (const [id, session] of browserSessions.entries()) {
+      if (session.ws.readyState === 1) {
+        targetSession = session;
+        currentBrowserId = id;
+        break;
       }
     }
   }
 
+  const targetSocket = targetSession ? targetSession.ws : activeExtensionSocket;
+
   if (!targetSocket || targetSocket.readyState !== 1) {
-    throw new Error("Chrome extension is not currently connected to the bridge. Ensure the extension is installed and loaded in your active browser.");
+    throw new Error("No Chrome browser is currently connected to the bridge. Ensure the extension is installed and loaded in your active browser.");
   }
 
   const id = messageIdCounter++;
@@ -217,6 +296,22 @@ const server = new Server(
 server.setRequestHandler(ListToolsRequestSchema, async () => {
   return {
     tools: [
+      {
+        name: 'list_browsers',
+        description: 'Lists all connected browser windows/profiles connected to the single bridge port 42819 with their active tab and session IDs.',
+        inputSchema: { type: 'object', properties: {} },
+      },
+      {
+        name: 'switch_browser',
+        description: 'Switch active target browser window by browserId (1, 2, ...) so subsequent MCP actions target that specific browser.',
+        inputSchema: {
+          type: 'object',
+          properties: {
+            browserId: { type: 'number', description: 'Target browser ID to activate' }
+          },
+          required: ['browserId']
+        },
+      },
       {
         name: 'open_tab',
         description: 'Opens a new browser tab in Chrome and navigates to the specified URL.',
@@ -433,6 +528,8 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
             endX: { type: 'number', description: 'End X coordinate for drag action' },
             endY: { type: 'number', description: 'End Y coordinate for drag action' },
             selector: { type: 'string', description: 'Optional CSS selector of target element' },
+            dropSelector: { type: 'string', description: 'Optional CSS selector of drop destination element for drag action' },
+            steps: { type: 'number', description: 'Number of intermediate move interpolation steps for drag (default: 15)' },
             button: { type: 'string', enum: ['left', 'middle', 'right'], description: 'Mouse button (default: left)' },
             deltaX: { type: 'number', description: 'Horizontal scroll delta for scroll action' },
             deltaY: { type: 'number', description: 'Vertical scroll delta for scroll action' },
@@ -503,8 +600,8 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
       },
       {
         name: 'get_web_vitals',
-        description: 'Extracts Core Web Vitals metrics (LCP, CLS, FCP) from the specified tab (or active tab).',
-        inputSchema: { type: 'object', properties: { tabId: { type: 'number', description: 'Optional target Chrome tab ID' } } },
+        description: 'Extracts Core Web Vitals metrics (LCP, CLS, FCP) from the active browser tab. Use this to audit and optimize page load performance.',
+        inputSchema: { type: 'object', properties: {} },
       },
       {
         name: 'run_security_audit',
@@ -530,29 +627,13 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
       },
       {
         name: 'get_network_logs',
-        description: 'Get recent network requests made by the specified tab (or active tab). Use this to debug failed API calls, 404s, or inspect payloads.',
-        inputSchema: { type: 'object', properties: { tabId: { type: 'number', description: 'Optional target Chrome tab ID' } } },
+        description: 'Get recent network requests made by the active browser tab. Use this to debug failed API calls, 404s, or inspect payloads.',
+        inputSchema: { type: 'object', properties: {} },
       },
       {
         name: 'get_console_logs',
-        description: 'Get recent console logs (errors, warnings, info) from the specified tab (or active tab). Use this to see Javascript errors.',
-        inputSchema: { type: 'object', properties: { tabId: { type: 'number', description: 'Optional target Chrome tab ID' } } },
-      },
-      {
-        name: 'wait_for',
-        description: 'Waits until a condition holds before returning: an element selector reaching a state, a JS predicate becoming truthy, the URL containing a substring, or the network going idle. Use this to synchronize before acting on dynamic/SPA pages instead of guessing with delays.',
-        inputSchema: {
-          type: 'object',
-          properties: {
-            selector: { type: 'string', description: 'CSS selector to wait for' },
-            state: { type: 'string', enum: ['visible', 'attached', 'hidden', 'detached'], description: 'Desired selector state (default: visible)' },
-            predicate: { type: 'string', description: 'JS expression evaluated in the page; waits until it returns truthy (e.g. "!!window.__APP_READY__")' },
-            urlIncludes: { type: 'string', description: 'Wait until the tab URL contains this substring' },
-            networkIdleMs: { type: 'number', description: 'Wait until no network requests for this many ms (e.g. 500)' },
-            timeoutMs: { type: 'number', description: 'Max time to wait in ms (default: 10000)' },
-            tabId: { type: 'number', description: 'Optional target Chrome tab ID' }
-          }
-        },
+        description: 'Get recent console logs (errors, warnings, info) from the active browser tab. Use this to see Javascript errors.',
+        inputSchema: { type: 'object', properties: {} },
       },
       {
         name: 'get_storage',
@@ -561,7 +642,7 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
       },
       {
         name: 'execute_script',
-        description: 'Executes arbitrary JavaScript in the webpage (MAIN world) and returns the evaluated result. Use an explicit `return` for multi-statement scripts (a bare single expression is auto-returned). Supports async/await and promises. If the page CSP blocks eval, it transparently falls back to the DevTools protocol so the script still runs. Ideal for inspecting React/Vue/Redux stores, window globals, or triggering custom events.',
+        description: 'Executes arbitrary JavaScript in the webpage context and returns the evaluated result. Supports async functions and promises. Ideal for inspecting React/Vue/Redux stores, window globals, or triggering custom events.',
         inputSchema: {
           type: 'object',
           properties: {
@@ -742,31 +823,49 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
   };
 });
 
-// Maps a raw error message to a stable, machine-readable code + a fix hint so the
-// calling agent can recover instead of parsing a stack trace.
-function classifyError(message) {
-  const m = String(message || '');
-  if (/not currently connected to the bridge|no chrome browser/i.test(m))
-    return { code: 'BRIDGE_DISCONNECTED', hint: 'Open a page in Chrome with the extension loaded, then retry. Check get_tab_info.' };
-  if (/no active tab/i.test(m))
-    return { code: 'NO_ACTIVE_TAB', hint: 'Pass an explicit tabId (from list_tabs) or focus a tab.' };
-  if (/tab with id .* not found/i.test(m))
-    return { code: 'TAB_NOT_FOUND', hint: 'The tabId is stale. Call list_tabs for current ids.' };
-  if (/timeout/i.test(m))
-    return { code: 'TIMEOUT', hint: 'The page/element was not ready. Use wait_for first, or raise timeoutMs.' };
-  if (/cannot access chrome:\/\/|restricted/i.test(m))
-    return { code: 'RESTRICTED_PAGE', hint: 'chrome:// and store pages cannot be scripted. Switch to a normal web page.' };
-  if (/content security policy|unsafe-eval/i.test(m))
-    return { code: 'CSP_BLOCKED', hint: 'Page CSP blocked eval; the debugger fallback should handle this once the extension is reloaded.' };
-  return { code: 'TOOL_ERROR', hint: 'Unexpected error. Retry; if it persists, check get_bridge_status / console logs.' };
-}
-
 server.setRequestHandler(CallToolRequestSchema, async (request) => {
-  const __t0 = Date.now();
   try {
     const args = request.params.arguments || {};
+    if (args.browserId !== undefined && browserSessions.has(parseInt(args.browserId, 10))) {
+      currentBrowserId = parseInt(args.browserId, 10);
+    }
     let result;
     switch (request.params.name) {
+      case 'list_browsers': {
+        const browsers = [];
+        for (const [id, session] of browserSessions.entries()) {
+          if (session.ws.readyState === 1) {
+            let activeTab = null;
+            try {
+              activeTab = await askExtension('GET_TAB_INFO', { browserId: id, timeoutMs: 2000 });
+            } catch (e) {}
+            browsers.push({
+              browserId: id,
+              active: id === currentBrowserId,
+              title: activeTab?.title || 'Unknown Tab',
+              url: activeTab?.url || '',
+              dimensions: activeTab ? `${activeTab.width}x${activeTab.height}` : undefined,
+              connectedAt: new Date(session.connectedAt).toISOString(),
+              meta: session.meta || {}
+            });
+          }
+        }
+        result = browsers;
+        break;
+      }
+      case 'switch_browser': {
+        const targetId = parseInt(args.browserId, 10);
+        if (!browserSessions.has(targetId) || browserSessions.get(targetId).ws.readyState !== 1) {
+          throw new Error(`Browser #${targetId} is not connected. Call 'list_browsers' to inspect available sessions.`);
+        }
+        currentBrowserId = targetId;
+        result = {
+          success: true,
+          currentBrowserId: targetId,
+          message: `Switched active target to Browser #${targetId}`
+        };
+        break;
+      }
       case 'get_dom_snapshot':
         result = await askExtension('GET_DOM', { tabId: args.tabId });
         break;
@@ -824,6 +923,8 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
           endX: args.endX,
           endY: args.endY,
           selector: args.selector,
+          dropSelector: args.dropSelector,
+          steps: args.steps,
           button: args.button,
           deltaX: args.deltaX,
           deltaY: args.deltaY,
@@ -901,9 +1002,30 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
           tabId: args.tabId
         });
         break;
-      case 'list_tabs':
-        result = await askExtension('LIST_TABS');
+      case 'list_tabs': {
+        const queryAll = args.allBrowsers !== false && (browserSessions.size > 1 || args.allBrowsers === true);
+        if (queryAll && browserSessions.size > 1 && args.browserId === undefined) {
+          const allTabs = [];
+          for (const [id, session] of browserSessions.entries()) {
+            if (session.ws.readyState === 1) {
+              try {
+                const tabs = await askExtension('LIST_TABS', { browserId: id, timeoutMs: 3000 });
+                if (Array.isArray(tabs)) {
+                  allTabs.push(...tabs.map(t => ({
+                    ...t,
+                    browserId: id,
+                    isCurrentBrowser: id === currentBrowserId
+                  })));
+                }
+              } catch (e) {}
+            }
+          }
+          result = allTabs;
+        } else {
+          result = await askExtension('LIST_TABS', { browserId: args.browserId });
+        }
         break;
+      }
       case 'capture_screenshot': {
         const base64DataUrl = await askExtension('CAPTURE_SCREENSHOT', { tabId: args.tabId });
         if (base64DataUrl && base64DataUrl.startsWith('data:image/png;base64,')) {
@@ -937,7 +1059,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         result = await askExtension('TOGGLE_LAYOUT_DEBUG');
         break;
       case 'get_web_vitals':
-        result = await askExtension('GET_WEB_VITALS', { tabId: args.tabId });
+        result = await askExtension('GET_WEB_VITALS');
         break;
       case 'run_security_audit':
         result = await askExtension('RUN_SECURITY_AUDIT');
@@ -952,21 +1074,10 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         });
         break;
       case 'get_network_logs':
-        result = await askExtension('GET_NETWORK_LOGS', { tabId: args.tabId });
+        result = await askExtension('GET_NETWORK_LOGS');
         break;
       case 'get_console_logs':
-        result = await askExtension('GET_CONSOLE_LOGS', { tabId: args.tabId });
-        break;
-      case 'wait_for':
-        result = await askExtension('WAIT_FOR', {
-          selector: args.selector,
-          state: args.state,
-          predicate: args.predicate,
-          urlIncludes: args.urlIncludes,
-          networkIdleMs: args.networkIdleMs,
-          timeoutMs: args.timeoutMs,
-          tabId: args.tabId
-        });
+        result = await askExtension('GET_CONSOLE_LOGS');
         break;
       case 'get_tab_info':
         result = await askExtension('GET_TAB_INFO', { tabId: args.tabId });
@@ -1217,18 +1328,12 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         throw new McpError(ErrorCode.MethodNotFound, `Unknown tool: ${request.params.name}`);
     }
 
-    const durationMs = Date.now() - __t0;
-    if (result && typeof result === 'object' && !Array.isArray(result)) {
-      result = { ...result, durationMs };
-    }
     return {
       content: [{ type: 'text', text: typeof result === 'string' ? result : JSON.stringify(result, null, 2) }],
     };
   } catch (error) {
-    const durationMs = Date.now() - __t0;
-    const { code, hint } = classifyError(error.message);
     return {
-      content: [{ type: 'text', text: JSON.stringify({ error: { code, message: error.message, hint }, durationMs }, null, 2) }],
+      content: [{ type: 'text', text: `Error: ${error.message}` }],
       isError: true,
     };
   }
@@ -1248,8 +1353,6 @@ async function run() {
     process.exit(0);
   };
 
-  process.stdin.on('close', () => cleanupAndExit('STDIN_CLOSE'));
-  process.stdin.on('end', () => cleanupAndExit('STDIN_END'));
   process.on('SIGINT', () => cleanupAndExit('SIGINT'));
   process.on('SIGTERM', () => cleanupAndExit('SIGTERM'));
 }

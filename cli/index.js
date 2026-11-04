@@ -61,12 +61,16 @@ ${fmt.bold('USAGE:')}
 
 ${fmt.bold('COMMANDS:')}
   ${fmt.cyan('status')}                                Check connection to Chrome bridge
+  ${fmt.cyan('browsers, list-browsers')}               List all connected browser sessions
+  ${fmt.cyan('switch-browser <id>')}                   Switch active target browser session
   ${fmt.cyan('tabs, list-tabs')}                       List all open Chrome tabs
   ${fmt.cyan('open <url>')}                            Open a new tab or navigate to URL
   ${fmt.cyan('goto, navigate <url>')}                  Navigate active tab to URL
   ${fmt.cyan('tab-info')}                              Get active or targeted tab metadata
   ${fmt.cyan('dom')}                                   Get current HTML DOM (supports --clean, --selector)
   ${fmt.cyan('click <selector>')}                      Click an element
+  ${fmt.cyan('drag <startX> <startY> <endX> <endY>')}  High-precision drag-and-drop / canvas drawing
+  ${fmt.cyan('mouse <action>')}                        Coordinate mouse action (click, dblclick, move, drag)
   ${fmt.cyan('type <selector> <text>')}                Type text into an input field
   ${fmt.cyan('fill <jsonFile|jsonString>')}            Batch fill form inputs
   ${fmt.cyan('combobox <trigger> <option>')}           Select option from searchable combobox
@@ -93,6 +97,7 @@ ${fmt.bold('COMMANDS:')}
 
 ${fmt.bold('GLOBAL OPTIONS:')}
   --json                     Output strictly structured JSON for AI tools & automation
+  -b, --browser <id>         Target a specific browser session ID
   --tab-id <id>              Target a specific Chrome tab ID
   -s, --selector <sel>       CSS selector for targeting elements
   -o, --output <path>        Output file or directory path
@@ -112,7 +117,12 @@ export async function runCli(argv = process.argv.slice(2)) {
   }
 
   if (flags.version || flags.v) {
-    console.log("2.1.0");
+    try {
+      const pkg = JSON.parse(fs.readFileSync(path.resolve(__dirname, '..', 'package.json'), 'utf8'));
+      console.log(pkg.version || '2.3.0');
+    } catch {
+      console.log('2.3.0');
+    }
     return 0;
   }
 
@@ -231,17 +241,30 @@ Always leverage Xtra DevPilot for browser automation, DOM inspection, form filli
     });
   }
 
-  const client = new BridgeClient();
+  const browserId = flags.browser || flags.b ? parseInt(flags.browser || flags.b, 10) : undefined;
+  const client = new BridgeClient(42819, '127.0.0.1', browserId);
 
   try {
+
     switch (command) {
       case 'status': {
         try {
           await client.connect(3000);
-          const tabs = await client.call('LIST_TABS');
-          const data = { connected: true, bridgeUrl: client.url, tabsCount: Array.isArray(tabs) ? tabs.length : 0 };
+          let browsers = [];
+          try {
+            browsers = await client.call('LIST_BROWSERS', {}, 3000);
+          } catch (e) {}
+          const tabs = await client.call('LIST_TABS', { browserId }, 3000);
+          const browsersCount = Array.isArray(browsers) && browsers.length > 0 ? browsers.length : 1;
+          const data = {
+            connected: true,
+            bridgeUrl: client.url,
+            browsersCount,
+            browsers: Array.isArray(browsers) ? browsers : [],
+            tabsCount: Array.isArray(tabs) ? tabs.length : 0
+          };
           if (isJson) fmt.printJson(data);
-          else console.log(fmt.success(`Connected to Chrome bridge at ${client.url} (${data.tabsCount} active tabs)`));
+          else console.log(fmt.success(`Connected to Chrome bridge at ${client.url} (${browsersCount} browser${browsersCount === 1 ? '' : 's'}, ${data.tabsCount} active tabs)`));
           return 0;
         } catch (err) {
           if (isJson) fmt.printJson({ connected: false, error: err.message, code: 1 });
@@ -250,14 +273,57 @@ Always leverage Xtra DevPilot for browser automation, DOM inspection, form filli
         }
       }
 
+      case 'browsers':
+      case 'list-browsers': {
+        const browsers = await client.call('LIST_BROWSERS', {}, 5000);
+        if (isJson) {
+          fmt.printJson(browsers);
+        } else {
+          const rows = (browsers || []).map(b => [
+            String(b.browserId),
+            b.active ? '* ACTIVE' : 'Connected',
+            b.title || 'Unknown',
+            b.dimensions || '-',
+            b.url || ''
+          ]);
+          fmt.printTable(['BROWSER ID', 'STATUS', 'ACTIVE TAB', 'DIMENSIONS', 'URL'], rows);
+        }
+        return 0;
+      }
+
+      case 'switch-browser': {
+        const targetBrowserId = parseInt(args[0] || flags.browser || flags.b, 10);
+        if (isNaN(targetBrowserId)) {
+          if (isJson) fmt.printJson({ error: "Missing required argument: <browserId>", code: 2 });
+          else console.error(fmt.error("Usage: devpilot switch-browser <browserId>"));
+          return 2;
+        }
+        const res = await client.call('SWITCH_BROWSER', { browserId: targetBrowserId });
+        if (isJson) fmt.printJson(res);
+        else console.log(fmt.success(`Switched active targeted browser to Browser #${targetBrowserId}`));
+        return 0;
+      }
+
       case 'tabs':
       case 'list-tabs': {
-        const tabs = await client.call('LIST_TABS');
+        const tabs = await client.call('LIST_TABS', { browserId });
         if (isJson) {
           fmt.printJson(tabs);
         } else {
-          const rows = (tabs || []).map(t => [String(t.id), t.active ? '* Yes' : 'No', t.title || 'Untitled', t.url || '']);
-          fmt.printTable(['TAB ID', 'ACTIVE', 'TITLE', 'URL'], rows);
+          const hasMultipleBrowsers = (tabs || []).some(t => t.browserId !== undefined);
+          if (hasMultipleBrowsers) {
+            const rows = (tabs || []).map(t => [
+              String(t.browserId || '-'),
+              String(t.id),
+              t.active ? '* Yes' : 'No',
+              t.title || 'Untitled',
+              t.url || ''
+            ]);
+            fmt.printTable(['BROWSER', 'TAB ID', 'ACTIVE', 'TITLE', 'URL'], rows);
+          } else {
+            const rows = (tabs || []).map(t => [String(t.id), t.active ? '* Yes' : 'No', t.title || 'Untitled', t.url || '']);
+            fmt.printTable(['TAB ID', 'ACTIVE', 'TITLE', 'URL'], rows);
+          }
         }
         return 0;
       }
@@ -351,6 +417,85 @@ Always leverage Xtra DevPilot for browser automation, DOM inspection, form filli
         const res = await client.call('CLICK_ELEMENT', { selector, timeoutMs, tabId });
         if (isJson) fmt.printJson({ status: 'success', selector, result: res });
         else console.log(fmt.success(`Clicked element '${selector}'`));
+        return 0;
+      }
+
+      case 'drag': {
+        let startX = parseFloat(args[0]);
+        let startY = parseFloat(args[1]);
+        let endX = parseFloat(args[2]);
+        let endY = parseFloat(args[3]);
+        let selector = flags.selector || flags.from || flags.s;
+        let dropSelector = flags.dropSelector || flags.to || flags.d;
+
+        // Support selector-to-selector syntax: devpilot drag <sourceSelector> <dropSelector>
+        if (isNaN(startX) && args[0] && typeof args[0] === 'string' && isNaN(parseFloat(args[0]))) {
+          selector = args[0];
+          dropSelector = args[1] || dropSelector;
+        }
+
+        if (isNaN(startX) && !selector) {
+          if (isJson) fmt.printJson({ error: "Missing arguments: provide <startX> <startY> <endX> <endY> or <sourceSelector> <dropSelector>", code: 2 });
+          else console.error(fmt.error("Usage:\n  devpilot drag <startX> <startY> <endX> <endY> [--steps <n>]\n  devpilot drag <sourceSelector> <dropSelector> [--steps <n>]"));
+          return 2;
+        }
+
+        const steps = flags.steps ? parseInt(flags.steps, 10) : 15;
+        const res = await client.call('MOUSE_ACTION', {
+          action: 'drag',
+          x: !isNaN(startX) ? startX : undefined,
+          y: !isNaN(startY) ? startY : undefined,
+          endX: !isNaN(endX) ? endX : undefined,
+          endY: !isNaN(endY) ? endY : undefined,
+          selector,
+          dropSelector,
+          steps,
+          tabId
+        });
+
+        if (isJson) fmt.printJson({ status: 'success', selector, dropSelector, result: res });
+        else {
+          const verifiedMsg = res?.verified !== undefined ? ` [Verified: ${res.verified ? 'YES' : 'NO'}]` : '';
+          const deltaMsg = res?.delta ? ` (delta: dx=${res.delta.x}, dy=${res.delta.y})` : '';
+          console.log(fmt.success(`Dragged ${selector || `from (${startX}, ${startY})`} -> ${dropSelector || `(${endX}, ${endY})`}${verifiedMsg}${deltaMsg}`));
+        }
+        return 0;
+      }
+
+      case 'mouse': {
+        const action = args[0] || flags.action;
+        if (!action || !['click', 'dblclick', 'move', 'drag', 'scroll'].includes(action)) {
+          if (isJson) fmt.printJson({ error: "Invalid action. Allowed: click, dblclick, move, drag, scroll", code: 2 });
+          else console.error(fmt.error("Usage: devpilot mouse <click|dblclick|move|drag|scroll> [--x <x>] [--y <y>] [--endX <endX>] [--endY <endY>] [--selector <sel>] [--drop-selector <sel>]"));
+          return 2;
+        }
+        const x = flags.x !== undefined ? parseFloat(flags.x) : (args[1] && !isNaN(parseFloat(args[1])) ? parseFloat(args[1]) : undefined);
+        const y = flags.y !== undefined ? parseFloat(flags.y) : (args[2] && !isNaN(parseFloat(args[2])) ? parseFloat(args[2]) : undefined);
+        const endX = flags.endX !== undefined ? parseFloat(flags.endX) : (flags.toX !== undefined ? parseFloat(flags.toX) : undefined);
+        const endY = flags.endY !== undefined ? parseFloat(flags.endY) : (flags.toY !== undefined ? parseFloat(flags.toY) : undefined);
+        const button = flags.button || 'left';
+        const selector = flags.selector || flags.s || (args[1] && isNaN(parseFloat(args[1])) ? args[1] : undefined);
+        const dropSelector = flags.dropSelector || flags.to || flags.d;
+        const steps = flags.steps ? parseInt(flags.steps, 10) : 15;
+        const deltaX = flags.deltaX ? parseFloat(flags.deltaX) : 0;
+        const deltaY = flags.deltaY ? parseFloat(flags.deltaY) : 0;
+
+        const res = await client.call('MOUSE_ACTION', {
+          action,
+          x,
+          y,
+          endX,
+          endY,
+          button,
+          selector,
+          dropSelector,
+          steps,
+          deltaX,
+          deltaY,
+          tabId
+        });
+        if (isJson) fmt.printJson({ status: 'success', action, result: res });
+        else console.log(fmt.success(`Executed mouse action '${action}'`));
         return 0;
       }
 

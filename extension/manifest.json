@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Xtra DevPilot",
-  "version": "1.2.0",
+  "version": "1.0.0",
   "description": "Bridges live browser data to your IDE via MCP.",
   "permissions": [
     "storage",
@@ -10,8 +10,7 @@
     "tabs",
     "webRequest",
     "cookies",
-    "pageCapture",
-    "debugger"
+    "pageCapture"
   ],
   "host_permissions": [
     "<all_urls>"
