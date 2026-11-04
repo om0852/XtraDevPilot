@@ -21,18 +21,18 @@ Today input is synthetic DOM events and page-world eval, which fails on canvas/m
 
 - ✅ Pointer-event sequences in `mouse_action` (DOM path) — `pointerover/enter/down/move/up` + mouse, so canvas apps register clicks/drags.
 - ✅ `capture_screenshot` no longer steals focus / sleeps 150ms when tab is already active.
-- ⬜ **`wait_for` primitive** — wait on selector / selector-gone / `networkidle` / JS predicate / URL change / "app mounted". (Biggest missing piece; every multi-step run needs it.)
-- ⬜ **Atomic `batch_execute`** — run every step, per-step results array, `stopOnError`, per-step `waitFor`. (Currently drops after the first action.)
+- ✅ **`wait_for` primitive** — selector/state, JS predicate, URL-includes, network-idle; per-condition timeouts. (MCP tool + content handler.)
+- ✅ **Atomic `batch_execute`** — runs every step, waits for each element, per-step `{index,action,ok,error}` results, `stopOnError`, per-step `waitMs`; supports click/type/select/check/scroll/wait. (Was silently skipping not-yet-present elements.)
 - ⬜ **Bridge resilience** — heartbeat + auto-reconnect + in-flight request queue; `get_bridge_status` tool.
-- ⬜ **Structured errors everywhere** — `{code, message, hint, didYouMean}` instead of raw stacks (e.g. `getTargetTabId` → `NO_ACTIVE_TAB`).
-- ⬜ **`durationMs` on every tool result** — observability / latency measurement (currently impossible externally).
+- ✅ **Structured errors** — `{code, message, hint}` (BRIDGE_DISCONNECTED / NO_ACTIVE_TAB / TAB_NOT_FOUND / TIMEOUT / RESTRICTED_PAGE / CSP_BLOCKED) instead of raw stacks.
+- ✅ **`durationMs` on every object tool result** — observability / latency measurement.
 
 ## Tier 2 — AI-ergonomics
 
 - ⬜ **Ref-based targeting** — every read returns stable `ref` ids; `click`/`type`/`assert` accept `ref`; resolver by role+name+text with self-healing across re-renders.
 - ⬜ **Fused perception tool** — one call: screenshot + trimmed AX tree + interactive-element list (coords + refs), optional diff-since-last-snapshot, token-budgeted.
 - ⬜ **`get_app_context` framework adapter** — auto-detect React/Vue fiber, Redux/Zustand/Pinia, tldraw/canvas engines; return a **stable handle + state snapshot** (replaces per-call fiber-walking, which is brittle and orphans on remounts).
-- ⬜ **`tabId` on `get_network_logs` / `get_console_logs` / `get_web_vitals`** (currently active-tab only).
+- ✅ **`tabId` on `get_network_logs` / `get_console_logs` / `get_web_vitals`** (were active-tab only).
 
 ## Tier 3 — Power features
 
@@ -51,15 +51,16 @@ Today input is synthetic DOM events and page-world eval, which fails on canvas/m
 ## Reverse-engineering suite (from The Verge test — see `re-theverge/REPORT.md`)
 
 - ✅ **`extract_api_endpoints`**: summary-only MCP output + full spec/catalog persisted to disk; static-asset filtering (js/map/css/img/font/media); host grouping (`servers`); first/third-party tagging; method counts. *(Verified: Verge HAR 179→95 endpoints, 8 first-party vs 87 third-party, 66 hosts.)*
-- ⬜ **`reconstruct_source_tree`**: fix `detectedTechStack: []` and `extractedModulesCount: 0` (not wired up); emit a clear "N sourcemaps found / app source not recoverable" note.
+- ✅ **`reconstruct_source_tree`**: broadened tech-stack detection (Webpack/Turbopack/npm/Angular/jQuery/…), added `topPackages`, renamed the confusing `extractedModulesCount` to `fallbackExtractedModulesCount`, added `sourceMapsFound`/`reconstructedFileCount` + a human `note`. *(Verified on Verge: now reports ["Webpack","npm packages"] + core-js/@voxmedia/identity-library, note explains recovery.)*
 - ⬜ **`export_rea_evidence`**: make cookie/storage capture opt-in or redacted (sensitive on authenticated targets); populate `limitations`.
 - ⬜ Add `durationMs` to all RE tools.
 
 ---
 
 ## Done so far (committed)
-- `perf(extension)`: pointer events, screenshot speed, CSP eval fallback, 50ms element poll, manifest v1.1.0.
+- `perf(extension)`: pointer events, screenshot speed, CSP eval fallback, 50ms element poll.
 - `fix(rea)`: `extract_api_endpoints` filtering + summary + host grouping.
+- `feat`: `wait_for` tool, atomic `batch_execute`, structured errors + `durationMs`, `tabId` on logs/vitals, `reconstruct_source_tree` reporting. manifest v1.2.0.
 
 ## Testing note
 New **extension** code (anything touching `extension/*`) only takes effect after the unpacked extension is **reloaded in Chrome** (and the new `debugger` permission accepted) and the **MCP server restarted**. Node-side changes (`mcp-server/*`, `src/*`) are testable immediately.

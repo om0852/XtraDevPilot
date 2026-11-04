@@ -503,8 +503,8 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
       },
       {
         name: 'get_web_vitals',
-        description: 'Extracts Core Web Vitals metrics (LCP, CLS, FCP) from the active browser tab. Use this to audit and optimize page load performance.',
-        inputSchema: { type: 'object', properties: {} },
+        description: 'Extracts Core Web Vitals metrics (LCP, CLS, FCP) from the specified tab (or active tab).',
+        inputSchema: { type: 'object', properties: { tabId: { type: 'number', description: 'Optional target Chrome tab ID' } } },
       },
       {
         name: 'run_security_audit',
@@ -530,13 +530,29 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
       },
       {
         name: 'get_network_logs',
-        description: 'Get recent network requests made by the active browser tab. Use this to debug failed API calls, 404s, or inspect payloads.',
-        inputSchema: { type: 'object', properties: {} },
+        description: 'Get recent network requests made by the specified tab (or active tab). Use this to debug failed API calls, 404s, or inspect payloads.',
+        inputSchema: { type: 'object', properties: { tabId: { type: 'number', description: 'Optional target Chrome tab ID' } } },
       },
       {
         name: 'get_console_logs',
-        description: 'Get recent console logs (errors, warnings, info) from the active browser tab. Use this to see Javascript errors.',
-        inputSchema: { type: 'object', properties: {} },
+        description: 'Get recent console logs (errors, warnings, info) from the specified tab (or active tab). Use this to see Javascript errors.',
+        inputSchema: { type: 'object', properties: { tabId: { type: 'number', description: 'Optional target Chrome tab ID' } } },
+      },
+      {
+        name: 'wait_for',
+        description: 'Waits until a condition holds before returning: an element selector reaching a state, a JS predicate becoming truthy, the URL containing a substring, or the network going idle. Use this to synchronize before acting on dynamic/SPA pages instead of guessing with delays.',
+        inputSchema: {
+          type: 'object',
+          properties: {
+            selector: { type: 'string', description: 'CSS selector to wait for' },
+            state: { type: 'string', enum: ['visible', 'attached', 'hidden', 'detached'], description: 'Desired selector state (default: visible)' },
+            predicate: { type: 'string', description: 'JS expression evaluated in the page; waits until it returns truthy (e.g. "!!window.__APP_READY__")' },
+            urlIncludes: { type: 'string', description: 'Wait until the tab URL contains this substring' },
+            networkIdleMs: { type: 'number', description: 'Wait until no network requests for this many ms (e.g. 500)' },
+            timeoutMs: { type: 'number', description: 'Max time to wait in ms (default: 10000)' },
+            tabId: { type: 'number', description: 'Optional target Chrome tab ID' }
+          }
+        },
       },
       {
         name: 'get_storage',
@@ -726,7 +742,27 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
   };
 });
 
+// Maps a raw error message to a stable, machine-readable code + a fix hint so the
+// calling agent can recover instead of parsing a stack trace.
+function classifyError(message) {
+  const m = String(message || '');
+  if (/not currently connected to the bridge|no chrome browser/i.test(m))
+    return { code: 'BRIDGE_DISCONNECTED', hint: 'Open a page in Chrome with the extension loaded, then retry. Check get_tab_info.' };
+  if (/no active tab/i.test(m))
+    return { code: 'NO_ACTIVE_TAB', hint: 'Pass an explicit tabId (from list_tabs) or focus a tab.' };
+  if (/tab with id .* not found/i.test(m))
+    return { code: 'TAB_NOT_FOUND', hint: 'The tabId is stale. Call list_tabs for current ids.' };
+  if (/timeout/i.test(m))
+    return { code: 'TIMEOUT', hint: 'The page/element was not ready. Use wait_for first, or raise timeoutMs.' };
+  if (/cannot access chrome:\/\/|restricted/i.test(m))
+    return { code: 'RESTRICTED_PAGE', hint: 'chrome:// and store pages cannot be scripted. Switch to a normal web page.' };
+  if (/content security policy|unsafe-eval/i.test(m))
+    return { code: 'CSP_BLOCKED', hint: 'Page CSP blocked eval; the debugger fallback should handle this once the extension is reloaded.' };
+  return { code: 'TOOL_ERROR', hint: 'Unexpected error. Retry; if it persists, check get_bridge_status / console logs.' };
+}
+
 server.setRequestHandler(CallToolRequestSchema, async (request) => {
+  const __t0 = Date.now();
   try {
     const args = request.params.arguments || {};
     let result;
@@ -901,7 +937,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         result = await askExtension('TOGGLE_LAYOUT_DEBUG');
         break;
       case 'get_web_vitals':
-        result = await askExtension('GET_WEB_VITALS');
+        result = await askExtension('GET_WEB_VITALS', { tabId: args.tabId });
         break;
       case 'run_security_audit':
         result = await askExtension('RUN_SECURITY_AUDIT');
@@ -916,10 +952,21 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         });
         break;
       case 'get_network_logs':
-        result = await askExtension('GET_NETWORK_LOGS');
+        result = await askExtension('GET_NETWORK_LOGS', { tabId: args.tabId });
         break;
       case 'get_console_logs':
-        result = await askExtension('GET_CONSOLE_LOGS');
+        result = await askExtension('GET_CONSOLE_LOGS', { tabId: args.tabId });
+        break;
+      case 'wait_for':
+        result = await askExtension('WAIT_FOR', {
+          selector: args.selector,
+          state: args.state,
+          predicate: args.predicate,
+          urlIncludes: args.urlIncludes,
+          networkIdleMs: args.networkIdleMs,
+          timeoutMs: args.timeoutMs,
+          tabId: args.tabId
+        });
         break;
       case 'get_tab_info':
         result = await askExtension('GET_TAB_INFO', { tabId: args.tabId });
@@ -1170,12 +1217,18 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         throw new McpError(ErrorCode.MethodNotFound, `Unknown tool: ${request.params.name}`);
     }
 
+    const durationMs = Date.now() - __t0;
+    if (result && typeof result === 'object' && !Array.isArray(result)) {
+      result = { ...result, durationMs };
+    }
     return {
       content: [{ type: 'text', text: typeof result === 'string' ? result : JSON.stringify(result, null, 2) }],
     };
   } catch (error) {
+    const durationMs = Date.now() - __t0;
+    const { code, hint } = classifyError(error.message);
     return {
-      content: [{ type: 'text', text: `Error: ${error.message}` }],
+      content: [{ type: 'text', text: JSON.stringify({ error: { code, message: error.message, hint }, durationMs }, null, 2) }],
       isError: true,
     };
   }

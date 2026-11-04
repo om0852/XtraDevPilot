@@ -151,6 +151,23 @@ async function waitForElement(selector, timeoutMs = 3000, state = 'visible', roo
   });
 }
 
+// Evaluate a script in the page (MAIN world) via the injected bridge and resolve its value.
+function runInPage(script, timeoutMs = 3000) {
+  return new Promise((resolve, reject) => {
+    const execId = 'wf_' + Math.random().toString(36).slice(2, 9);
+    const to = setTimeout(() => { window.removeEventListener('message', h); reject(new Error('page eval timeout')); }, timeoutMs);
+    const h = (e) => {
+      if (e.source !== window || !e.data || e.data.type !== 'DEVPILOT_EXEC_RESULT' || e.data.execId !== execId) return;
+      clearTimeout(to); window.removeEventListener('message', h);
+      if (e.data.error) reject(new Error(e.data.error)); else resolve(e.data.result);
+    };
+    window.addEventListener('message', h);
+    window.postMessage({ type: 'DEVPILOT_EXEC_SCRIPT', execId, script }, '*');
+  });
+}
+
+const sleepMs = (ms) => new Promise(r => setTimeout(r, ms));
+
 // --- MCP Visual Badge & Accessibility Tree Helpers ---
 
 function ensureMcpBadge() {
@@ -570,27 +587,81 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
 
   if (request.action === 'BATCH_EXECUTE') {
     (async () => {
+      ensureMcpBadge();
+      const actions = request.actions || [];
+      const stopOnError = request.stopOnError !== false; // default: stop on first failure
+      const results = [];
+      for (let i = 0; i < actions.length; i++) {
+        const item = actions[i] || {};
+        const act = (item.action || 'CLICK_ELEMENT').toUpperCase();
+        const step = { index: i, action: act, selector: item.selector, ok: false };
+        try {
+          if (item.waitMs) await sleepMs(item.waitMs);
+          if (act === 'WAIT') { await sleepMs(item.ms || item.waitMs || 500); step.ok = true; results.push(step); continue; }
+
+          let el = null;
+          if (item.selector) {
+            el = await waitForElement(item.selector, item.timeoutMs != null ? item.timeoutMs : 2000, 'visible');
+            if (!el) { step.error = `element not found: ${item.selector}`; results.push(step); if (stopOnError) break; else continue; }
+            flashInteractionHighlight(el);
+          }
+
+          switch (act) {
+            case 'CLICK_ELEMENT': el.click(); step.ok = true; break;
+            case 'TYPE_TEXT': setNativeValue(el, item.text || ''); step.ok = true; break;
+            case 'SELECT': setNativeValue(el, item.value != null ? item.value : (item.text || '')); el.dispatchEvent(new Event('change', { bubbles: true })); step.ok = true; break;
+            case 'CHECK': if (el.type === 'checkbox' && !el.checked) el.click(); step.ok = true; break;
+            case 'UNCHECK': if (el.type === 'checkbox' && el.checked) el.click(); step.ok = true; break;
+            case 'SCROLL_TO': el.scrollIntoView({ block: 'center' }); step.ok = true; break;
+            default: step.error = `unsupported action: ${act}`;
+          }
+        } catch (e) { step.error = String(e && e.message || e); }
+        results.push(step);
+        if (!step.ok && stopOnError) break;
+      }
+      const completed = results.filter(r => r.ok).length;
+      sendResponse({ result: { ok: completed === actions.length, total: actions.length, completed, steps: results } });
+    })();
+    return true;
+  }
+
+  if (request.action === 'WAIT_FOR') {
+    (async () => {
+      const t = request.timeoutMs || 10000;
+      const start = Date.now();
+      const remain = () => t - (Date.now() - start);
       try {
-        ensureMcpBadge();
-        const actions = request.actions || [];
-        const results = [];
-        for (const item of actions) {
-          const sel = item.selector ? findElement(item.selector) : null;
-          if (sel) {
-            flashInteractionHighlight(sel);
-            if (item.action === 'CLICK_ELEMENT') {
-              sel.click();
-              results.push(`Clicked ${item.selector}`);
-            } else if (item.action === 'TYPE_TEXT') {
-              setNativeValue(sel, item.text || '');
-              results.push(`Typed into ${item.selector}`);
-            }
+        if (request.selector) {
+          const state = request.state || 'visible';
+          const el = await waitForElement(request.selector, remain(), state);
+          if (!el && state !== 'detached') throw new Error(`timeout: selector '${request.selector}' did not reach '${state}'`);
+        }
+        if (request.urlIncludes) {
+          while (!location.href.includes(request.urlIncludes)) {
+            if (remain() <= 0) throw new Error(`timeout: URL did not include '${request.urlIncludes}'`);
+            await sleepMs(80);
           }
         }
-        sendResponse({ result: results });
-      } catch (e) {
-        sendResponse({ error: e.message });
-      }
+        if (request.predicate) {
+          let ok = false;
+          while (remain() > 0) {
+            try { const v = await runInPage('return (' + request.predicate + ');', Math.min(2500, Math.max(500, remain()))); if (v) { ok = true; break; } } catch (e) {}
+            await sleepMs(120);
+          }
+          if (!ok) throw new Error('timeout: predicate never became truthy');
+        }
+        if (request.networkIdleMs) {
+          const idle = request.networkIdleMs; let last = -1, stableSince = Date.now();
+          while (remain() > 0) {
+            let cnt = last;
+            try { cnt = await runInPage("return performance.getEntriesByType('resource').length;", 1500); } catch (e) {}
+            if (cnt !== last) { last = cnt; stableSince = Date.now(); }
+            else if (Date.now() - stableSince >= idle) break;
+            await sleepMs(100);
+          }
+        }
+        sendResponse({ result: { status: 'ready', waitedMs: Date.now() - start } });
+      } catch (e) { sendResponse({ error: String(e && e.message || e) }); }
     })();
     return true;
   }

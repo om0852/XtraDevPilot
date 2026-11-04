@@ -43,18 +43,38 @@ export function normalizeSourcePath(rawPath) {
  */
 export function detectProjectTechStack(filePaths) {
   const stack = new Set();
+  let sawJs = false;
   for (const fp of filePaths) {
     const lower = fp.toLowerCase();
+    if (lower.endsWith('.js') || lower.endsWith('.mjs') || lower.endsWith('.cjs')) sawJs = true;
     if (lower.includes('react') || lower.endsWith('.tsx') || lower.endsWith('.jsx')) stack.add('React');
     if (lower.includes('next/') || lower.includes('_app.') || lower.includes('_document.') || lower.includes('app/page.')) stack.add('Next.js');
     if (lower.endsWith('.vue') || lower.includes('vue-router') || lower.includes('pinia')) stack.add('Vue');
     if (lower.endsWith('.svelte')) stack.add('Svelte');
+    if (lower.includes('@angular/') || lower.includes('angular.')) stack.add('Angular');
     if (lower.endsWith('.ts') || lower.endsWith('.tsx')) stack.add('TypeScript');
-    if (lower.includes('tailwind') || lower.includes('tailwind.config')) stack.add('TailwindCSS');
+    if (lower.includes('tailwind')) stack.add('TailwindCSS');
     if (lower.includes('redux') || lower.includes('zustand') || lower.includes('mobx')) stack.add('State Management');
-    if (lower.includes('vite.config')) stack.add('Vite');
+    if (lower.includes('vite.config') || lower.includes('/vite/')) stack.add('Vite');
+    if (lower.includes('webpack/') || lower.includes('__webpack') || lower.includes('webpack/runtime')) stack.add('Webpack');
+    if (lower.includes('/rollup/') || lower.includes('rollupplugin')) stack.add('Rollup');
+    if (lower.includes('turbopack')) stack.add('Turbopack');
+    if (lower.includes('node_modules/')) stack.add('npm packages');
+    if (lower.includes('jquery')) stack.add('jQuery');
   }
+  // Never report "nothing" when source was actually recovered.
+  if (stack.size === 0 && sawJs) stack.add('JavaScript');
   return Array.from(stack);
+}
+
+/** Extracts the top npm package names from reconstructed node_modules paths. */
+export function detectTopPackages(filePaths, limit = 15) {
+  const counts = new Map();
+  for (const fp of filePaths) {
+    const m = fp.replace(/\\/g, '/').match(/node_modules\/((?:@[^/]+\/)?[^/]+)/i);
+    if (m) counts.set(m[1], (counts.get(m[1]) || 0) + 1);
+  }
+  return [...counts.entries()].sort((a, b) => b[1] - a[1]).slice(0, limit).map(([name, files]) => ({ name, files }));
 }
 
 /**
@@ -319,6 +339,7 @@ export function reconstructCodebaseFromDirectory(inputDir, outputDir) {
   // Language & tech stack analysis
   const relativeList = processedSources.map(s => s.relativePath);
   const techStack = detectProjectTechStack(relativeList);
+  const topPackages = detectTopPackages(relativeList);
   const extensionsMap = {};
 
   for (const s of processedSources) {
@@ -326,19 +347,34 @@ export function reconstructCodebaseFromDirectory(inputDir, outputDir) {
     extensionsMap[ext] = (extensionsMap[ext] || 0) + 1;
   }
 
+  // Human-readable note so results are never ambiguous about what was/wasn't recovered.
+  let note;
+  if (totalReconstructedFiles > 0) {
+    note = `Recovered ${totalReconstructedFiles} source file(s) from ${processedMaps.length} sourcemap(s). ` +
+      `Only code shipped with sourcemaps can be reconstructed; bundles without maps are not recoverable.`;
+  } else if (mapFiles.length === 0 && extractedModulesList.length > 0) {
+    note = `No sourcemaps found. Fell back to bundle module extraction: ${extractedModulesList.length} module chunk(s) recovered (minified).`;
+  } else {
+    note = `No original source recovered. The site ships no sourcemaps (and no extractable module chunks), so only minified bundles are available.`;
+  }
+
   // Build manifest
   const manifest = {
     reconstructionDate: new Date().toISOString(),
     inputDirectory: resolvedInput,
     outputDirectory: resolvedOutput,
+    sourceMapsFound: mapFiles.length,
+    sourceMapsUnpacked: processedMaps.length,
     totalFiles: totalReconstructedFiles,
     totalSizeKB: Math.round((totalReconstructedBytes / 1024) * 100) / 100,
     detectedTechStack: techStack,
+    topPackages,
     extensionBreakdown: extensionsMap,
     processedSourceMaps: processedMaps,
     reconstructedFiles: processedSources.slice(0, 500),
-    extractedModulesCount: extractedModulesList.length,
-    extractedModules: extractedModulesList.slice(0, 100)
+    fallbackExtractedModulesCount: extractedModulesList.length,
+    extractedModules: extractedModulesList.slice(0, 100),
+    note
   };
 
   const manifestPath = path.resolve(resolvedOutput, 'reconstruction-manifest.json');
@@ -347,11 +383,15 @@ export function reconstructCodebaseFromDirectory(inputDir, outputDir) {
   return {
     success: true,
     outputDirectory: resolvedOutput,
+    sourceMapsFound: mapFiles.length,
+    reconstructedFileCount: totalReconstructedFiles,
     totalFiles: totalReconstructedFiles,
     totalSizeKB: manifest.totalSizeKB,
     detectedTechStack: techStack,
+    topPackages,
     manifestPath,
-    extractedModulesCount: extractedModulesList.length,
-    hasSourceMaps: processedMaps.length > 0
+    fallbackExtractedModulesCount: extractedModulesList.length,
+    hasSourceMaps: processedMaps.length > 0,
+    note
   };
 }

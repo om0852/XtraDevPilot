@@ -78,8 +78,9 @@ chrome.tabs.onUpdated.addListener(ensureConnected);
 chrome.runtime.onStartup.addListener(ensureConnected);
 chrome.runtime.onInstalled.addListener(ensureConnected);
 
-function getActiveTabLogs(logsObj) {
+function getActiveTabLogs(logsObj, tabId) {
   return new Promise((resolve) => {
+    if (tabId) return resolve(logsObj[tabId] || []);
     chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
       if (tabs.length === 0) return resolve([]);
       resolve(logsObj[tabs[0].id] || []);
@@ -151,13 +152,14 @@ async function handleAction(action, payload = {}) {
         });
       });
     case 'GET_NETWORK_LOGS':
-      return await getActiveTabLogs(networkLogsByTab);
+      return await getActiveTabLogs(networkLogsByTab, payload.tabId);
     case 'GET_CONSOLE_LOGS':
-      return await getActiveTabLogs(consoleLogsByTab);
+      return await getActiveTabLogs(consoleLogsByTab, payload.tabId);
     case 'GET_DOM':
     case 'GET_CLEAN_DOM':
     case 'GET_AX_TREE':
     case 'BATCH_EXECUTE':
+    case 'WAIT_FOR':
     case 'HIGHLIGHT_ELEMENT':
     case 'WAIT_FOR_CLICK':
     case 'CLICK_ELEMENT':
