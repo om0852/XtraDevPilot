@@ -823,7 +823,27 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
   };
 });
 
+// Maps a raw error message to a stable, machine-readable code + a fix hint so the
+// calling agent can recover instead of parsing a stack trace.
+function classifyError(message) {
+  const m = String(message || '');
+  if (/not currently connected to the bridge|no chrome browser|not connected/i.test(m))
+    return { code: 'BRIDGE_DISCONNECTED', hint: 'Open a page in Chrome with the extension loaded, then retry. Check list_browsers.' };
+  if (/no active tab/i.test(m))
+    return { code: 'NO_ACTIVE_TAB', hint: 'Pass an explicit tabId (from list_tabs) or focus a tab.' };
+  if (/tab with id .* not found|no tab with id/i.test(m))
+    return { code: 'TAB_NOT_FOUND', hint: 'The tabId is stale. Call list_tabs for current ids.' };
+  if (/timeout/i.test(m))
+    return { code: 'TIMEOUT', hint: 'The page/element was not ready. Use wait_for_element first, or raise timeoutMs.' };
+  if (/cannot access chrome:\/\/|restricted/i.test(m))
+    return { code: 'RESTRICTED_PAGE', hint: 'chrome:// and store pages cannot be scripted. Switch to a normal web page.' };
+  if (/content security policy|unsafe-eval/i.test(m))
+    return { code: 'CSP_BLOCKED', hint: 'Page CSP blocked eval; the debugger fallback should handle this (reload the extension if needed).' };
+  return { code: 'TOOL_ERROR', hint: 'Unexpected error. Retry; if it persists, check list_browsers / console logs.' };
+}
+
 server.setRequestHandler(CallToolRequestSchema, async (request) => {
+  const __t0 = Date.now();
   try {
     const args = request.params.arguments || {};
     if (args.browserId !== undefined && browserSessions.has(parseInt(args.browserId, 10))) {
@@ -1328,12 +1348,18 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         throw new McpError(ErrorCode.MethodNotFound, `Unknown tool: ${request.params.name}`);
     }
 
+    const durationMs = Date.now() - __t0;
+    if (result && typeof result === 'object' && !Array.isArray(result)) {
+      result = { ...result, durationMs };
+    }
     return {
       content: [{ type: 'text', text: typeof result === 'string' ? result : JSON.stringify(result, null, 2) }],
     };
   } catch (error) {
+    const durationMs = Date.now() - __t0;
+    const { code, hint } = classifyError(error.message);
     return {
-      content: [{ type: 'text', text: `Error: ${error.message}` }],
+      content: [{ type: 'text', text: JSON.stringify({ error: { code, message: error.message, hint }, durationMs }, null, 2) }],
       isError: true,
     };
   }
