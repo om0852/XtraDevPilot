@@ -970,7 +970,7 @@ function classifyError(message) {
     return { code: 'TIMEOUT', hint: 'The page/element was not ready. Use wait_for_element first, or raise timeoutMs.' };
   if (/cannot access chrome:\/\/|restricted/i.test(m))
     return { code: 'RESTRICTED_PAGE', hint: 'chrome:// and store pages cannot be scripted. Switch to a normal web page.' };
-  if (/content security policy|unsafe-eval/i.test(m))
+  if (/content security policy|unsafe-eval|trusted.?type/i.test(m))
     return { code: 'CSP_BLOCKED', hint: 'Page CSP blocked eval; the debugger fallback should handle this (reload the extension if needed).' };
   return { code: 'TOOL_ERROR', hint: 'Unexpected error. Retry; if it persists, check list_browsers / console logs.' };
 }

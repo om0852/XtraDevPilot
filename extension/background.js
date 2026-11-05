@@ -621,7 +621,9 @@ async function executeScriptWithFallback(payload) {
     return await askContentScript('EXECUTE_SCRIPT', payload);
   } catch (err) {
     const msg = String((err && err.message) || err);
-    if (/content security policy|unsafe-eval|evalerror|csp\b/i.test(msg)) {
+    // CSP eval blocks and Trusted Types (e.g. Gemini) both stop the in-page path;
+    // the DevTools protocol evaluates outside those policies.
+    if (/content security policy|unsafe-eval|evalerror|csp\b|trusted.?type/i.test(msg)) {
       return await evaluateViaDebugger(payload);
     }
     throw err;

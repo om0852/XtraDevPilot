@@ -340,11 +340,17 @@ async function waitForElement(selector, timeoutMs = 3000, state = 'visible', roo
     const check = () => {
       const el = findElement(selector, root);
       const isAttached = !!el;
-      const isVisible = isAttached && (el.offsetWidth > 0 || el.offsetHeight > 0 || el.getClientRects().length > 0 || window.getComputedStyle(el).display !== 'none');
+      let isVisible = false;
+      if (isAttached) {
+        const cs = (el.ownerDocument.defaultView || window).getComputedStyle(el);
+        isVisible = cs.display !== 'none' && cs.visibility !== 'hidden' && el.getClientRects().length > 0;
+      }
 
       if (state === 'attached' && isAttached) return resolve(el);
       if (state === 'visible' && isVisible) return resolve(el);
       if (state === 'detached' && !isAttached) return resolve(true);
+      // "hidden" = gone or not rendered (e.g. waiting for a spinner / stop button to disappear)
+      if (state === 'hidden' && !isVisible) return resolve(true);
 
       if (Date.now() - startTime >= timeoutMs) {
         return resolve(null);
@@ -996,9 +1002,14 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
         } else {
           el = document.activeElement || document.body;
         }
-        scrollIntoViewDeep(el);
+        // Only scroll when the field is actually off-screen: recentring an already
+        // visible editor makes canvas apps (draw.io, Figma) jump their viewport.
+        const r0 = topLevelRect(el);
+        const visible = r0.width > 0 && r0.height > 0 && r0.left < window.innerWidth && r0.top < window.innerHeight
+          && r0.left + r0.width > 0 && r0.top + r0.height > 0;
+        if (!visible) scrollIntoViewDeep(el);
         flashInteractionHighlight(el);
-        if (typeof el.focus === 'function') el.focus();
+        if (typeof el.focus === 'function') { try { el.focus({ preventScroll: true }); } catch (e) { el.focus(); } }
         if (request.selectAll) {
           try {
             if (/^(input|textarea)$/i.test(el.tagName) && typeof el.select === 'function') el.select();
